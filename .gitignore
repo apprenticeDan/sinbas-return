@@ -1,0 +1,173 @@
+# ============================================================
+#  RUST
+# ============================================================
+/target/
+**/*.rs.bk
+*.pdb
+ 
+# Cargo lock: mantenlo en binarios, ignóralo en librerías puras
+# Cargo.lock   ← descomenta si es una librería
+ 
+# Artefactos de benchmarks
+/criterion/
+ 
+# ============================================================
+#  WEBASSEMBLY
+# ============================================================
+pkg/
+wasm-pack.log
+*.wasm
+*.wat
+ 
+# wasm-bindgen generados
+/src/generated/
+ 
+# ============================================================
+#  NODE / NPM / YARN / PNPM
+# ============================================================
+node_modules/
+.pnp
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnpm-store/
+ 
+# ============================================================
+#  VITE
+# ============================================================
+dist/
+dist-ssr/
+.vite/
+*.local
+ 
+# ============================================================
+#  TYPESCRIPT
+# ============================================================
+*.tsbuildinfo
+.tscache/
+ 
+# Salida compilada de TS (si no usas Vite para esto)
+out/
+build/
+ 
+# ============================================================
+#  VARIABLES DE ENTORNO Y SECRETOS
+# ============================================================
+.env
+.env.*
+!.env.example
+!.env.test
+*.pem
+*.key
+secrets.toml
+config.secret.toml
+ 
+# ============================================================
+#  EDITORES E IDEs
+# ============================================================
+ 
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+ 
+# JetBrains (RustRover, CLion, IntelliJ)
+.idea/
+*.iml
+*.iws
+*.ipr
+ 
+# Vim / Neovim
+*.swp
+*.swo
+*~
+.nvim/
+ 
+# Emacs
+\#*\#
+.\#*
+*.elc
+ 
+# Zed
+.zed/
+ 
+# ============================================================
+#  SISTEMA OPERATIVO
+# ============================================================
+ 
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+ 
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+ 
+# Linux
+.directory
+*.desktop
+ 
+# ============================================================
+#  LOGS Y TEMPORALES
+# ============================================================
+*.log
+*.log.*
+logs/
+tmp/
+temp/
+.tmp/
+*.tmp
+*.temp
+*.cache
+ 
+# ============================================================
+#  TESTING Y COBERTURA
+# ============================================================
+lcov.info
+coverage/
+tarpaulin-report.html
+.nyc_output/
+ 
+# ============================================================
+#  DOCKER (si lo añades después)
+# ============================================================
+.docker/volumes/
+ 
+# ============================================================
+#  MISC
+# ============================================================
+*.orig
+*.rej
+.direnv/
+.envrc
+ 
+# ============================================================
+#  TAURI
+# ============================================================
+ 
+# Bundles generados (instaladores: .msi, .deb, .AppImage, .dmg, .app, .exe)
+src-tauri/target/
+src-tauri/WixTools/
+ 
+# Iconos generados automáticamente por `tauri icon`
+# (solo si los generas desde un PNG fuente — si los editas a mano, comenta esto)
+src-tauri/icons/
+ 
+# Archivos de firma y actualización automática (Tauri updater)
+*.sig
+latest.json
+update-manifest.json
+ 
+# Caché de Tauri CLI
+.tauri/
+
+
