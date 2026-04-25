@@ -1,5 +1,7 @@
+use super::email::EmailError;
+
 #[derive(Debug)]
 pub enum UserError {
-    InvalidEmail,
+    Email(EmailError),
     EmptyPassword,
 }
