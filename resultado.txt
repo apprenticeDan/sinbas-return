@@ -1,0 +1,169 @@
+
+ ---- main.rs ---- 
+mod domain;
+mod application;
+mod infrastructure;
+
+//use domain::user::User;
+use domain::user_error::UserError;
+use domain::email::EmailError;
+use application::auth_service::AuthService;
+
+fn main() {
+    println!("Hello, world!");
+    let user1 = AuthService::register(
+        1,
+        "test@mail.com".to_string(),
+        "passHash".to_string(),);
+    let user2 = AuthService::register(
+        2,
+        "test_mail-invalido.com".to_string(),
+        "123".to_string(),);
+
+    match user1 {
+        Ok(u) => println!("Usuario creado: {:?}", u),
+        Err(UserError::Email(EmailError::InvalidFormat)) => { println!("Error: e-mail no válido") }
+        Err(UserError::EmptyPassword) => { println!("Error: password vacío") }
+        Err(UserError::Email(EmailError::Empty)) => { println!("Error: email vacio"); }
+    }
+
+    match user2 {
+        Ok(u) => println!("Usuario creado: {:?}", u),
+        Err(UserError::Email(EmailError::InvalidFormat)) => { println!("Error: e-mail no válido") }
+        Err(UserError::EmptyPassword) => { println!("Error: password vacío") }
+        Err(UserError::Email(EmailError::Empty)) => { println!("Error: email vacio"); }
+    }
+}
+
+
+ ---- domain/email.rs ---- 
+//use super::user_error::UserError;
+
+#[derive(Debug)]
+pub enum EmailError { Empty, InvalidFormat, }
+
+#[derive(Debug, Clone)]
+pub struct Email(String);
+
+impl Email {
+    pub fn parse(value: String) -> Result<Self, EmailError> {
+        let v = value.trim().to_string();
+        if v.is_empty() { return Err(EmailError::Empty); }
+        
+        let parts: Vec<&str> = v.splitn(2,'@').collect();
+        if parts.len() != 2 { return Err(EmailError::InvalidFormat); }
+
+        let local = parts[0];
+        let domain = parts[1];
+        if local.is_empty() || !domain.contains('.') { return Err(EmailError::InvalidFormat); } 
+        if domain.starts_with('.') || domain.ends_with('.') { return Err(EmailError::InvalidFormat); }
+
+        Ok(Self(v))
+    }
+
+    pub fn value(&self) -> &str { &self.0 }
+
+}
+
+
+ ---- domain/mod.rs ---- 
+pub mod user;
+pub mod user_error;
+pub mod email;
+
+
+ ---- domain/user.rs ---- 
+use super::{user_error::UserError, email::Email};
+
+#[derive(Clone)]
+pub struct User {
+    pub id: u64,
+    pub email: Email,
+    password_hash: String,
+}
+
+impl User {
+    pub fn create(id: u64, email: String, password_hash: String) -> Result<User, UserError> {
+        let emilio = Email::parse(email)
+            .map_err(UserError::Email)?;
+        // if !email.contains("@") { return Err(UserError::InvalidEmail); }
+        // if password_hash.is_empty() { return Err(UserError::EmptyPassword); }
+
+        Ok(Self { id, email: emilio, password_hash, })
+    } 
+}
+
+impl std::fmt::Debug for User {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("User")
+            .field("id", &self.id)
+            .field("email", &self.email.value())
+            .field("password_hash", &"***")
+            .finish()
+    }
+}
+
+
+ ---- domain/user_error.rs ---- 
+use super::email::EmailError;
+
+#[derive(Debug)]
+pub enum UserError {
+    Email(EmailError),
+    EmptyPassword,
+    HashingFailed,
+}
+
+
+ ---- application/auth_service.rs ---- 
+use crate::domain::{user::User, user_error::UserError};
+use crate::infrastructure::security::{hash_password, verify_password};
+
+pub struct AuthService;
+
+impl AuthService {
+    pub fn register(id: u64, email: String, password: String,) -> Result<User, UserError> {
+        if password.is_empty() { return Err(UserError::EmptyPassword); }
+
+        let pass_hash = hash_password(&password)
+            .map_err(|_| UserError::HashingFailed)?;
+
+        User::create(id, email, pass_hash)
+    }
+}
+
+
+ ---- application/mod.rs ---- 
+pub mod auth_service;
+
+
+ ---- infrastructure/mod.rs ---- 
+pub mod security;
+
+
+ ---- infrastructure/security.rs ---- 
+use argon2::{ password_hash::{SaltString, PasswordHasher }, Argon2, };
+use rand::rngs::OsRng;
+
+pub fn hash_password(pass: &str) -> Result<String, String> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    let hash = argon2
+        .hash_password(pass.as_bytes(), &salt)
+        .map_err(|e| e.to_string())?
+        .to_string();
+
+    Ok(hash)
+}
+
+pub fn verify_password(pass: &str, hash: &str) -> Result<bool, String> {
+    let parsed_hash = PasswordHash::new(hash)
+        .map_err(|e| e.to_string())?;
+    let argon2 = Argon2::default();
+
+    match argon2.verify_password(pass.as_bytes(), &parsed_hash) {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
+    }
+}
+

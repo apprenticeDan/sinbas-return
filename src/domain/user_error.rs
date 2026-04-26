@@ -4,4 +4,5 @@ use super::email::EmailError;
 pub enum UserError {
     Email(EmailError),
     EmptyPassword,
+    HashingFailed,
 }
