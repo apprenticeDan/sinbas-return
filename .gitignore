@@ -1,4 +1,98 @@
 # ============================================================
+# F# / .NET (ASP.NET Core) – Versión recomendada
+# ============================================================
+
+# Build outputs
+bin/
+obj/
+[Bb]uild/
+[Bb]in/
+[Oo]bj/
+[Bb]uildLogs/
+
+# NuGet packages
+*.nupkg
+*.snupkg
+*.nuspec
+packages/
+*.dll
+*.exe
+*.pdb
+
+# User & IDE files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+.idea/
+*.iml
+*.fsharplocal          # F# local tool
+.ionide/               # Ionide (F# VSCode) cache
+
+# Test results
+TestResult.xml
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+*.cobertura.xml
+*.dotCover
+
+# Database local files
+*.db
+*.mdf
+*.ldf
+*.mdb
+*.sqlite
+*.sqlite3
+
+# Logs & crash dumps
+*.log
+*.dmp
+*.hprof
+*.tmp
+
+# Publish outputs
+publish/
+[Pp]ublish/
+[Oo]utput/
+
+# Node.js / client-side (si usas npm, bower, etc.)
+node_modules/
+bower_components/
+wwwroot/lib/           # Solo ignora libs generadas, NO todo wwwroot
+wwwroot/dist/
+wwwroot/*.min.js
+wwwroot/*.min.css
+
+# Pero NO ignores wwwroot/images (es contenido original)
+# Si quieres asegurar que se vean, puedes excluir explícitamente:
+!wwwroot/images/
+!wwwroot/css/
+!wwwroot/js/
+
+# EF Core – Las migraciones NO se ignoran
+# (No poner Migrations/ aquí)
+
+# Secretos de desarrollo (no poner en control de versiones)
+appsettings.Development.json   # Opcional: si cada dev tiene su propia BD local
+secrets.json
+*.secrets.json
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Herramientas de construcción
+.fake/
+.paket/
+paket-files/
+.fsharplint/
+
+# ============================================================
 #  RUST
 # ============================================================
 /target/

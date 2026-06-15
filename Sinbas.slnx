@@ -1,0 +1,8 @@
+<Solution>
+<Folder Name="/src/">
+  <Project Path="src/Sinbas.Domain/Sinbas.Domain.fsproj" />
+  <Project Path="src/Sinbas.Application/Sinbas.Application.fsproj" />
+  <Project Path="src/Sinbas.Infrastructure/Sinbas.Infrastructure.fsproj" />
+  <Project Path="src/Sinbas.Web/Sinbas.Web.fsproj" />
+  </Folder>
+</Solution>

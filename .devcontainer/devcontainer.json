@@ -1,0 +1,29 @@
+{
+    "name": "Sinbas Dev",
+    "dockerComposeFile": [
+        "../compose.yml"
+    ],
+    "service": "sinbas-api",
+    "workspaceFolder": "/workspace",
+    "remoteUser": "root",
+    "forwardPorts": [
+        8080,
+        5432
+    ],
+    "postCreateCommand": "dotnet tool install -g fantomas && echo 'Sinbas listo'",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ionide.ionide-fsharp",
+                "ms-azuretools.vscode-docker",
+                "humao.rest-client",
+                "editorconfig.editorconfig"
+            ],
+            "settings": {
+                "editor.formatOnSave": true,
+                "FSharp.enableTreeView": true,
+                "FSharp.linter": true
+            }
+        }
+    }
+}

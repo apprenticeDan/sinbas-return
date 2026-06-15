@@ -1,8 +1,0 @@
-[package]
-name = "projecto1"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-argon2 = "0.5"
-rand = "0.8"
