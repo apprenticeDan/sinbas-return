@@ -128,7 +128,10 @@ let ``Usuario updates are immutable and return updated copy`` () =
     let roles = Set.ofList [Administrador; Almacen]
     
     // Create initial user
-    let user = Usuario.crear empId username hash roles
+    let user =
+        match Usuario.crear empId username hash roles with
+        | Ok u -> u
+        | Error e -> failwithf "Failed to create user: %A" e
     
     Assert.True(Usuario.activo user)
     Assert.True((roles = Usuario.roles user))

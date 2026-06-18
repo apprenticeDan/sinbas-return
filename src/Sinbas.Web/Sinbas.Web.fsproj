@@ -5,6 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="AuthEndpoints.fs" />
+    <Compile Include="UserEndpoints.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -15,6 +17,7 @@
   
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.8" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.0.0" />
   </ItemGroup>
 
 </Project>

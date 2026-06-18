@@ -31,14 +31,9 @@ module NombreRol =
         | "Laboratorio" -> Ok Laboratorio
         | x -> Error $"Rol desconocido: {x}"
 
-type EstadoEmpleado =
+type EstadoUsuario =
     | Activo
-    | Inactivo
-
-type Empleado =
-    { Id: EmpleadoId
-      NombreCompleto: string
-      Estado: EstadoEmpleado }
+    | Bloqueado
 
 type Usuario =
     private
@@ -47,12 +42,13 @@ type Usuario =
           NombreUsuario: NombreUsuario
           Hash: PasswordHash
           Roles: Set<NombreRol>
-          Activo: bool }
+          Estado: EstadoUsuario }
 
 type AuthError =
     | CredencialesInvalidas
     | UsuarioInactivo
     | NombreUsuarioInvalido of string
+    | RolesRequeridos of string
     | ErrorInterno of string
 
 module Usuario =
@@ -68,20 +64,23 @@ module Usuario =
             Error(NombreUsuarioInvalido raw)
 
     let crear empleadoId nombreUsuario hash roles =
-        { Id = UsuarioId 0
-          EmpleadoId = empleadoId
-          NombreUsuario = nombreUsuario
-          Hash = hash
-          Roles = roles
-          Activo = true }
+        if Set.isEmpty roles then
+            Error (RolesRequeridos "El usuario debe tener al menos un rol")
+        else
+            Ok { Id = UsuarioId 0
+                 EmpleadoId = empleadoId
+                 NombreUsuario = nombreUsuario
+                 Hash = hash
+                 Roles = roles
+                 Estado = Activo }
 
-    let reconstruir id empleadoId nombre hash roles activo =
+    let reconstruir id empleadoId nombre hash roles estado =
         { Id = UsuarioId id
           EmpleadoId = EmpleadoId empleadoId
           NombreUsuario = NombreUsuario nombre
           Hash = PasswordHash hash
           Roles = roles
-          Activo = activo }
+          Estado = estado }
 
     let id u = u.Id
 
@@ -93,16 +92,21 @@ module Usuario =
 
     let roles u = u.Roles
 
-    let activo u = u.Activo
+    let estado u = u.Estado
+
+    let activo u = u.Estado = Activo
+
+    let puedeIniciarSesion u =
+        u.Estado = Activo && not (Set.isEmpty u.Roles)
 
     let asignarRoles nuevosRoles (usuario: Usuario) =
         { usuario with Roles = Set.ofList nuevosRoles }
 
     let activar (usuario: Usuario) =
-        { usuario with Activo = true }
+        { usuario with Estado = Activo }
 
     let desactivar (usuario: Usuario) =
-        { usuario with Activo = false }
+        { usuario with Estado = Bloqueado }
 
     let cambiarHash nuevoHash (usuario: Usuario) =
         { usuario with Hash = nuevoHash }

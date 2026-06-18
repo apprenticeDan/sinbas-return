@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -6,7 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Library.fs" />
+    <Compile Include="PasswordHasher.fs" />
+    <Compile Include="JwtService.fs" />
+    <Compile Include="AuthRepository.fs" />
   </ItemGroup>
 
   <ItemGroup>

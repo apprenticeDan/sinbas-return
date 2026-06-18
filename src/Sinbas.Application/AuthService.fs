@@ -1,10 +1,10 @@
 namespace Sinbas.Application
 
-namespace Sinbas.Application
-
 open Sinbas.Domain
 
 type BuscarUsuarioPorNombre = NombreUsuario -> Async<Result<Usuario, AuthError>>
+type BuscarUsuarioPorId = UsuarioId -> Async<Result<Usuario, AuthError>>
+type GuardarUsuario = Usuario -> Async<Result<unit, AuthError>>
 
 type VerificarHash = string -> PasswordHash -> bool
 
@@ -38,7 +38,7 @@ module AuthUseCase =
 
                 | Ok usuario ->
 
-                    if not (Usuario.activo usuario) then
+                    if not (Usuario.puedeIniciarSesion usuario) then
                         return Error UsuarioInactivo
 
                     else
