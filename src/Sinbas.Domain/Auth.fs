@@ -7,31 +7,38 @@ type PasswordHash = PasswordHash of string
 
 type NombreRol =
     | Administrador
+    | Gerencia
     | Comercial
     | Almacen
     | Laboratorio
-    | Asistente
 
 module NombreRol =
 
     let toString =
         function
         | Administrador -> "Administrador"
+        | Gerencia -> "Gerencia"
         | Comercial -> "Comercial"
         | Almacen -> "Almacen"
         | Laboratorio -> "Laboratorio"
-        | Asistente -> "Asistente"
 
     let fromString =
         function
         | "Administrador" -> Ok Administrador
+        | "Gerencia" -> Ok Gerencia
         | "Comercial" -> Ok Comercial
         | "Almacen" -> Ok Almacen
         | "Laboratorio" -> Ok Laboratorio
-        | "Asistente" -> Ok Asistente
         | x -> Error $"Rol desconocido: {x}"
 
-type Rol = { Id: RolId; Nombre: NombreRol }
+type EstadoEmpleado =
+    | Activo
+    | Inactivo
+
+type Empleado =
+    { Id: EmpleadoId
+      NombreCompleto: string
+      Estado: EstadoEmpleado }
 
 type Usuario =
     private
@@ -39,7 +46,7 @@ type Usuario =
           EmpleadoId: EmpleadoId
           NombreUsuario: NombreUsuario
           Hash: PasswordHash
-          Roles: Rol list
+          Roles: Set<NombreRol>
           Activo: bool }
 
 type AuthError =
@@ -60,8 +67,15 @@ module Usuario =
         else
             Error(NombreUsuarioInvalido raw)
 
-    let reconstruir id empleadoId nombre hash roles activo =
+    let crear empleadoId nombreUsuario hash roles =
+        { Id = UsuarioId 0
+          EmpleadoId = empleadoId
+          NombreUsuario = nombreUsuario
+          Hash = hash
+          Roles = roles
+          Activo = true }
 
+    let reconstruir id empleadoId nombre hash roles activo =
         { Id = UsuarioId id
           EmpleadoId = EmpleadoId empleadoId
           NombreUsuario = NombreUsuario nombre
@@ -71,6 +85,8 @@ module Usuario =
 
     let id u = u.Id
 
+    let empleadoId u = u.EmpleadoId
+
     let nombreUsuario u = u.NombreUsuario
 
     let hash u = u.Hash
@@ -79,8 +95,38 @@ module Usuario =
 
     let activo u = u.Activo
 
+    let asignarRoles nuevosRoles (usuario: Usuario) =
+        { usuario with Roles = Set.ofList nuevosRoles }
+
+    let activar (usuario: Usuario) =
+        { usuario with Activo = true }
+
+    let desactivar (usuario: Usuario) =
+        { usuario with Activo = false }
+
+    let cambiarHash nuevoHash (usuario: Usuario) =
+        { usuario with Hash = nuevoHash }
+
+    let agregarRol rol (usuario: Usuario) =
+        { usuario with Roles = usuario.Roles.Add rol }
+
+    let quitarRol rol (usuario: Usuario) =
+        { usuario with Roles = usuario.Roles.Remove rol }
+
     let tieneRol rol u =
-        u.Roles |> List.exists (fun r -> r.Nombre = rol)
+        u.Roles.Contains rol
+
+    let esAdministrador u =
+        tieneRol Administrador u
+
+    let puedeGestionarUsuarios u =
+        esAdministrador u
+
+    let puedeRegistrarAnalisis u =
+        tieneRol Laboratorio u
+
+    let puedePrepararPedidos u =
+        tieneRol Almacen u
 
 module NombreUsuario =
 

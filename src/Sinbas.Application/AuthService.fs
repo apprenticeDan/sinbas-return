@@ -1,4 +1,4 @@
-﻿namespace Sinbas.Application
+namespace Sinbas.Application
 
 namespace Sinbas.Application
 
@@ -52,7 +52,10 @@ module AuthUseCase =
                             let token = emitirToken usuario
 
                             let roles =
-                                usuario |> Usuario.roles |> List.map (fun r -> NombreRol.toString r.Nombre)
+                                usuario
+                                |> Usuario.roles
+                                |> Set.toList
+                                |> List.map NombreRol.toString
 
                             let nombre = Usuario.nombreUsuario usuario |> NombreUsuario.valor
                             return

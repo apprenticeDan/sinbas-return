@@ -32,7 +32,6 @@ type ClienteId = ClienteId of int
 type ProveedorId = ProveedorId of int
 
 type UsuarioId = UsuarioId of int
-type RolId = RolId of int
 
 type LaboratorioId = LaboratorioId of int
 type ProformaId = ProformaId of int

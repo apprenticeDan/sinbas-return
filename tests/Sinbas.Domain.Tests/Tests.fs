@@ -116,3 +116,37 @@ let ``Resolver FIFO asigna lotes en orden cronologico de ingreso`` () =
     match Fifo.resolverFIFO (ProductoId prodId) req3 lotes movimientos with
     | Error (StockInsuficiente _) -> ()
     | res -> failwithf "Debería haber fallado por stock insuficiente, obtuvo: %A" res
+
+[<Fact>]
+let ``Usuario updates are immutable and return updated copy`` () =
+    let empId = EmpleadoId 1
+    let username =
+        match Usuario.validarNombreUsuario "test.user" with
+        | Ok u -> u
+        | Error e -> failwithf "Invalid username: %A" e
+    let hash = PasswordHash "some-hash"
+    let roles = Set.ofList [Administrador; Almacen]
+    
+    // Create initial user
+    let user = Usuario.crear empId username hash roles
+    
+    Assert.True(Usuario.activo user)
+    Assert.True((roles = Usuario.roles user))
+    
+    // Desactivar
+    let inactiveUser = Usuario.desactivar user
+    Assert.False(Usuario.activo inactiveUser)
+    Assert.True(Usuario.activo user) // original remains active
+    
+    // Assign new roles
+    let newRolesList = [Laboratorio; Comercial]
+    let updatedRolesUser = Usuario.asignarRoles newRolesList user
+    Assert.True(Set.ofList newRolesList = Usuario.roles updatedRolesUser)
+    Assert.True((roles = Usuario.roles user)) // original remains unchanged
+    
+    // Check tieneRol and helper properties
+    Assert.True(Usuario.tieneRol Administrador user)
+    Assert.True(Usuario.esAdministrador user)
+    Assert.True(Usuario.puedeGestionarUsuarios user)
+    Assert.False(Usuario.tieneRol Laboratorio user)
+    Assert.True(Usuario.puedeRegistrarAnalisis updatedRolesUser)
