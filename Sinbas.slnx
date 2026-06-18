@@ -5,4 +5,7 @@
   <Project Path="src/Sinbas.Infrastructure/Sinbas.Infrastructure.fsproj" />
   <Project Path="src/Sinbas.Web/Sinbas.Web.fsproj" />
   </Folder>
+<Folder Name="/tests/">
+  <Project Path="tests/Sinbas.Domain.Tests/Sinbas.Domain.Tests.fsproj" />
+</Folder>
 </Solution>

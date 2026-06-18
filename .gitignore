@@ -264,4 +264,4 @@ update-manifest.json
 # Caché de Tauri CLI
 .tauri/
 
-
+*.txt

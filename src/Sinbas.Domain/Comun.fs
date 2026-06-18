@@ -16,6 +16,7 @@ type DomainError =
     | CIInvalido of string
     | ValorRequerido of string
     | SecuenciaInvalida of string
+    | StockInsuficiente of string
 
 // ─────────────────────────────────────────────────────────────
 // IDs técnicos internos — el compilador impide mezclarlos
@@ -24,15 +25,18 @@ type DomainError =
 type ProductoId = ProductoId of int
 type LoteId = LoteId of int
 type OrdenId = OrdenId of int
+
 type PersonaId = PersonaId of int
 type EmpleadoId = EmpleadoId of int
 type ClienteId = ClienteId of int
 type ProveedorId = ProveedorId of int
+
+type UsuarioId = UsuarioId of int
+type RolId = RolId of int
+
 type LaboratorioId = LaboratorioId of int
 type ProformaId = ProformaId of int
 type UbicacionId = UbicacionId of int
-type UsuarioId = UsuarioId of int
-type RolId = RolId of int
 
 type TruequeId = TruequeId of int
 type MovimientoId = MovimientoId of int

@@ -13,5 +13,12 @@
     <ProjectReference Include="..\Sinbas.Domain\Sinbas.Domain.fsproj" />
     <ProjectReference Include="..\Sinbas.Application\Sinbas.Application.fsproj" />
   </ItemGroup>
+<ItemGroup>
+  <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
+<PackageReference Include="Dapper" Version="2.1.79" />
+<PackageReference Include="Npgsql" Version="10.0.2" />
+<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.18.0" />
+<PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.18.0" />
+</ItemGroup>
 
 </Project>
