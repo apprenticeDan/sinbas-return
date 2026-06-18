@@ -44,6 +44,11 @@ module AuthRepository =
             | false, _ -> return Error (ErrorInterno "Usuario no encontrado")
         }
 
+    let listarUsuarios () : Async<Usuario list> =
+        async {
+            return usuarios.Values |> Seq.toList
+        }
+
     let guardarUsuario (usuario: Usuario) : Async<Result<unit, AuthError>> =
         async {
             let (UsuarioId id) = Usuario.id usuario

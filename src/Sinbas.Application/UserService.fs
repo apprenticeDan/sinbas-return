@@ -22,7 +22,37 @@ type DisableUserCommand =
 type EnableUserCommand =
     { UsuarioId: int }
 
+type ListarUsuarios = unit -> Async<Usuario list>
+
+type UserListItem =
+    { Id: int
+      EmpleadoId: int
+      NombreUsuario: string
+      Roles: string list
+      Activo: bool }
+
 module UserUseCase =
+
+    let private aUserListItem (u: Usuario) : UserListItem =
+        { Id = let (UsuarioId x) = Usuario.id u in x
+          EmpleadoId = let (EmpleadoId x) = Usuario.empleadoId u in x
+          NombreUsuario = Usuario.nombreUsuario u |> NombreUsuario.valor
+          Roles = Usuario.roles u |> Set.toList |> List.map NombreRol.toString
+          Activo = Usuario.activo u }
+
+    let listarUsuarios (listar: ListarUsuarios) =
+        async {
+            let! usuarios = listar ()
+            return usuarios |> List.map aUserListItem
+        }
+
+    let obtenerUsuarioPorId buscarPorId (usuarioId: UsuarioId) =
+        async {
+            let! result = buscarPorId usuarioId
+            match result with
+            | Error e -> return Error e
+            | Ok u -> return Ok (aUserListItem u)
+        }
 
     let crearUsuario buscarPorNombre guardarUsuario hashPassword (cmd: CreateUserCommand) =
         async {
