@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="PasswordHasher.fs" />
     <Compile Include="JwtService.fs" />
+    <Compile Include="DbConnection.fs" />
     <Compile Include="AuthRepository.fs" />
   </ItemGroup>
 
