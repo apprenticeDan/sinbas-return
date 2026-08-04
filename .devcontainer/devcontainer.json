@@ -5,19 +5,25 @@
     ],
     "service": "sinbas-api",
     "workspaceFolder": "/workspace",
-    "remoteUser": "root",
+    "shutdownAction": "stopCompose",
+    "updateRemoteUserUID": true,
+    "remoteUser": "dev",
     "forwardPorts": [
         8080,
+        5173,
         5432
     ],
-    "postCreateCommand": "dotnet tool install -g fantomas && echo 'Sinbas listo'",
+    "postStartCommand": "sudo chown -R dev:dev /workspace || true",
+    "postCreateCommand": "dotnet tool restore && dotnet restore && echo 'Sinbas listo'",
     "customizations": {
         "vscode": {
             "extensions": [
                 "ionide.ionide-fsharp",
                 "ms-azuretools.vscode-docker",
                 "humao.rest-client",
-                "editorconfig.editorconfig"
+                "editorconfig.editorconfig",
+                "esbenp.prettier-vscode",
+                "bradlc.vscode-tailwindcss"
             ],
             "settings": {
                 "editor.formatOnSave": true,

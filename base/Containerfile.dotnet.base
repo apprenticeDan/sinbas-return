@@ -1,0 +1,67 @@
+# Containerfile.dotnet.base
+# Imagen compartida para desarrollo .NET 10 (F#/C#) + Node.js 24 / TypeScript / SolidJS / Tailwind (Vite).
+FROM mcr.microsoft.com/dotnet/sdk:10.0
+
+# --------------------------------------------------------------------
+# Herramientas base y Node.js 24
+# --------------------------------------------------------------------
+RUN apt-get update \
+    && apt-get install -y \
+    curl \
+    ca-certificates \
+    gnupg \
+    git \
+    sudo \
+    build-essential \
+    && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# --------------------------------------------------------------------
+# Usuario de desarrollo
+# --------------------------------------------------------------------
+ARG USERNAME=dev
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN if getent group "${USER_GID}" >/dev/null; then \
+    groupmod -n "${USERNAME}" "$(getent group ${USER_GID} | cut -d: -f1)"; \
+    else \
+    groupadd --gid "${USER_GID}" "${USERNAME}"; \
+    fi \
+    && if getent passwd "${USER_UID}" >/dev/null; then \
+    usermod -l "${USERNAME}" -d "/home/${USERNAME}" -m -g "${USER_GID}" "$(getent passwd ${USER_UID} | cut -d: -f1)"; \
+    else \
+    useradd --uid "${USER_UID}" --gid "${USER_GID}" -m "${USERNAME}"; \
+    fi \
+    && mkdir -p /workspace \
+    && chown -R "${USERNAME}:${USERNAME}" /workspace "/home/${USERNAME}" \
+    && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} \
+    && chmod 0440 /etc/sudoers.d/${USERNAME}
+
+WORKDIR /workspace
+
+USER ${USERNAME}
+
+# --------------------------------------------------------------------
+# Herramientas globales: .NET tools + pnpm
+# --------------------------------------------------------------------
+RUN dotnet tool install -g fantomas
+
+ENV PATH="/home/${USERNAME}/.dotnet/tools:$PATH"
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+ENV DOTNET_NOLOGO=1
+ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+
+ENV NPM_CONFIG_PREFIX=/home/${USERNAME}/.npm-global
+ENV PATH=/home/${USERNAME}/.npm-global/bin:$PATH
+
+RUN npm install -g pnpm
+
+# --------------------------------------------------------------------
+# Puertos (8080 ASP.NET Core, 5173 Vite)
+# --------------------------------------------------------------------
+EXPOSE 8080 5173
+
+CMD ["bash"]

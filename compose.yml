@@ -1,6 +1,8 @@
+name: sinbas-return
 services:
   sinbas-db:
-    image: postgres:16
+    image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: sinbas
       POSTGRES_PASSWORD: sinbas
@@ -17,23 +19,24 @@ services:
       retries: 5
 
   sinbas-api:
-    build:
-      context: .
-      dockerfile: Containerfile
+    # Imagen base pre-construida: base/build-dotnet-base.sh 1.0.0
+    image: sinbas/dotnet10-solid-dev:latest
     depends_on:
       sinbas-db:
         condition: service_healthy
     volumes:
-      - .:/workspace:Z
+      - .:/workspace:cached,Z
     ports:
       - "8080:8080"
+      - "5173:5173"
+    command: sleep infinity
+    user: dev
+    userns_mode: keep-id
     environment:
       ASPNETCORE_URLS: "http://0.0.0.0:8080"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
       DATABASE_URL: "Host=sinbas-db;Database=sinbas;Username=sinbas;Password=sinbas"
-    stdin_open: true
-    tty: true
 
 volumes:
   sinbas-pgdata:
