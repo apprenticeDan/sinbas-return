@@ -1,5 +1,11 @@
 # ============================================================
-# F# / .NET (ASP.NET Core) – Versión recomendada
+#  MONOREPO: sinbas-return
+#  back/  → F# / .NET 10 (ASP.NET Core)
+#  front/ → TypeScript / SolidJS / Vite / Tailwind / pnpm
+# ============================================================
+
+# ============================================================
+#  BACK — F# / .NET (ASP.NET Core)
 # ============================================================
 
 # Build outputs
@@ -19,17 +25,15 @@ packages/
 *.exe
 *.pdb
 
-# User & IDE files
+# F# / Ionide
+*.fsharplocal
+.ionide/
+
+# User & solution files
 *.user
 *.suo
 *.userosscache
 *.sln.docstates
-.vs/
-.vscode/
-.idea/
-*.iml
-*.fsharplocal          # F# local tool
-.ionide/               # Ionide (F# VSCode) cache
 
 # Test results
 TestResult.xml
@@ -40,114 +44,59 @@ TestResults/
 *.cobertura.xml
 *.dotCover
 
-# Database local files
-*.db
-*.mdf
-*.ldf
-*.mdb
-*.sqlite
-*.sqlite3
-
-# Logs & crash dumps
-*.log
-*.dmp
-*.hprof
-*.tmp
-
 # Publish outputs
 publish/
 [Pp]ublish/
 [Oo]utput/
 
-# Node.js / client-side (si usas npm, bower, etc.)
-node_modules/
-bower_components/
-wwwroot/lib/           # Solo ignora libs generadas, NO todo wwwroot
-wwwroot/dist/
-wwwroot/*.min.js
-wwwroot/*.min.css
-
-# Pero NO ignores wwwroot/images (es contenido original)
-# Si quieres asegurar que se vean, puedes excluir explícitamente:
-!wwwroot/images/
-!wwwroot/css/
-!wwwroot/js/
-
-# EF Core – Las migraciones NO se ignoran
-# (No poner Migrations/ aquí)
-
-# Secretos de desarrollo (no poner en control de versiones)
-appsettings.Development.json   # Opcional: si cada dev tiene su propia BD local
-secrets.json
-*.secrets.json
-
-# Archivos del sistema
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Herramientas de construcción
+# Herramientas de construcción F#
 .fake/
 .paket/
 paket-files/
 .fsharplint/
 
+# wwwroot generado (ASP.NET serve estático)
+wwwroot/lib/
+wwwroot/dist/
+wwwroot/*.min.js
+wwwroot/*.min.css
+!wwwroot/images/
+!wwwroot/css/
+!wwwroot/js/
+
+# Secretos de desarrollo .NET
+appsettings.Development.json
+secrets.json
+*.secrets.json
+
 # ============================================================
-#  RUST
+#  FRONT — TypeScript / SolidJS / Vite / Tailwind / pnpm
 # ============================================================
-/target/
-**/*.rs.bk
-*.pdb
- 
-# Cargo lock: mantenlo en binarios, ignóralo en librerías puras
-# Cargo.lock   ← descomenta si es una librería
- 
-# Artefactos de benchmarks
-/criterion/
- 
-# ============================================================
-#  WEBASSEMBLY
-# ============================================================
-pkg/
-wasm-pack.log
-*.wasm
-*.wat
- 
-# wasm-bindgen generados
-/src/generated/
- 
-# ============================================================
-#  NODE / NPM / YARN / PNPM
-# ============================================================
+
+# Dependencias
 node_modules/
-.pnp
-.pnp.js
-.yarn/cache
-.yarn/unplugged
-.yarn/build-state.yml
-.yarn/install-state.gz
 .pnpm-store/
- 
-# ============================================================
-#  VITE
-# ============================================================
+
+# Vite — build output
 dist/
 dist-ssr/
 .vite/
-*.local
- 
-# ============================================================
-#  TYPESCRIPT
-# ============================================================
+
+# TypeScript
 *.tsbuildinfo
 .tscache/
- 
-# Salida compilada de TS (si no usas Vite para esto)
-out/
-build/
- 
+
+# Archivos locales de Vite (env overrides)
+*.local
+
+# ESLint cache
+.eslintcache
+
+# PostCSS / Tailwind cache
+.postcss-cache/
+
 # ============================================================
-#  VARIABLES DE ENTORNO Y SECRETOS
+#  VARIABLES DE ENTORNO Y SECRETOS (compartido)
 # ============================================================
 .env
 .env.*
@@ -155,42 +104,41 @@ build/
 !.env.test
 *.pem
 *.key
-secrets.toml
-config.secret.toml
- 
+
 # ============================================================
 #  EDITORES E IDEs
 # ============================================================
- 
+
 # VS Code
 .vscode/
 !.vscode/extensions.json
 !.vscode/settings.json.example
- 
-# JetBrains (RustRover, CLion, IntelliJ)
+
+# JetBrains (Rider, IntelliJ, WebStorm)
 .idea/
 *.iml
 *.iws
 *.ipr
- 
+.vs/
+
 # Vim / Neovim
 *.swp
 *.swo
 *~
 .nvim/
- 
+
 # Emacs
 \#*\#
 .\#*
 *.elc
- 
+
 # Zed
 .zed/
- 
+
 # ============================================================
 #  SISTEMA OPERATIVO
 # ============================================================
- 
+
 # macOS
 .DS_Store
 .AppleDouble
@@ -198,20 +146,19 @@ config.secret.toml
 ._*
 .Spotlight-V100
 .Trashes
- 
+
 # Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 *.lnk
- 
+
 # Linux
 .directory
-*.desktop
- 
+
 # ============================================================
-#  LOGS Y TEMPORALES
+#  LOGS, TEMPORALES Y BASES DE DATOS LOCALES
 # ============================================================
 *.log
 *.log.*
@@ -222,20 +169,30 @@ temp/
 *.tmp
 *.temp
 *.cache
- 
+*.dmp
+
+# DB locales
+*.db
+*.mdf
+*.ldf
+*.mdb
+*.sqlite
+*.sqlite3
+
 # ============================================================
-#  TESTING Y COBERTURA
+#  TESTING Y COBERTURA (back + front)
 # ============================================================
 lcov.info
 coverage/
-tarpaulin-report.html
 .nyc_output/
- 
+
 # ============================================================
-#  DOCKER (si lo añades después)
+#  INFRAESTRUCTURA (Docker / Podman)
 # ============================================================
 .docker/volumes/
- 
+db-data/
+postgres-data/
+
 # ============================================================
 #  MISC
 # ============================================================
@@ -243,25 +200,3 @@ tarpaulin-report.html
 *.rej
 .direnv/
 .envrc
- 
-# ============================================================
-#  TAURI
-# ============================================================
- 
-# Bundles generados (instaladores: .msi, .deb, .AppImage, .dmg, .app, .exe)
-src-tauri/target/
-src-tauri/WixTools/
- 
-# Iconos generados automáticamente por `tauri icon`
-# (solo si los generas desde un PNG fuente — si los editas a mano, comenta esto)
-src-tauri/icons/
- 
-# Archivos de firma y actualización automática (Tauri updater)
-*.sig
-latest.json
-update-manifest.json
- 
-# Caché de Tauri CLI
-.tauri/
-
-*.txt
