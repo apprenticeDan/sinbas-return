@@ -19,26 +19,33 @@ type DomainError =
     | StockInsuficiente of string
 
 // ─────────────────────────────────────────────────────────────
+// Generador centralizado de identidades técnicas (UUID v7)
+// ─────────────────────────────────────────────────────────────
+
+module Identidad =
+    let nuevo () : Guid = Guid.CreateVersion7()
+
+// ─────────────────────────────────────────────────────────────
 // IDs técnicos internos — el compilador impide mezclarlos
 // ─────────────────────────────────────────────────────────────
 
-type ProductoId = ProductoId of int
-type LoteId = LoteId of int
-type OrdenId = OrdenId of int
+type ProductoId = ProductoId of Guid
+type LoteId = LoteId of Guid
+type OrdenId = OrdenId of Guid
 
-type PersonaId = PersonaId of int
-type EmpleadoId = EmpleadoId of int
-type ClienteId = ClienteId of int
-type ProveedorId = ProveedorId of int
+type PersonaId = PersonaId of Guid
+type EmpleadoId = EmpleadoId of Guid
+type ClienteId = ClienteId of Guid
+type ProveedorId = ProveedorId of Guid
 
-type UsuarioId = UsuarioId of int
+type UsuarioId = UsuarioId of Guid
 
-type LaboratorioId = LaboratorioId of int
-type ProformaId = ProformaId of int
-type UbicacionId = UbicacionId of int
+type LaboratorioId = LaboratorioId of Guid
+type ProformaId = ProformaId of Guid
+type UbicacionId = UbicacionId of Guid
 
-type TruequeId = TruequeId of int
-type MovimientoId = MovimientoId of int
+type TruequeId = TruequeId of Guid
+type MovimientoId = MovimientoId of Guid
 // ─────────────────────────────────────────────────────────────
 // CI boliviana — número + complemento opcional
 // ─────────────────────────────────────────────────────────────

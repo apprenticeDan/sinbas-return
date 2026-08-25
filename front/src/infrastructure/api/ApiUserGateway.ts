@@ -10,18 +10,18 @@ export const ApiUserGateway = {
       body: JSON.stringify(data),
     }),
 
-  assignRoles: (id: number, roles: SystemRole[]) =>
+  assignRoles: (id: string, roles: SystemRole[]) =>
     httpClient<void>(`/usuarios/${id}/roles`, {
       method: 'PUT',
       body: JSON.stringify({ usuarioId: id, roles }),
     }),
 
-  activarUsuario: (id: number) =>
+  activarUsuario: (id: string) =>
     httpClient<void>(`/usuarios/${id}/activar`, {
       method: 'PUT',
     }),
 
-  desactivarUsuario: (id: number) =>
+  desactivarUsuario: (id: string) =>
     httpClient<void>(`/usuarios/${id}/desactivar`, {
       method: 'PUT',
     }),

@@ -49,7 +49,6 @@ export const UserModal: Component<UserModalProps> = (props) => {
         await UserUseCases.asignarRoles(props.userToEdit.id, selectedRoles());
       } else {
         await UserUseCases.crearUsuario({
-          empleadoId: 1, // Se enlaza con el registro del empleado en segundo plano
           nombreUsuario: username().trim(),
           contrasena: password(),
           roles: selectedRoles(),

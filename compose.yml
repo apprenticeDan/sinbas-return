@@ -25,7 +25,7 @@ services:
       sinbas-db:
         condition: service_healthy
     volumes:
-      - .:/workspace:cached,Z
+      - .:/workspace:cached,z
     ports:
       - "8080:8080"
       - "5173:5173"

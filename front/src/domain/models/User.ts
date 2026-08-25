@@ -1,15 +1,16 @@
 import { SystemRole } from './Role';
+export type { SystemRole };
 
 export interface UserItem {
-  id: number;
-  empleadoId: number;
+  id: string;
+  empleadoId: string;
   nombreUsuario: string;
   roles: SystemRole[];
   activo: boolean;
 }
 
 export interface CreateUserDTO {
-  empleadoId: number;
+  empleadoId?: string;
   nombreUsuario: string;
   contrasena: string;
   roles: SystemRole[];

@@ -2,6 +2,7 @@ namespace Sinbas.Infrastructure
 
 open System
 open Dapper
+open Dapper.FSharp.PostgreSQL
 open Sinbas.Domain
 
 // ─────────────────────────────────────────────────────────────
@@ -10,16 +11,31 @@ open Sinbas.Domain
 
 [<CLIMutable>]
 type UsuarioRow =
-    { id            : int
-      empleado_id   : int
+    { id            : Guid
+      empleado_id   : Guid
       nombre_usuario: string
       password_hash : string
       estado        : string }
 
 [<CLIMutable>]
 type UsuarioRolRow =
-    { usuario_id: int
+    { usuario_id: Guid
       rol       : string }
+
+[<CLIMutable>]
+type EmpleadoRow =
+    { id             : Guid
+      nombre_completo: string
+      estado         : string }
+
+// ─────────────────────────────────────────────────────────────
+// Def de Tablas para Dapper.FSharp
+// ─────────────────────────────────────────────────────────────
+
+module private AuthTables =
+    let usuarioTable = table'<UsuarioRow> "usuario"
+    let usuarioRolTable = table'<UsuarioRolRow> "usuario_rol"
+    let empleadoTable = table'<EmpleadoRow> "empleado"
 
 // ─────────────────────────────────────────────────────────────
 // Helpers privados
@@ -49,29 +65,41 @@ module private AuthRepositoryHelpers =
             rolSet
             estado
 
-    let cargarRoles (conn: Npgsql.NpgsqlConnection) (usuarioId: int) =
-        conn.QueryAsync<UsuarioRolRow>(
-            "SELECT usuario_id, rol FROM usuario_rol WHERE usuario_id = @Id",
-            {| Id = usuarioId |}
-        )
-
-    let persistirRoles (conn: Npgsql.NpgsqlConnection) (usuarioId: int) (roles: NombreRol Set) =
+    let cargarRoles (conn: Npgsql.NpgsqlConnection) (usuarioId: Guid) =
         async {
-            do! conn.ExecuteAsync(
-                    "DELETE FROM usuario_rol WHERE usuario_id = @Id",
-                    {| Id = usuarioId |}
-                ) |> Async.AwaitTask |> Async.Ignore
+            let! roles =
+                select {
+                    for r in AuthTables.usuarioRolTable do
+                    where (r.usuario_id = usuarioId)
+                }
+                |> conn.SelectAsync<UsuarioRolRow>
+                |> Async.AwaitTask
+            return roles
+        }
+
+    let persistirRoles (conn: Npgsql.NpgsqlConnection) (usuarioId: Guid) (roles: NombreRol Set) =
+        async {
+            do! delete {
+                    for r in AuthTables.usuarioRolTable do
+                    where (r.usuario_id = usuarioId)
+                }
+                |> conn.DeleteAsync
+                |> Async.AwaitTask
+                |> Async.Ignore
 
             let rolRows =
                 roles
                 |> Set.toList
-                |> List.map (fun r -> {| usuario_id = usuarioId; rol = NombreRol.toString r |})
+                |> List.map (fun r -> { usuario_id = usuarioId; rol = NombreRol.toString r })
 
             if not rolRows.IsEmpty then
-                do! conn.ExecuteAsync(
-                        "INSERT INTO usuario_rol (usuario_id, rol) VALUES (@usuario_id, @rol)",
-                        rolRows
-                    ) |> Async.AwaitTask |> Async.Ignore
+                do! insert {
+                        into AuthTables.usuarioRolTable
+                        values rolRows
+                    }
+                    |> conn.InsertAsync
+                    |> Async.AwaitTask
+                    |> Async.Ignore
         }
 
 // ─────────────────────────────────────────────────────────────
@@ -87,19 +115,19 @@ module AuthRepository =
             use conn = DbConnection.crear ()
             let valorNombre = NombreUsuario.valor nombre
 
-            let! rowOpt =
-                conn.QueryFirstOrDefaultAsync<UsuarioRow>(
-                    "SELECT id, empleado_id, nombre_usuario, password_hash, estado
-                     FROM usuario
-                     WHERE nombre_usuario = @Nombre",
-                    {| Nombre = valorNombre |}
-                ) |> Async.AwaitTask
+            let! rows =
+                select {
+                    for u in AuthTables.usuarioTable do
+                    where (u.nombre_usuario = valorNombre)
+                }
+                |> conn.SelectAsync<UsuarioRow>
+                |> Async.AwaitTask
 
-            match box rowOpt with
-            | null -> return Error CredencialesInvalidas
-            | _ ->
-                let! rolesSeq = cargarRoles conn rowOpt.id |> Async.AwaitTask
-                return Ok (reconstruirDesdeFilas rowOpt rolesSeq)
+            match Seq.tryHead rows with
+            | None -> return Error CredencialesInvalidas
+            | Some row ->
+                let! rolesSeq = cargarRoles conn row.id
+                return Ok (reconstruirDesdeFilas row rolesSeq)
         }
 
     let buscarUsuarioPorId (id: UsuarioId) : Async<Result<Usuario, AuthError>> =
@@ -107,19 +135,19 @@ module AuthRepository =
             use conn = DbConnection.crear ()
             let (UsuarioId rawId) = id
 
-            let! rowOpt =
-                conn.QueryFirstOrDefaultAsync<UsuarioRow>(
-                    "SELECT id, empleado_id, nombre_usuario, password_hash, estado
-                     FROM usuario
-                     WHERE id = @Id",
-                    {| Id = rawId |}
-                ) |> Async.AwaitTask
+            let! rows =
+                select {
+                    for u in AuthTables.usuarioTable do
+                    where (u.id = rawId)
+                }
+                |> conn.SelectAsync<UsuarioRow>
+                |> Async.AwaitTask
 
-            match box rowOpt with
-            | null -> return Error (ErrorInterno "Usuario no encontrado")
-            | _ ->
-                let! rolesSeq = cargarRoles conn rowOpt.id |> Async.AwaitTask
-                return Ok (reconstruirDesdeFilas rowOpt rolesSeq)
+            match Seq.tryHead rows with
+            | None -> return Error (ErrorInterno "Usuario no encontrado")
+            | Some row ->
+                let! rolesSeq = cargarRoles conn row.id
+                return Ok (reconstruirDesdeFilas row rolesSeq)
         }
 
     let listarUsuarios () : Async<Usuario list> =
@@ -127,14 +155,20 @@ module AuthRepository =
             use conn = DbConnection.crear ()
 
             let! filas =
-                conn.QueryAsync<UsuarioRow>(
-                    "SELECT id, empleado_id, nombre_usuario, password_hash, estado FROM usuario ORDER BY id"
-                ) |> Async.AwaitTask
+                select {
+                    for u in AuthTables.usuarioTable do
+                    orderBy u.nombre_usuario
+                }
+                |> conn.SelectAsync<UsuarioRow>
+                |> Async.AwaitTask
 
             let! roles =
-                conn.QueryAsync<UsuarioRolRow>(
-                    "SELECT usuario_id, rol FROM usuario_rol"
-                ) |> Async.AwaitTask
+                select {
+                    for r in AuthTables.usuarioRolTable do
+                    selectAll
+                }
+                |> conn.SelectAsync<UsuarioRolRow>
+                |> Async.AwaitTask
 
             let rolesPorUsuario =
                 roles
@@ -163,47 +197,63 @@ module AuthRepository =
             let roles                = Usuario.roles usuario
 
             try
-                if id = 0 then
-                    // Asegurar que el empleado existe en la tabla 'empleado'
-                    do! conn.ExecuteAsync(
-                            "INSERT INTO empleado (id, nombre_completo, estado)
-                             OVERRIDING SYSTEM VALUE
-                             VALUES (@EmpId, 'Empleado #' || @EmpId, 'Activo')
-                             ON CONFLICT (id) DO NOTHING",
-                            {| EmpId = empId |}
-                        ) |> Async.AwaitTask |> Async.Ignore
+                // 1. Asegurar que el registro de empleado existe
+                let! empleadoExistente =
+                    select {
+                        for e in AuthTables.empleadoTable do
+                        where (e.id = empId)
+                    }
+                    |> conn.SelectAsync<EmpleadoRow>
+                    |> Async.AwaitTask
 
-                    // INSERT — PostgreSQL genera el ID de usuario
-                    let! nuevoId =
-                        conn.ExecuteScalarAsync<int>(
-                            "INSERT INTO usuario (empleado_id, nombre_usuario, password_hash, estado)
-                             VALUES (@EmpleadoId, @NombreUsuario, @PasswordHash, @Estado)
-                             RETURNING id",
-                            {| EmpleadoId = empId
-                               NombreUsuario = nombre
-                               PasswordHash = hash
-                               Estado = estado |}
-                        ) |> Async.AwaitTask
+                if Seq.isEmpty empleadoExistente then
+                    let nuevoEmpleado = { id = empId; nombre_completo = sprintf "Empleado #%s" (empId.ToString().Substring(0, 8)); estado = "Activo" }
+                    do! insert {
+                            into AuthTables.empleadoTable
+                            value nuevoEmpleado
+                        }
+                        |> conn.InsertAsync
+                        |> Async.AwaitTask
+                        |> Async.Ignore
 
-                    do! persistirRoles conn nuevoId roles
-                    return Ok ()
+                // 2. Verificar si el usuario ya existe
+                let! usuarioExistente =
+                    select {
+                        for u in AuthTables.usuarioTable do
+                        where (u.id = id)
+                    }
+                    |> conn.SelectAsync<UsuarioRow>
+                    |> Async.AwaitTask
 
+                let row =
+                    { id = id
+                      empleado_id = empId
+                      nombre_usuario = nombre
+                      password_hash = hash
+                      estado = estado }
+
+                if Seq.isEmpty usuarioExistente then
+                    // INSERT con Dapper.FSharp
+                    do! insert {
+                            into AuthTables.usuarioTable
+                            value row
+                        }
+                        |> conn.InsertAsync
+                        |> Async.AwaitTask
+                        |> Async.Ignore
                 else
-                    // UPDATE
-                    do! conn.ExecuteAsync(
-                            "UPDATE usuario
-                             SET nombre_usuario = @NombreUsuario,
-                                 password_hash  = @PasswordHash,
-                                 estado         = @Estado
-                             WHERE id = @Id",
-                            {| Id = id
-                               NombreUsuario = nombre
-                               PasswordHash = hash
-                               Estado = estado |}
-                        ) |> Async.AwaitTask |> Async.Ignore
+                    // UPDATE con Dapper.FSharp
+                    do! update {
+                            for u in AuthTables.usuarioTable do
+                            set row
+                            where (u.id = id)
+                        }
+                        |> conn.UpdateAsync
+                        |> Async.AwaitTask
+                        |> Async.Ignore
 
-                    do! persistirRoles conn id roles
-                    return Ok ()
+                do! persistirRoles conn id roles
+                return Ok ()
 
             with ex ->
                 return Error (ErrorInterno ex.Message)

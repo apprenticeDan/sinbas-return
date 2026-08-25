@@ -6,9 +6,9 @@ export const UserUseCases = {
 
   crearUsuario: (data: CreateUserDTO) => ApiUserGateway.createUsuario(data),
 
-  asignarRoles: (id: number, roles: SystemRole[]) => ApiUserGateway.assignRoles(id, roles),
+  asignarRoles: (id: string, roles: SystemRole[]) => ApiUserGateway.assignRoles(id, roles),
 
-  cambiarEstado: async (id: number, estaActivo: boolean) => {
+  cambiarEstado: async (id: string, estaActivo: boolean) => {
     if (estaActivo) {
       await ApiUserGateway.desactivarUsuario(id);
     } else {

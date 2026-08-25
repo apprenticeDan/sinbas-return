@@ -1,32 +1,33 @@
 namespace Sinbas.Application
 
+open System
 open Sinbas.Domain
 
 type CreateUserCommand =
-    { EmpleadoId: int
+    { EmpleadoId: Guid option
       NombreUsuario: string
       Contrasena: string
       Roles: string [] }
 
 type AssignRolesCommand =
-    { UsuarioId: int
+    { UsuarioId: Guid
       Roles: string [] }
 
 type ChangePasswordCommand =
-    { UsuarioId: int
+    { UsuarioId: Guid
       NuevaContrasena: string }
 
 type DisableUserCommand =
-    { UsuarioId: int }
+    { UsuarioId: Guid }
 
 type EnableUserCommand =
-    { UsuarioId: int }
+    { UsuarioId: Guid }
 
 type ListarUsuarios = unit -> Async<Usuario list>
 
 type UserListItem =
-    { Id: int
-      EmpleadoId: int
+    { Id: Guid
+      EmpleadoId: Guid
       NombreUsuario: string
       Roles: string list
       Activo: bool }
@@ -73,7 +74,12 @@ module UserUseCase =
                             | Error _ -> None)
                         |> Set.ofArray
 
-                    match Usuario.crear (EmpleadoId cmd.EmpleadoId) nombreUsuario hash parsedRoles with
+                    let empId =
+                        match cmd.EmpleadoId with
+                        | Some id -> EmpleadoId id
+                        | None -> EmpleadoId (Identidad.nuevo ())
+
+                    match Usuario.crear empId nombreUsuario hash parsedRoles with
                     | Error e -> return Error e
                     | Ok nuevoUsuario ->
                         return! guardarUsuario nuevoUsuario

@@ -67,14 +67,14 @@ module Usuario =
         if Set.isEmpty roles then
             Error (RolesRequeridos "El usuario debe tener al menos un rol")
         else
-            Ok { Id = UsuarioId 0
+            Ok { Id = UsuarioId (Identidad.nuevo ())
                  EmpleadoId = empleadoId
                  NombreUsuario = nombreUsuario
                  Hash = hash
                  Roles = roles
                  Estado = Activo }
 
-    let reconstruir id empleadoId nombre hash roles estado =
+    let reconstruir (id: System.Guid) (empleadoId: System.Guid) nombre hash roles estado =
         { Id = UsuarioId id
           EmpleadoId = EmpleadoId empleadoId
           NombreUsuario = NombreUsuario nombre

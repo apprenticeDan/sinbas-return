@@ -29,7 +29,7 @@ module UserEndpoints =
         |> ignore
 
         // GET /api/usuarios/{id}
-        app.MapGet("/api/usuarios/{id}", Func<int, Threading.Tasks.Task<IResult>>(fun id ->
+        app.MapGet("/api/usuarios/{id}", Func<Guid, Threading.Tasks.Task<IResult>>(fun id ->
             async {
                 let! result = UserUseCase.obtenerUsuarioPorId buscarPorId (UsuarioId id)
                 match result with
@@ -65,7 +65,7 @@ module UserEndpoints =
         |> ignore
 
         // PUT /api/usuarios/{id}/roles
-        app.MapPut("/api/usuarios/{id}/roles", Func<int, AssignRolesCommand, Threading.Tasks.Task<IResult>>(fun id cmd ->
+        app.MapPut("/api/usuarios/{id}/roles", Func<Guid, AssignRolesCommand, Threading.Tasks.Task<IResult>>(fun id cmd ->
             async {
                 let command = { cmd with UsuarioId = id }
                 let! result = UserUseCase.asignarRoles buscarPorId guardarUsuario command
@@ -83,7 +83,7 @@ module UserEndpoints =
         |> ignore
 
         // PUT /api/usuarios/{id}/activar
-        app.MapPut("/api/usuarios/{id}/activar", Func<int, Threading.Tasks.Task<IResult>>(fun id ->
+        app.MapPut("/api/usuarios/{id}/activar", Func<Guid, Threading.Tasks.Task<IResult>>(fun id ->
             async {
                 let command : EnableUserCommand = { UsuarioId = id }
                 let! result = UserUseCase.activarUsuario buscarPorId guardarUsuario command
@@ -97,7 +97,7 @@ module UserEndpoints =
         |> ignore
 
         // PUT /api/usuarios/{id}/desactivar
-        app.MapPut("/api/usuarios/{id}/desactivar", Func<int, Threading.Tasks.Task<IResult>>(fun id ->
+        app.MapPut("/api/usuarios/{id}/desactivar", Func<Guid, Threading.Tasks.Task<IResult>>(fun id ->
             async {
                 let command : DisableUserCommand = { UsuarioId = id }
                 let! result = UserUseCase.desactivarUsuario buscarPorId guardarUsuario command
@@ -111,7 +111,7 @@ module UserEndpoints =
         |> ignore
 
         // PUT /api/usuarios/{id}/password
-        app.MapPut("/api/usuarios/{id}/password", Func<int, ChangePasswordCommand, Threading.Tasks.Task<IResult>>(fun id cmd ->
+        app.MapPut("/api/usuarios/{id}/password", Func<Guid, ChangePasswordCommand, Threading.Tasks.Task<IResult>>(fun id cmd ->
             async {
                 let command = { cmd with UsuarioId = id }
                 let! result = UserUseCase.cambiarContrasena buscarPorId guardarUsuario hashPassword command
