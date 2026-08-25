@@ -45,10 +45,14 @@ module UserEndpoints =
         // POST /api/usuarios
         app.MapPost("/api/usuarios", Func<CreateUserCommand, Threading.Tasks.Task<IResult>>(fun cmd ->
             async {
+                printfn "[UserEndpoints] Petición POST /api/usuarios recibida: %+A" cmd
                 let! result = UserUseCase.crearUsuario buscarPorNombre guardarUsuario hashPassword cmd
                 match result with
-                | Ok () -> return Results.StatusCode(201)
+                | Ok () ->
+                    printfn "[UserEndpoints] Usuario creado exitosamente: %s" cmd.NombreUsuario
+                    return Results.StatusCode(201)
                 | Error (err: AuthError) ->
+                    printfn "[UserEndpoints] Error al crear usuario: %+A" err
                     match err with
                     | NombreUsuarioInvalido msg -> return Results.BadRequest({| error = msg |})
                     | RolesRequeridos msg -> return Results.BadRequest({| error = msg |})

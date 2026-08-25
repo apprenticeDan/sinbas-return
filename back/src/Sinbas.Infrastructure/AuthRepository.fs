@@ -164,7 +164,16 @@ module AuthRepository =
 
             try
                 if id = 0 then
-                    // INSERT — PostgreSQL genera el ID
+                    // Asegurar que el empleado existe en la tabla 'empleado'
+                    do! conn.ExecuteAsync(
+                            "INSERT INTO empleado (id, nombre_completo, estado)
+                             OVERRIDING SYSTEM VALUE
+                             VALUES (@EmpId, 'Empleado #' || @EmpId, 'Activo')
+                             ON CONFLICT (id) DO NOTHING",
+                            {| EmpId = empId |}
+                        ) |> Async.AwaitTask |> Async.Ignore
+
+                    // INSERT — PostgreSQL genera el ID de usuario
                     let! nuevoId =
                         conn.ExecuteScalarAsync<int>(
                             "INSERT INTO usuario (empleado_id, nombre_usuario, password_hash, estado)
@@ -178,6 +187,7 @@ module AuthRepository =
 
                     do! persistirRoles conn nuevoId roles
                     return Ok ()
+
                 else
                     // UPDATE
                     do! conn.ExecuteAsync(

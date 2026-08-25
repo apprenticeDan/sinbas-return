@@ -6,11 +6,11 @@ type CreateUserCommand =
     { EmpleadoId: int
       NombreUsuario: string
       Contrasena: string
-      Roles: string list }
+      Roles: string [] }
 
 type AssignRolesCommand =
     { UsuarioId: int
-      Roles: string list }
+      Roles: string [] }
 
 type ChangePasswordCommand =
     { UsuarioId: int
@@ -67,11 +67,11 @@ module UserUseCase =
                     let hash = hashPassword cmd.Contrasena
                     let parsedRoles =
                         cmd.Roles
-                        |> List.choose (fun r ->
+                        |> Array.choose (fun r ->
                             match NombreRol.fromString r with
                             | Ok role -> Some role
                             | Error _ -> None)
-                        |> Set.ofList
+                        |> Set.ofArray
 
                     match Usuario.crear (EmpleadoId cmd.EmpleadoId) nombreUsuario hash parsedRoles with
                     | Error e -> return Error e
@@ -87,10 +87,11 @@ module UserUseCase =
             | Ok usuario ->
                 let parsedRoles =
                     cmd.Roles
-                    |> List.choose (fun r ->
+                    |> Array.choose (fun r ->
                         match NombreRol.fromString r with
                         | Ok role -> Some role
                         | Error _ -> None)
+                    |> Array.toList
 
                 let usuarioActualizado = Usuario.asignarRoles parsedRoles usuario
                 if Set.isEmpty (Usuario.roles usuarioActualizado) then
