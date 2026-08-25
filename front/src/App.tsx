@@ -1,53 +1,40 @@
-import { Component, Show } from 'solid-js';
-import { isLoggedIn, activeTab } from './store/authStore';
-import { Sidebar } from './components/Sidebar';
-import { LoginView } from './views/LoginView';
-import { UsersView } from './views/UsersView';
-import { PlaceholderView } from './views/PlaceholderView';
+import { Component, createSignal, Show } from 'solid-js';
+import { authStore } from './ui/store/authStore';
+import { Sidebar } from './ui/components/Sidebar';
+import { LoginView } from './ui/views/LoginView';
+import { UsersView } from './ui/views/UsersView';
+import { PlaceholderView } from './ui/views/PlaceholderView';
 
 export const App: Component = () => {
+  const [currentView, setCurrentView] = createSignal('users');
+
   return (
-    <Show when={isLoggedIn()} fallback={<LoginView />}>
+    <Show when={authStore.isAuthenticated()} fallback={<LoginView />}>
       <div class="app">
-        <Sidebar />
+        <Sidebar currentView={currentView()} onNavigate={setCurrentView} />
         <main class="content">
-          <Show when={activeTab() === 'usuarios'}>
+          <Show when={currentView() === 'users'}>
             <UsersView />
           </Show>
-
-          <Show when={activeTab() === 'ingresos'}>
+          <Show when={currentView() === 'productos'}>
             <PlaceholderView
-              title="Registro de Ingresos"
-              eyebrow="Almacén"
-              description="Cada entrada de semillas, plantas, insumos o servicios al almacén, con su procedencia."
-              featureCode="F4 / F-INV-01"
+              title="Catálogo de Productos y Precios"
+              featureCode="MF-01-01"
+              description="Gestión de especies, variedades de semillas y tarifas activas."
             />
           </Show>
-
-          <Show when={activeTab() === 'proforma'}>
+          <Show when={currentView() === 'lotes'}>
             <PlaceholderView
-              title="Cotización (Proforma)"
-              eyebrow="Comercial"
-              description="Cotización para un cliente con disponibilidad de stock por ítem y estampado sin reserva."
-              featureCode="F7 / F-COM-01"
+              title="Gestión de Lotes de Semillas"
+              featureCode="MF-02-01"
+              description="Registro y trazabilidad de lotes recibidos y procesados."
             />
           </Show>
-
-          <Show when={activeTab() === 'pedidos'}>
+          <Show when={currentView() === 'laboratorio'}>
             <PlaceholderView
-              title="Ventas y Pedidos"
-              eyebrow="Comercial / Almacén"
-              description="Ventas y usos internos por preparar, con sus etiquetas de despacho y selección FIFO."
-              featureCode="F8 / F-COM-02"
-            />
-          </Show>
-
-          <Show when={activeTab() === 'kardex'}>
-            <PlaceholderView
-              title="Kárdex e Inventario"
-              eyebrow="Trazabilidad"
-              description="Cálculo puro de existencias por proyección inmutable (fold) e historial completo de movimientos."
-              featureCode="F5 / F-INV-08"
+              title="Análisis de Calidad y Germinación"
+              featureCode="MF-03-01"
+              description="Certificación de semillas y resultados de laboratorio."
             />
           </Show>
         </main>
@@ -55,4 +42,5 @@ export const App: Component = () => {
     </Show>
   );
 };
+
 export default App;

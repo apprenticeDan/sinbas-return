@@ -1,5 +1,6 @@
 import { Component, createSignal, onMount, For, Show } from 'solid-js';
-import { api, UserItem } from '../services/api';
+import { UserItem } from '../../domain/models/User';
+import { UserUseCases } from '../../application/usecases/UserUseCases';
 import { UserModal } from '../components/UserModal';
 
 export const UsersView: Component = () => {
@@ -13,7 +14,7 @@ export const UsersView: Component = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getUsuarios();
+      const data = await UserUseCases.listarUsuarios();
       setUsers(data);
     } catch (err: any) {
       setError(err.message || 'Error al cargar usuarios');
@@ -28,11 +29,7 @@ export const UsersView: Component = () => {
 
   const handleToggleState = async (user: UserItem) => {
     try {
-      if (user.activo) {
-        await api.desactivarUsuario(user.id);
-      } else {
-        await api.activarUsuario(user.id);
-      }
+      await UserUseCases.cambiarEstado(user.id, user.activo);
       await loadUsers();
     } catch (err: any) {
       alert(err.message || 'Error al cambiar estado del usuario');
@@ -61,9 +58,9 @@ export const UsersView: Component = () => {
 
       <div class="stack">
         <div class="card">
-          <div class="toolbar" style={{ justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontWeight: '600', color: 'var(--ink-soft)' }}>
+          <div class="toolbar" style={{ 'justify-content': 'space-between' }}>
+            <div style={{ display: 'flex', 'align-items': 'center', gap: '10px' }}>
+              <span style={{ 'font-weight': '600', color: 'var(--ink-soft)' }}>
                 Total Usuarios: {users().length}
               </span>
             </div>
@@ -82,7 +79,7 @@ export const UsersView: Component = () => {
           </Show>
 
           <Show when={loading()}>
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-soft)' }}>
+            <div style={{ padding: '40px', 'text-align': 'center', color: 'var(--ink-soft)' }}>
               Cargando usuarios...
             </div>
           </Show>
@@ -96,7 +93,7 @@ export const UsersView: Component = () => {
                   <th>Usuario</th>
                   <th>Roles Asignados</th>
                   <th>Estado</th>
-                  <th style={{ textAlign: 'right' }}>Acciones</th>
+                  <th style={{ 'text-align': 'right' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -105,12 +102,12 @@ export const UsersView: Component = () => {
                     <tr>
                       <td class="muted">#{u.id}</td>
                       <td>Empleado #{u.empleadoId}</td>
-                      <td style={{ fontWeight: '600' }}>{u.nombreUsuario}</td>
+                      <td style={{ 'font-weight': '600' }}>{u.nombreUsuario}</td>
                       <td>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '4px' }}>
                           <For each={u.roles}>
                             {(r) => (
-                              <span class="pill pill-green" style={{ fontSize: '10.5px' }}>
+                              <span class="pill pill-green" style={{ 'font-size': '10.5px' }}>
                                 {r}
                               </span>
                             )}
@@ -125,18 +122,18 @@ export const UsersView: Component = () => {
                           <span class="pill pill-green">Activo</span>
                         </Show>
                       </td>
-                      <td style={{ textAlign: 'right' }}>
+                      <td style={{ 'text-align': 'right' }}>
                         <div style={{ display: 'inline-flex', gap: '6px' }}>
                           <button
                             class="btn btn-ghost"
-                            style={{ padding: '4px 10px', fontSize: '11.5px' }}
+                            style={{ padding: '4px 10px', 'font-size': '11.5px' }}
                             onClick={() => openEditModal(u)}
                           >
                             Roles
                           </button>
                           <button
                             class={`btn ${u.activo ? 'btn-ghost' : 'btn-primary'}`}
-                            style={{ padding: '4px 10px', fontSize: '11.5px' }}
+                            style={{ padding: '4px 10px', 'font-size': '11.5px' }}
                             onClick={() => handleToggleState(u)}
                           >
                             {u.activo ? 'Desactivar' : 'Activar'}
