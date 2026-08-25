@@ -200,3 +200,5 @@ postgres-data/
 *.rej
 .direnv/
 .envrc
+
+docs/borradores/
