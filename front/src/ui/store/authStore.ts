@@ -31,4 +31,33 @@ export const authStore = {
   },
   isAuthenticated: () => !!token(),
   hasRole: (role: string) => user()?.roles.includes(role) || false,
+  hasAnyRole: (roles: string[]) => user()?.roles.some((r) => roles.includes(r)) || false,
+
+  canAccessView: (view: string): boolean => {
+    const userRoles = user()?.roles || [];
+    if (userRoles.includes('Administrador')) return true;
+
+    switch (view) {
+      case 'users':
+        return false; // Solo Administrador
+      case 'productos':
+        return userRoles.some((r) => ['Gerencia', 'Comercial'].includes(r));
+      case 'lotes':
+        return userRoles.some((r) => ['Almacen', 'Gerencia', 'Laboratorio', 'Comercial'].includes(r));
+      case 'laboratorio':
+        return userRoles.includes('Laboratorio');
+      default:
+        return false;
+    }
+  },
+
+  getDefaultView: (): string => {
+    const userRoles = user()?.roles || [];
+    if (userRoles.includes('Administrador')) return 'users';
+    if (userRoles.includes('Almacen')) return 'lotes';
+    if (userRoles.includes('Laboratorio')) return 'laboratorio';
+    if (userRoles.some((r) => ['Gerencia', 'Comercial'].includes(r))) return 'productos';
+    return 'lotes';
+  },
 };
+

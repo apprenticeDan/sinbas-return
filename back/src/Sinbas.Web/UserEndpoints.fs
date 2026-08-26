@@ -24,6 +24,7 @@ module UserEndpoints =
                 return Results.Ok(usuarios)
             } |> Async.StartAsTask
         ))
+            .RequireAuthorization("RequireAdmin")
             .WithName("ListarUsuarios")
             .WithTags("Usuarios")
         |> ignore
@@ -38,6 +39,7 @@ module UserEndpoints =
                 | Error _ -> return Results.NotFound({| error = "Usuario no encontrado" |})
             } |> Async.StartAsTask
         ))
+            .RequireAuthorization("RequireAdmin")
             .WithName("ObtenerUsuario")
             .WithTags("Usuarios")
         |> ignore
@@ -60,6 +62,7 @@ module UserEndpoints =
                     | _ -> return Results.BadRequest({| error = sprintf "%A" err |})
             } |> Async.StartAsTask
         ))
+            .RequireAuthorization("RequireAdmin")
             .WithName("CrearUsuario")
             .WithTags("Usuarios")
         |> ignore
@@ -78,6 +81,7 @@ module UserEndpoints =
                     | _ -> return Results.BadRequest({| error = sprintf "%A" err |})
             } |> Async.StartAsTask
         ))
+            .RequireAuthorization("RequireAdmin")
             .WithName("AsignarRoles")
             .WithTags("Usuarios")
         |> ignore
@@ -92,6 +96,7 @@ module UserEndpoints =
                 | Error err -> return Results.BadRequest({| error = sprintf "%A" err |})
             } |> Async.StartAsTask
         ))
+            .RequireAuthorization("RequireAdmin")
             .WithName("ActivarUsuario")
             .WithTags("Usuarios")
         |> ignore
@@ -106,6 +111,7 @@ module UserEndpoints =
                 | Error err -> return Results.BadRequest({| error = sprintf "%A" err |})
             } |> Async.StartAsTask
         ))
+            .RequireAuthorization("RequireAdmin")
             .WithName("DesactivarUsuario")
             .WithTags("Usuarios")
         |> ignore
@@ -120,6 +126,7 @@ module UserEndpoints =
                 | Error err -> return Results.BadRequest({| error = sprintf "%A" err |})
             } |> Async.StartAsTask
         ))
+            .RequireAuthorization("RequireAdmin")
             .WithName("CambiarPassword")
             .WithTags("Usuarios")
         |> ignore
