@@ -5,6 +5,7 @@ import { Product } from '../../domain/models/Product';
 import { DataTable, Column } from '../components/DataTable';
 import { ProductFormModal } from '../components/ProductFormModal';
 import { AssignPriceModal } from '../components/AssignPriceModal';
+import { formatDisplayId } from '../utils/formatters';
 
 export function CatalogView() {
   onMount(() => {
@@ -22,6 +23,24 @@ export function CatalogView() {
   });
 
   const columns: Column<Product>[] = [
+    {
+      header: 'ID',
+      width: '90px',
+      cell: (p, idx) => (
+        <span
+          title={`UUID v7: ${p.id}`}
+          style={{
+            'font-family': 'monospace',
+            'font-size': '12px',
+            color: 'var(--ink-soft)',
+            cursor: 'help',
+            'border-bottom': '1px dotted var(--border)',
+          }}
+        >
+          {formatDisplayId('PRD', idx, p.id)}
+        </span>
+      ),
+    },
     {
       header: 'Producto / Nombre Científico',
       cell: (p) => (

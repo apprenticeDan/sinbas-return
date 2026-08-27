@@ -3,9 +3,10 @@ import { JSX, For, Show } from 'solid-js';
 export interface Column<T> {
   header: string;
   accessor?: keyof T;
-  cell?: (row: T) => JSX.Element;
+  cell?: (row: T, index: number) => JSX.Element;
   className?: string;
   align?: 'left' | 'center' | 'right';
+  width?: string;
 }
 
 interface DataTableProps<T> {
@@ -18,7 +19,7 @@ interface DataTableProps<T> {
 export function DataTable<T extends { id: string | number }>(props: DataTableProps<T>) {
   return (
     <div class="card" style={{ overflow: 'hidden' }}>
-      <div style={{ 'overflow-x': 'auto', 'max-width': '100%' }}>
+      <div style={{ 'overflow-x': 'auto', width: '100%' }}>
         <table style={{ width: '100%', 'border-collapse': 'collapse', 'min-width': '650px' }}>
           <thead>
             <tr>
@@ -26,7 +27,7 @@ export function DataTable<T extends { id: string | number }>(props: DataTablePro
                 {(col) => (
                   <th
                     class={col.className || ''}
-                    style={{ 'text-align': col.align || 'left' }}
+                    style={{ 'text-align': col.align || 'left', width: col.width || 'auto' }}
                   >
                     {col.header}
                   </th>
@@ -59,15 +60,15 @@ export function DataTable<T extends { id: string | number }>(props: DataTablePro
                 }
               >
                 <For each={props.data}>
-                  {(row) => (
+                  {(row, idx) => (
                     <tr>
                       <For each={props.columns}>
                         {(col) => (
                           <td
                             class={col.className || ''}
-                            style={{ 'text-align': col.align || 'left' }}
+                            style={{ 'text-align': col.align || 'left', width: col.width || 'auto' }}
                           >
-                            {col.cell ? col.cell(row) : (col.accessor ? String(row[col.accessor] ?? '') : '')}
+                            {col.cell ? col.cell(row, idx()) : (col.accessor ? String(row[col.accessor] ?? '') : '')}
                           </td>
                         )}
                       </For>

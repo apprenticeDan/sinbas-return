@@ -195,7 +195,10 @@ nav.nav-list {
 /* Content Shell */
 .content {
   padding: 30px 38px 60px;
-  max-width: 1180px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .panel-head {
@@ -232,6 +235,7 @@ nav.nav-list {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-l);
   box-shadow: 0 1px 2px rgba(53, 90, 44, 0.04);
+  overflow: hidden;
 }
 
 .toolbar {

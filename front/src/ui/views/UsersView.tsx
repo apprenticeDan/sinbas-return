@@ -2,6 +2,7 @@ import { Component, createSignal, onMount, For, Show } from 'solid-js';
 import { UserItem } from '../../domain/models/User';
 import { UserUseCases } from '../../application/usecases/UserUseCases';
 import { UserModal } from '../components/UserModal';
+import { formatDisplayId } from '../utils/formatters';
 
 export const UsersView: Component = () => {
   const [users, setUsers] = createSignal<UserItem[]>([]);
@@ -57,7 +58,7 @@ export const UsersView: Component = () => {
       </div>
 
       <div class="stack">
-        <div class="card">
+        <div class="card" style={{ overflow: 'hidden' }}>
           <div class="toolbar" style={{ 'justify-content': 'space-between' }}>
             <div style={{ display: 'flex', 'align-items': 'center', gap: '10px' }}>
               <span style={{ 'font-weight': '600', color: 'var(--ink-soft)' }}>
@@ -65,7 +66,7 @@ export const UsersView: Component = () => {
               </span>
             </div>
             <button class="btn btn-primary" onClick={openCreateModal}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style={{ width: '16px', height: '16px' }}>
                 <path d="M12 5v14M5 12h14" />
               </svg>
               Nuevo Usuario
@@ -85,66 +86,76 @@ export const UsersView: Component = () => {
           </Show>
 
           <Show when={!loading()}>
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Empleado</th>
-                  <th>Usuario</th>
-                  <th>Roles Asignados</th>
-                  <th>Estado</th>
-                  <th style={{ 'text-align': 'right' }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                <For each={users()}>
-                  {(u) => (
-                    <tr>
-                      <td class="muted">#{u.id}</td>
-                      <td>Empleado #{u.empleadoId}</td>
-                      <td style={{ 'font-weight': '600' }}>{u.nombreUsuario}</td>
-                      <td>
-                        <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '4px' }}>
-                          <For each={u.roles}>
-                            {(r) => (
-                              <span class="pill pill-green" style={{ 'font-size': '10.5px' }}>
-                                {r}
-                              </span>
-                            )}
-                          </For>
-                        </div>
-                      </td>
-                      <td>
-                        <Show
-                          when={u.activo}
-                          fallback={<span class="pill pill-rust">Bloqueado</span>}
-                        >
-                          <span class="pill pill-green">Activo</span>
-                        </Show>
-                      </td>
-                      <td style={{ 'text-align': 'right' }}>
-                        <div style={{ display: 'inline-flex', gap: '6px' }}>
-                          <button
-                            class="btn btn-ghost"
-                            style={{ padding: '4px 10px', 'font-size': '11.5px' }}
-                            onClick={() => openEditModal(u)}
+            <div style={{ 'overflow-x': 'auto', width: '100%' }}>
+              <table style={{ width: '100%', 'border-collapse': 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '100px' }}>ID</th>
+                    <th>Empleado</th>
+                    <th>Usuario</th>
+                    <th>Roles Asignados</th>
+                    <th>Estado</th>
+                    <th style={{ 'text-align': 'right' }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <For each={users()}>
+                    {(u, idx) => (
+                      <tr>
+                        <td style={{ 'font-family': 'monospace', 'font-size': '12.5px', color: 'var(--ink-soft)' }}>
+                          <span title={`UUID: ${u.id}`} style={{ cursor: 'help', 'border-bottom': '1px dotted var(--border)' }}>
+                            {formatDisplayId('USR', idx(), u.id)}
+                          </span>
+                        </td>
+                        <td>
+                          <span title={`UUID Empleado: ${u.empleadoId}`} style={{ cursor: 'help', 'font-size': '13px', color: 'var(--ink)' }}>
+                            Empleado {formatDisplayId('EMP', idx(), u.empleadoId)}
+                          </span>
+                        </td>
+                        <td style={{ 'font-weight': '600' }}>{u.nombreUsuario}</td>
+                        <td>
+                          <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '4px' }}>
+                            <For each={u.roles}>
+                              {(r) => (
+                                <span class="pill pill-green" style={{ 'font-size': '10.5px' }}>
+                                  {r}
+                                </span>
+                              )}
+                            </For>
+                          </div>
+                        </td>
+                        <td>
+                          <Show
+                            when={u.activo}
+                            fallback={<span class="pill pill-rust">Bloqueado</span>}
                           >
-                            Roles
-                          </button>
-                          <button
-                            class={`btn ${u.activo ? 'btn-ghost' : 'btn-primary'}`}
-                            style={{ padding: '4px 10px', 'font-size': '11.5px' }}
-                            onClick={() => handleToggleState(u)}
-                          >
-                            {u.activo ? 'Desactivar' : 'Activar'}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
+                            <span class="pill pill-green">Activo</span>
+                          </Show>
+                        </td>
+                        <td style={{ 'text-align': 'right' }}>
+                          <div style={{ display: 'inline-flex', gap: '6px' }}>
+                            <button
+                              class="btn btn-ghost"
+                              style={{ padding: '4px 10px', 'font-size': '11.5px' }}
+                              onClick={() => openEditModal(u)}
+                            >
+                              Roles
+                            </button>
+                            <button
+                              class={`btn ${u.activo ? 'btn-ghost' : 'btn-primary'}`}
+                              style={{ padding: '4px 10px', 'font-size': '11.5px' }}
+                              onClick={() => handleToggleState(u)}
+                            >
+                              {u.activo ? 'Desactivar' : 'Activar'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </For>
+                </tbody>
+              </table>
+            </div>
           </Show>
         </div>
       </div>
