@@ -26,16 +26,18 @@ export function CatalogView() {
       header: 'Producto / Nombre Científico',
       cell: (p) => (
         <div>
-          <div class="font-bold text-slate-100 flex items-center gap-2">
+          <div style={{ 'font-weight': '600', color: 'var(--ink)' }}>
             <Show when={p.genero && p.epiteto} fallback={<span>{p.nombreVisible}</span>}>
-              <span class="italic font-serif text-emerald-300 text-base">{p.nombreVisible}</span>
+              <span style={{ 'font-style': 'italic', 'font-family': 'var(--font-display)', color: 'var(--green-deep)', 'font-size': '15px' }}>
+                {p.nombreVisible}
+              </span>
             </Show>
           </div>
           <Show when={p.nombresComunes && p.nombresComunes.length > 0}>
-            <div class="flex flex-wrap gap-1 mt-1">
+            <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '4px', 'margin-top': '4px' }}>
               <For each={p.nombresComunes}>
                 {(nc) => (
-                  <span class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-slate-800 text-slate-300 border border-slate-700/60">
+                  <span class="pill pill-green" style={{ 'font-size': '10.5px' }}>
                     {nc}
                   </span>
                 )}
@@ -47,32 +49,25 @@ export function CatalogView() {
     },
     {
       header: 'Categoría',
-      cell: (p) => {
-        const bgMap: Record<string, string> = {
-          Semilla: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60',
-          Plantin: 'bg-teal-950/80 text-teal-300 border-teal-700/60',
-          Insumo: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60',
-          Otro: 'bg-slate-800 text-slate-300 border-slate-700',
-        };
-        return (
-          <span class={`inline-block px-2.5 py-1 text-xs font-semibold rounded-lg border ${bgMap[p.categoria] || bgMap.Otro}`}>
-            {p.categoria}
-          </span>
-        );
-      },
+      cell: (p) => (
+        <span class="pill pill-green" style={{ 'font-weight': '600' }}>
+          {p.categoria}
+        </span>
+      ),
     },
     {
       header: 'Unidad / Trazabilidad',
       cell: (p) => (
-        <div class="space-y-1">
-          <div class="text-slate-200 font-medium">{p.unidadManejo}</div>
-          <span
-            class={`inline-block px-2 py-0.5 text-[10px] font-bold rounded ${
-              p.trazabilidad === 'PorLote' ? 'bg-amber-950/60 text-amber-300 border border-amber-800/60' : 'bg-slate-800 text-slate-400'
-            }`}
-          >
-            {p.trazabilidad === 'PorLote' ? 'Lote Obligatorio' : 'Simple'}
-          </span>
+        <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px' }}>
+          <div style={{ 'font-weight': '500', color: 'var(--ink)' }}>{p.unidadManejo}</div>
+          <div>
+            <span
+              class={p.trazabilidad === 'PorLote' ? 'pill pill-amber' : 'pill'}
+              style={{ 'font-size': '10px' }}
+            >
+              {p.trazabilidad === 'PorLote' ? 'Lote Obligatorio' : 'Simple'}
+            </span>
+          </div>
         </div>
       ),
     },
@@ -82,13 +77,9 @@ export function CatalogView() {
         <div>
           <Show
             when={p.precioOficial !== undefined && p.precioOficial !== null}
-            fallback={
-              <span class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-950/40 text-amber-400 border border-amber-800/40">
-                <span>⏳</span> Sin precio
-              </span>
-            }
+            fallback={<span class="pill pill-amber">⏳ Sin precio</span>}
           >
-            <span class="font-mono text-base font-bold text-emerald-400">
+            <span style={{ 'font-family': 'monospace', 'font-size': '15px', 'font-weight': '700', color: 'var(--green-deep)' }}>
               {p.moneda || 'BOB'} {p.precioOficial?.toFixed(2)}
             </span>
           </Show>
@@ -99,38 +90,26 @@ export function CatalogView() {
       header: 'Estado Comercial',
       cell: (p) => {
         if (p.estadoComercial === 'ActivoParaVenta') {
-          return (
-            <span class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 shadow-sm">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              Activo para Venta
-            </span>
-          );
+          return <span class="pill pill-green">● Activo para Venta</span>;
         } else if (p.estadoComercial === 'PendientePrecioBorrador') {
-          return (
-            <span class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-950/80 text-amber-300 border border-amber-700/60 shadow-sm">
-              <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-              Borrador Sin Precio
-            </span>
-          );
+          return <span class="pill pill-amber">● Borrador Sin Precio</span>;
         }
-        return (
-          <span class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-            Inactivo
-          </span>
-        );
+        return <span class="pill pill-rust">● Inactivo</span>;
       },
     },
     {
       header: 'Acciones',
+      align: 'right',
       cell: (p) => (
-        <div class="flex items-center gap-2">
+        <div style={{ display: 'flex', 'justify-content': 'flex-end', gap: '6px' }}>
           <Show when={canManagePrices()}>
             <button
               onClick={() => catalogStore.openAssignPriceModal(p)}
-              class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-900/60 hover:bg-emerald-800/80 text-emerald-200 border border-emerald-700/60 transition-all flex items-center gap-1 shadow-sm"
+              class="btn btn-primary"
+              style={{ padding: '5px 10px', 'font-size': '12px' }}
               title="Asignar o Modificar Precio Oficial (Gerencia)"
             >
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg style={{ width: '14px', height: '14px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
               </svg>
               {p.precioOficial ? 'Editar Precio' : 'Fijar Precio'}
@@ -138,7 +117,7 @@ export function CatalogView() {
           </Show>
 
           <Show when={!canManagePrices() && p.estadoComercial === 'PendientePrecioBorrador'}>
-            <span class="text-xs text-slate-500 italic">Esp. Gerencia</span>
+            <span style={{ 'font-size': '11px', color: 'var(--ink-soft)', 'font-style': 'italic' }}>Esp. Gerencia</span>
           </Show>
         </div>
       ),
@@ -146,88 +125,77 @@ export function CatalogView() {
   ];
 
   return (
-    <div class="space-y-6 animate-fade-in p-2 sm:p-4">
-      {/* Top Title & Stats Banner */}
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/60 border border-slate-800/80 p-5 rounded-2xl backdrop-blur-md">
-        <div>
-          <h1 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">
-            Catálogo Oficial de Productos y Precios
-          </h1>
-          <p class="text-xs sm:text-sm text-slate-400 mt-1">
-            Gobernanza comercial, precios oficiales y estados de disponibilidad para venta.
-          </p>
-        </div>
-
-        {/* Stats Cards */}
-        <div class="flex items-center gap-3">
-          <div class="px-4 py-2 bg-slate-800/80 border border-slate-700/60 rounded-xl text-center">
-            <div class="text-xs text-slate-400 font-medium">Total</div>
-            <div class="text-lg font-bold text-slate-100">{stats().total}</div>
-          </div>
-          <div class="px-4 py-2 bg-emerald-950/40 border border-emerald-800/40 rounded-xl text-center">
-            <div class="text-xs text-emerald-400 font-medium">En Venta</div>
-            <div class="text-lg font-bold text-emerald-300">{stats().activos}</div>
-          </div>
-          <div class="px-4 py-2 bg-amber-950/40 border border-amber-800/40 rounded-xl text-center">
-            <div class="text-xs text-amber-400 font-medium">Borradores</div>
-            <div class="text-lg font-bold text-amber-300">{stats().borradores}</div>
-          </div>
-        </div>
+    <section class="panel">
+      {/* Panel Header */}
+      <div class="panel-head">
+        <p class="panel-eyebrow">Catálogo Oficial</p>
+        <h1 class="panel-title">Catálogo de Productos y Precios</h1>
+        <p class="panel-desc">
+          Gobernanza comercial, precios oficiales y estados de disponibilidad para venta del vivero.
+        </p>
       </div>
 
-      {/* Filter & Action Toolbar */}
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900/40 border border-slate-800 p-4 rounded-xl">
-        {/* Left Filters */}
-        <div class="flex flex-wrap items-center gap-3 flex-1">
-          {/* Search Input */}
-          <div class="relative min-w-[220px] flex-1">
-            <input
-              type="text"
-              placeholder="Buscar por especie o nombre..."
-              value={catalogStore.searchTerm()}
-              onInput={(e) => catalogStore.setSearchTerm(e.currentTarget.value)}
-              class="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700/80 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-emerald-500 placeholder-slate-500"
-            />
-            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-            </svg>
+      {/* Toolbar & Filters Container */}
+      <div class="card" style={{ 'margin-bottom': '20px' }}>
+        <div class="toolbar" style={{ 'justify-content': 'space-between' }}>
+          {/* Filters */}
+          <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '12px', flex: '1', 'align-items': 'flex-end' }}>
+            <div class="field" style={{ 'min-width': '200px', flex: '1' }}>
+              <label>Buscar Producto</label>
+              <input
+                type="text"
+                placeholder="Especie o nombre común..."
+                value={catalogStore.searchTerm()}
+                onInput={(e) => catalogStore.setSearchTerm(e.currentTarget.value)}
+              />
+            </div>
+
+            <div class="field">
+              <label>Categoría</label>
+              <select
+                value={catalogStore.categoryFilter()}
+                onChange={(e) => catalogStore.setCategoryFilter(e.currentTarget.value)}
+              >
+                <option value="">Todas las Categorías</option>
+                <option value="Semilla">Semilla</option>
+                <option value="Plantin">Plantín</option>
+                <option value="Insumo">Insumo</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Estado Comercial</label>
+              <select
+                value={catalogStore.stateFilter()}
+                onChange={(e) => catalogStore.setStateFilter(e.currentTarget.value)}
+              >
+                <option value="">Todos los Estados</option>
+                <option value="ActivoParaVenta">Activo para Venta</option>
+                <option value="PendientePrecioBorrador">Borrador Sin Precio</option>
+              </select>
+            </div>
           </div>
 
-          {/* Category Filter */}
-          <select
-            value={catalogStore.categoryFilter()}
-            onChange={(e) => catalogStore.setCategoryFilter(e.currentTarget.value)}
-            class="px-3 py-2 bg-slate-800 border border-slate-700/80 rounded-lg text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
+          {/* Action Button */}
+          <button
+            onClick={() => catalogStore.setCreateModalOpen(true)}
+            class="btn btn-primary"
+            style={{ 'align-self': 'flex-end' }}
           >
-            <option value="">Todas las Categorías</option>
-            <option value="Semilla">Semilla</option>
-            <option value="Plantin">Plantín</option>
-            <option value="Insumo">Insumo</option>
-            <option value="Otro">Otro</option>
-          </select>
-
-          {/* State Filter */}
-          <select
-            value={catalogStore.stateFilter()}
-            onChange={(e) => catalogStore.setStateFilter(e.currentTarget.value)}
-            class="px-3 py-2 bg-slate-800 border border-slate-700/80 rounded-lg text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
-          >
-            <option value="">Todos los Estados</option>
-            <option value="ActivoParaVenta">Activo para Venta</option>
-            <option value="PendientePrecioBorrador">Borrador Sin Precio</option>
-          </select>
+            <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Nuevo Producto
+          </button>
         </div>
 
-        {/* Right Action Button */}
-        <button
-          onClick={() => catalogStore.setCreateModalOpen(true)}
-          class="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-sm font-semibold shadow-lg shadow-emerald-950/40 transition-all flex items-center justify-center gap-2"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-          </svg>
-          + Registrar Producto
-        </button>
+        {/* Stats Sub-bar */}
+        <div style={{ padding: '12px 20px', background: 'var(--surface-alt)', 'border-top': '1px solid var(--border-soft)', display: 'flex', gap: '20px', 'font-size': '12px' }}>
+          <div>Total: <strong>{stats().total}</strong></div>
+          <div style={{ color: 'var(--green-deep)' }}>En Venta: <strong>{stats().activos}</strong></div>
+          <div style={{ color: 'var(--amber)' }}>Borradores: <strong>{stats().borradores}</strong></div>
+        </div>
       </div>
 
       {/* Reusable Data Table Component */}
@@ -241,6 +209,6 @@ export function CatalogView() {
       {/* Modals */}
       <ProductFormModal />
       <AssignPriceModal />
-    </div>
+    </section>
   );
 }

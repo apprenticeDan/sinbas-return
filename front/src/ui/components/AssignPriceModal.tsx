@@ -33,43 +33,39 @@ export function AssignPriceModal() {
 
   return (
     <Show when={catalogStore.priceModalOpen() && product() !== null}>
-      <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in">
-        <div class="w-full max-w-md bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+      <div class="modal-overlay">
+        <div class="modal-card" style={{ 'max-width': '440px' }}>
           {/* Header */}
-          <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/40">
-            <h2 class="text-lg font-semibold text-emerald-400 flex items-center gap-2">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              Gobernanza de Precio Oficial
-            </h2>
+          <div class="modal-header">
+            <h2 class="modal-title">Gobernanza de Precio Oficial</h2>
             <button
               onClick={() => catalogStore.setPriceModalOpen(false)}
-              class="text-slate-400 hover:text-slate-200 transition-colors"
+              class="btn btn-ghost"
+              style={{ padding: '4px 8px', 'font-size': '16px' }}
             >
               ✕
             </button>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} class="p-6 space-y-4">
+          <form onSubmit={handleSubmit} style={{ display: 'flex', 'flex-direction': 'column', gap: '14px' }}>
             <Show when={modalError()}>
-              <div class="p-3 text-sm rounded-lg bg-rose-950/60 border border-rose-700/60 text-rose-300">
+              <div class="alert-error">
                 {modalError()}
               </div>
             </Show>
 
-            <div class="p-3 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-200 text-sm space-y-1">
-              <div class="text-xs font-semibold uppercase text-slate-400">Producto Seleccionado</div>
-              <div class="font-bold text-emerald-400 text-base">{product()?.nombreVisible}</div>
-              <div class="text-xs text-slate-400">
-                Categoría: <span class="text-slate-300">{product()?.categoria}</span> | Unidad: <span class="text-slate-300">{product()?.unidadManejo}</span>
+            <div style={{ padding: '12px', background: 'var(--surface-alt)', border: '1px solid var(--border)', 'border-radius': 'var(--radius-s)' }}>
+              <div style={{ 'font-size': '10.5px', 'text-transform': 'uppercase', color: 'var(--ink-soft)', 'font-weight': '600' }}>Producto Seleccionado</div>
+              <div style={{ 'font-weight': '700', color: 'var(--green-deep)', 'font-size': '16px', 'margin-top': '2px' }}>{product()?.nombreVisible}</div>
+              <div style={{ 'font-size': '12px', color: 'var(--ink-soft)', 'margin-top': '4px' }}>
+                Categoría: <strong>{product()?.categoria}</strong> | Unidad: <strong>{product()?.unidadManejo}</strong>
               </div>
             </div>
 
-            <div class="grid grid-cols-3 gap-3">
-              <div class="col-span-2">
-                <label class="block text-xs font-medium text-slate-300 mb-1">Precio Oficial *</label>
+            <div style={{ display: 'grid', 'grid-template-columns': '2fr 1fr', gap: '10px' }}>
+              <div class="field">
+                <label>Precio Oficial *</label>
                 <input
                   type="number"
                   step="0.01"
@@ -78,16 +74,15 @@ export function AssignPriceModal() {
                   placeholder="0.00"
                   value={monto() || ''}
                   onInput={(e) => setMonto(parseFloat(e.currentTarget.value) || 0)}
-                  class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 font-mono text-lg focus:outline-none focus:border-emerald-500"
+                  style={{ 'font-family': 'monospace', 'font-size': '16px', 'font-weight': '700' }}
                 />
               </div>
 
-              <div>
-                <label class="block text-xs font-medium text-slate-300 mb-1">Moneda</label>
+              <div class="field">
+                <label>Moneda</label>
                 <select
                   value={moneda()}
                   onChange={(e) => setMoneda(e.currentTarget.value)}
-                  class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 font-semibold focus:outline-none focus:border-emerald-500"
                 >
                   <option value="BOB">BOB (Bs.)</option>
                   <option value="USD">USD ($)</option>
@@ -95,26 +90,26 @@ export function AssignPriceModal() {
               </div>
             </div>
 
-            <div class="p-3 rounded-lg bg-amber-950/30 border border-amber-800/40 text-amber-300 text-xs">
-              ⚠️ Al guardar el precio oficial, el producto cambiará automáticamente de <strong>PendientePrecioBorrador</strong> a <strong>ActivoParaVenta</strong>.
+            <div class="pill pill-amber" style={{ padding: '8px 12px', 'border-radius': 'var(--radius-s)', 'font-size': '11.5px', 'line-height': '1.4' }}>
+              ⚠️ Al fijar el precio oficial, el producto cambiará automáticamente a <strong>Activo para Venta</strong>.
             </div>
 
             {/* Actions */}
-            <div class="pt-3 flex justify-end gap-3 border-t border-slate-800">
+            <div style={{ display: 'flex', 'justify-content': 'flex-end', gap: '8px', 'margin-top': '8px' }}>
               <button
                 type="button"
                 onClick={() => catalogStore.setPriceModalOpen(false)}
-                class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors"
+                class="btn btn-ghost"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={catalogStore.loading()}
-                class="px-5 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-sm font-medium shadow-lg shadow-emerald-900/30 transition-all flex items-center gap-2"
+                class="btn btn-primary"
               >
                 <Show when={catalogStore.loading()}>
-                  <span class="animate-spin text-lg">↻</span>
+                  <span>↻</span>
                 </Show>
                 Aprobar y Activar Venta
               </button>
