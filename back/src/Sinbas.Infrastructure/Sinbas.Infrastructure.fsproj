@@ -10,6 +10,7 @@
     <Compile Include="JwtService.fs" />
     <Compile Include="DbConnection.fs" />
     <Compile Include="AuthRepository.fs" />
+    <Compile Include="CatalogRepository.fs" />
   </ItemGroup>
 
   <ItemGroup>

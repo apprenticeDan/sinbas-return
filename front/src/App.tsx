@@ -3,6 +3,7 @@ import { authStore } from './ui/store/authStore';
 import { Sidebar } from './ui/components/Sidebar';
 import { LoginView } from './ui/views/LoginView';
 import { UsersView } from './ui/views/UsersView';
+import { CatalogView } from './ui/views/CatalogView';
 import { PlaceholderView } from './ui/views/PlaceholderView';
 
 export const App: Component = () => {
@@ -25,11 +26,7 @@ export const App: Component = () => {
             <UsersView />
           </Show>
           <Show when={currentView() === 'productos' && authStore.canAccessView('productos')}>
-            <PlaceholderView
-              title="Catálogo de Productos y Precios"
-              featureCode="MF-01-01"
-              description="Gestión de especies, variedades de semillas y tarifas activas."
-            />
+            <CatalogView />
           </Show>
           <Show when={currentView() === 'lotes' && authStore.canAccessView('lotes')}>
             <PlaceholderView

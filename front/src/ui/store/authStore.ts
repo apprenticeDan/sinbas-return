@@ -41,7 +41,7 @@ export const authStore = {
       case 'users':
         return false; // Solo Administrador
       case 'productos':
-        return userRoles.some((r) => ['Gerencia', 'Comercial'].includes(r));
+        return userRoles.some((r) => ['Gerencia', 'Comercial', 'Almacen'].includes(r));
       case 'lotes':
         return userRoles.some((r) => ['Almacen', 'Gerencia', 'Laboratorio', 'Comercial'].includes(r));
       case 'laboratorio':

@@ -17,7 +17,7 @@ export const Sidebar: Component<SidebarProps> = (props) => {
         </div>
         <div>
           <div class="brand-name">SINBAS</div>
-          <div class="brand-sub">Semillas & Semilleros</div>
+          <div class="brand-sub">Sistema de Información Basfor</div>
         </div>
       </div>
 

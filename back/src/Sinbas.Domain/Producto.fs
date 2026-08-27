@@ -54,6 +54,33 @@ type Trazabilidad =
     | Simple
 
 // ─────────────────────────────────────────────────────────────
+// Gobernanza de Precios y Estados Comerciales
+// ─────────────────────────────────────────────────────────────
+
+type EstadoComercial =
+    | PendientePrecioBorrador
+    | ActivoParaVenta
+    | Inactivo
+
+module EstadoComercial =
+    let aTexto = function
+        | PendientePrecioBorrador -> "PendientePrecioBorrador"
+        | ActivoParaVenta -> "ActivoParaVenta"
+        | Inactivo -> "Inactivo"
+
+    let desdeTexto (s: string) =
+        match s.Trim() with
+        | "ActivoParaVenta" -> ActivoParaVenta
+        | "Inactivo" -> Inactivo
+        | _ -> PendientePrecioBorrador
+
+type PrecioOficial =
+    { Valor: decimal
+      Moneda: string
+      ModificadoPor: UsuarioId option
+      FechaActualizacion: DateTime option }
+
+// ─────────────────────────────────────────────────────────────
 // Base común
 // ─────────────────────────────────────────────────────────────
 
@@ -83,9 +110,39 @@ type CategoriaProducto =
 
 type Producto =
     { Base: ProductoBase
-      Categoria: CategoriaProducto }
+      Categoria: CategoriaProducto
+      PrecioOficial: PrecioOficial option
+      EstadoComercial: EstadoComercial }
 
 module Producto =
+
+    let crearBorrador id unidad trazabilidad categoria observaciones =
+        { Base =
+            { Id = id
+              UnidadManejo = unidad
+              Trazabilidad = trazabilidad
+              Activo = true
+              Observaciones = observaciones }
+          Categoria = categoria
+          PrecioOficial = None
+          EstadoComercial = PendientePrecioBorrador }
+
+    let asignarPrecio (monto: decimal) (moneda: string option) (usuarioId: UsuarioId option) (p: Producto) : Result<Producto, DomainError> =
+        if monto <= 0m then
+            Error (CantidadInvalida (sprintf "El precio debe ser mayor a cero, recibido: %M" monto))
+        else
+            let nuevoPrecio =
+                { Valor = monto
+                  Moneda = defaultArg moneda "BOB"
+                  ModificadoPor = usuarioId
+                  FechaActualizacion = Some DateTime.UtcNow }
+            Ok { p with PrecioOficial = Some nuevoPrecio; EstadoComercial = ActivoParaVenta }
+
+    let esAptoParaVenta p =
+        p.Base.Activo && p.EstadoComercial = ActivoParaVenta && Option.isSome p.PrecioOficial
+
+    let desactivar p =
+        { p with Base = { p.Base with Activo = false }; EstadoComercial = Inactivo }
 
     let nombreVisible p =
         match p.Categoria with
@@ -112,3 +169,4 @@ module Producto =
     let requiereLote p = p.Base.Trazabilidad = PorLote
 
     let unidad p = p.Base.UnidadManejo
+

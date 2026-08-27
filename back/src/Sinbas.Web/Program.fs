@@ -44,6 +44,7 @@ let main args =
 
     builder.Services.AddAuthorization(fun options ->
         options.AddPolicy("RequireAdmin", fun policy -> policy.RequireRole("Administrador") |> ignore)
+        options.AddPolicy("RequireGerencia", fun policy -> policy.RequireRole("Administrador", "Gerencia") |> ignore)
         options.AddPolicy("RequireAlmacen", fun policy -> policy.RequireRole("Administrador", "Almacen") |> ignore)
         options.AddPolicy("RequireLaboratorio", fun policy -> policy.RequireRole("Administrador", "Laboratorio") |> ignore)
     ) |> ignore
@@ -77,6 +78,7 @@ let main args =
     // Register Endpoints
     AuthEndpoints.mapAuthEndpoints app
     UserEndpoints.mapUserEndpoints app
+    CatalogEndpoints.mapCatalogEndpoints app
 
     app.Run()
 
