@@ -17,11 +17,15 @@ let makeLote (loteGuid: Guid) (prodGuid: Guid) (idNum: int) fecha estado =
         match CodigoLote.desdeString (sprintf "TEST_%03d-02601-01" idNum) with
         | Ok c -> c
         | Error e -> failwithf "Error generando codigo: %A" e
+    let cant = { Valor = 100m; Unidad = Gramo }
     { Id = LoteId loteGuid
       Codigo = codigo
       ProductoId = ProductoId prodGuid
+      Procedencia = Some "Bosque de Prueba"
+      CantidadInicial = cant
+      CantidadActual = cant
       FechaIngreso = fecha
-      UbicacionId = None
+      Ubicacion = None
       Estado = estado
       Observaciones = None }
 

@@ -4,6 +4,7 @@ import { Sidebar } from './ui/components/Sidebar';
 import { LoginView } from './ui/views/LoginView';
 import { UsersView } from './ui/views/UsersView';
 import { CatalogView } from './ui/views/CatalogView';
+import { LotesView } from './ui/views/LotesView';
 import { PlaceholderView } from './ui/views/PlaceholderView';
 
 export const App: Component = () => {
@@ -29,11 +30,7 @@ export const App: Component = () => {
             <CatalogView />
           </Show>
           <Show when={currentView() === 'lotes' && authStore.canAccessView('lotes')}>
-            <PlaceholderView
-              title="Gestión de Lotes de Semillas"
-              featureCode="MF-02-01"
-              description="Registro y trazabilidad de lotes recibidos y procesados."
-            />
+            <LotesView />
           </Show>
           <Show when={currentView() === 'laboratorio' && authStore.canAccessView('laboratorio')}>
             <PlaceholderView

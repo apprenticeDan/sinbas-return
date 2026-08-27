@@ -8,6 +8,7 @@
     <Compile Include="AuthEndpoints.fs" />
     <Compile Include="UserEndpoints.fs" />
     <Compile Include="CatalogEndpoints.fs" />
+    <Compile Include="LoteEndpoints.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

@@ -79,6 +79,7 @@ let main args =
     AuthEndpoints.mapAuthEndpoints app
     UserEndpoints.mapUserEndpoints app
     CatalogEndpoints.mapCatalogEndpoints app
+    LoteEndpoints.mapEndpoints app
 
     app.Run()
 

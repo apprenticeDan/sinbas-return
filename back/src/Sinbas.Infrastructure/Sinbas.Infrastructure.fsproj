@@ -11,6 +11,7 @@
     <Compile Include="DbConnection.fs" />
     <Compile Include="AuthRepository.fs" />
     <Compile Include="CatalogRepository.fs" />
+    <Compile Include="LoteRepository.fs" />
   </ItemGroup>
 
   <ItemGroup>
