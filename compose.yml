@@ -18,8 +18,12 @@ services:
       retries: 5
 
   sinbas-api:
-    # Imagen base pre-construida: base/build-dotnet-base.sh 1.0.1
     image: sinbas/dotnet10-solid-dev:latest
+    build:
+      context: .
+      dockerfile: base/Containerfile.dotnet.base
+      args:
+        USERNAME: dev
     depends_on:
       sinbas-db:
         condition: service_healthy

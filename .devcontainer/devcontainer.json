@@ -13,8 +13,7 @@
         5173,
         5432
     ],
-    "postStartCommand": "sudo chown -R dev:dev /workspace || true",
-    "postCreateCommand": "dotnet tool restore && dotnet restore && echo 'Sinbas listo'",
+    "postCreateCommand": "dotnet restore back/Sinbas.slnx && pnpm --prefix front install && echo 'Sinbas listo'",
     "customizations": {
         "vscode": {
             "extensions": [

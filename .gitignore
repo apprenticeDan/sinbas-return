@@ -194,11 +194,18 @@ db-data/
 postgres-data/
 
 # ============================================================
-#  MISC
+#  MISC & HERRAMIENTAS DE CONSTRUCCIÓN ADICIONALES (Rust/Cargo/Logs)
 # ============================================================
 *.orig
 *.rej
 .direnv/
 .envrc
 
+target/
+.cargo/
+*.log
+pnpm-debug.log*
+npm-debug.log*
+
 docs/borradores/
+
