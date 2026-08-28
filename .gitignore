@@ -210,3 +210,4 @@ npm-debug.log*
 docs/borradores/
 
 *.txt  
+**/ejemplo_infra_contenedor/

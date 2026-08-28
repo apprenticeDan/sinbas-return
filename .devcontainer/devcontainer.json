@@ -1,19 +1,20 @@
 {
     "name": "Sinbas Dev",
-    "dockerComposeFile": [
-        "../compose.yml"
-    ],
+    "dockerComposeFile": "../compose.yml",
     "service": "sinbas-api",
     "workspaceFolder": "/workspace",
     "shutdownAction": "stopCompose",
-    "updateRemoteUserUID": true,
+    // "updateRemoteUserUID": true,
     "remoteUser": "dev",
     "forwardPorts": [
         8080,
         5173,
         5432
     ],
-    "postCreateCommand": "dotnet restore back/Sinbas.slnx && pnpm --prefix front install && echo 'Sinbas listo'",
+    "mounts": [
+        "source=nuget-cache,target=/home/dev/.nuget,type=volume"
+    ],
+    "postCreateCommand": "bash -lc 'dotnet restore back/Sinbas.slnx && pnpm --prefix front install && echo \"Sinbas listo\"'",
     "customizations": {
         "vscode": {
             "extensions": [

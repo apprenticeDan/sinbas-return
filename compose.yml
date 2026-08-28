@@ -1,7 +1,11 @@
 name: sinbas-return
+
+x-podman:
+  in_pod: false
+
 services:
   sinbas-db:
-    image: postgres:16-alpine
+    image: docker.io/postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: sinbas
@@ -19,16 +23,12 @@ services:
 
   sinbas-api:
     image: sinbas/dotnet10-solid-dev:latest
-    build:
-      context: .
-      dockerfile: base/Containerfile.dotnet.base
-      args:
-        USERNAME: dev
     depends_on:
       sinbas-db:
         condition: service_healthy
     volumes:
-      - .:/workspace:cached,z
+      - .:/workspace:cached,Z
+      - nuget-cache:/home/dev/.nuget
     ports:
       - "8080:8080"
       - "5173:5173"
@@ -43,3 +43,5 @@ services:
 
 volumes:
   sinbas-pgdata:
+  nuget-cache:
+
