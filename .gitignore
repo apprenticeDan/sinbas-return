@@ -76,6 +76,7 @@ secrets.json
 # Dependencias
 node_modules/
 .pnpm-store/
+pnpm-workspace.yaml
 
 # Vite — build output
 dist/
