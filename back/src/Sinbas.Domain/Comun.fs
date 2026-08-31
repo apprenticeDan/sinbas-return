@@ -17,6 +17,12 @@ type DomainError =
     | ValorRequerido of string
     | SecuenciaInvalida of string
     | StockInsuficiente of string
+    | SimbolosNoPermitidos of string
+    | LetrasNoPermitidas of string
+    | EdadInsuficiente of string
+    | VentaRestringida of string
+    | EmpleadoDuplicado of string
+
 
 // ─────────────────────────────────────────────────────────────
 // Generador centralizado de identidades técnicas (UUID v7)

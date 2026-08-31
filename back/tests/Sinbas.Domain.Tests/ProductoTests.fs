@@ -15,7 +15,7 @@ let crearSemillaValida () =
     | Ok nc ->
         let nomComun = match NombreComun.crear "Caoba" with Ok c -> c | Error e -> failwithf "%A" e
         let cat = Semilla(nc, [nomComun])
-        Producto.crearBorrador prodId Kilogramo PorLote cat (Some "Observación inicial")
+        Producto.crearBorrador prodId Kilogramo PorLote cat false (Some "Observación inicial")
 
 [<Fact>]
 let ``Creacion de Producto Semilla en borrador sin precio queda en estado PendientePrecioBorrador y no es apto para venta`` () =

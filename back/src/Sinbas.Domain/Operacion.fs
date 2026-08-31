@@ -193,3 +193,25 @@ module EstadoProforma =
                             { Fecha = ahora
                               Motivo = motivo
                               AnuladoPor = empleado } }
+
+module OperacionVenta =
+
+    /// Valida que la venta de productos restringidos (ej. cigarrillos, alcohol) a un comprador cuente con verificación de edad >= 18 años.
+    let validarVentaProductosRestringidos 
+        (fechaOperacion: DateOnly)
+        (fechaNacimientoCliente: DateOnly option)
+        (productosEnVenta: Producto list) : Result<unit, DomainError> =
+        let tieneProductoRestringido = productosEnVenta |> List.exists Producto.requiereMayorEdad
+        if tieneProductoRestringido then
+            match fechaNacimientoCliente with
+            | None ->
+                Error (VentaRestringida "No se especificó la fecha de nacimiento del cliente para la compra de productos restringidos a mayores de 18 años")
+            | Some fn ->
+                match Validacion.validarMayorEdad fn fechaOperacion 18 with
+                | Ok () -> Ok ()
+                | Error (EdadInsuficiente msg) ->
+                    Error (VentaRestringida $"Venta denegada: {msg}. Está prohibida la venta de cigarrillos y bebidas alcohólicas a menores de 18 años.")
+                | Error err -> Error err
+        else
+            Ok ()
+

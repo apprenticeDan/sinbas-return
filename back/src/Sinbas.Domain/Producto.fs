@@ -89,6 +89,7 @@ type ProductoBase =
       UnidadManejo: Unidad
       Trazabilidad: Trazabilidad
       Activo: bool
+      EsRestringidoParaMayores: bool
       Observaciones: string option }
 
 // ─────────────────────────────────────────────────────────────
@@ -116,16 +117,20 @@ type Producto =
 
 module Producto =
 
-    let crearBorrador id unidad trazabilidad categoria observaciones =
+    let crearBorrador id unidad trazabilidad categoria esRestringido observaciones =
         { Base =
             { Id = id
               UnidadManejo = unidad
               Trazabilidad = trazabilidad
               Activo = true
+              EsRestringidoParaMayores = esRestringido
               Observaciones = observaciones }
           Categoria = categoria
           PrecioOficial = None
           EstadoComercial = PendientePrecioBorrador }
+
+    let requiereMayorEdad (p: Producto) = p.Base.EsRestringidoParaMayores
+
 
     let asignarPrecio (monto: decimal) (moneda: string option) (usuarioId: UsuarioId option) (p: Producto) : Result<Producto, DomainError> =
         if monto <= 0m then
