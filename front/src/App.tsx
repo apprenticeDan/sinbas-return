@@ -39,6 +39,20 @@ export const App: Component = () => {
               description="Certificación de semillas y resultados de laboratorio."
             />
           </Show>
+          <Show when={currentView() === 'ingresos' && authStore.canAccessView('ingresos')}>
+            <PlaceholderView
+              title="Registro de Ingresos a Almacén"
+              featureCode="MF-04-01"
+              description="Recepción y registro de productos, semillas y materiales ingresados al almacén."
+            />
+          </Show>
+          <Show when={currentView() === 'egresos' && authStore.canAccessView('egresos')}>
+            <PlaceholderView
+              title="Registro de Egresos de Almacén"
+              featureCode="MF-08-03 / MF-09-01"
+              description="Salidas de productos: ventas, mermas, uso interno, trueques."
+            />
+          </Show>
         </main>
       </div>
     </Show>

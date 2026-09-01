@@ -46,6 +46,10 @@ export const authStore = {
         return userRoles.some((r) => ['Almacen', 'Gerencia', 'Laboratorio', 'Comercial'].includes(r));
       case 'laboratorio':
         return userRoles.includes('Laboratorio');
+      case 'ingresos':
+        return userRoles.some((r) => ['Almacen', 'Comercial', 'Gerencia'].includes(r));
+      case 'egresos':
+        return userRoles.some((r) => ['Almacen', 'Comercial', 'Gerencia'].includes(r));
       default:
         return false;
     }
@@ -54,7 +58,7 @@ export const authStore = {
   getDefaultView: (): string => {
     const userRoles = user()?.roles || [];
     if (userRoles.includes('Administrador')) return 'users';
-    if (userRoles.includes('Almacen')) return 'lotes';
+    if (userRoles.includes('Almacen')) return 'ingresos';
     if (userRoles.includes('Laboratorio')) return 'laboratorio';
     if (userRoles.some((r) => ['Gerencia', 'Comercial'].includes(r))) return 'productos';
     return 'lotes';

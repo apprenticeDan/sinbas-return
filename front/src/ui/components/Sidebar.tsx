@@ -75,6 +75,34 @@ export const Sidebar: Component<SidebarProps> = (props) => {
             Análisis Calidad
           </button>
         </Show>
+
+        <div class="nav-eyebrow" style={{ 'margin-top': '10px' }}>Almacén</div>
+
+        <Show when={authStore.canAccessView('ingresos')}>
+          <button
+            class={`nav-item ${props.currentView === 'ingresos' ? 'active' : ''}`}
+            onClick={() => props.onNavigate('ingresos')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4" />
+              <path d="M20 21H4a1 1 0 0 1-1-1v-6h18v6a1 1 0 0 1-1 1z" />
+            </svg>
+            Ingresos
+          </button>
+        </Show>
+
+        <Show when={authStore.canAccessView('egresos')}>
+          <button
+            class={`nav-item ${props.currentView === 'egresos' ? 'active' : ''}`}
+            onClick={() => props.onNavigate('egresos')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 21V9m0 0l-4 4m4-4l4 4" />
+              <path d="M20 3H4a1 1 0 0 0-1 1v6h18V4a1 1 0 0 0-1-1z" />
+            </svg>
+            Egresos
+          </button>
+        </Show>
       </nav>
 
       <div class="sidebar-foot">
