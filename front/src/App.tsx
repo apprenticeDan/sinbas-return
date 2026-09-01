@@ -7,6 +7,9 @@ import { CatalogView } from './ui/views/CatalogView';
 import { LotesView } from './ui/views/LotesView';
 import { PlaceholderView } from './ui/views/PlaceholderView';
 
+import { IngresosView } from './ui/views/IngresosView';
+import { EgresosView } from './ui/views/EgresosView';
+
 export const App: Component = () => {
   const [currentView, setCurrentView] = createSignal(authStore.getDefaultView());
 
@@ -40,18 +43,10 @@ export const App: Component = () => {
             />
           </Show>
           <Show when={currentView() === 'ingresos' && authStore.canAccessView('ingresos')}>
-            <PlaceholderView
-              title="Registro de Ingresos a Almacén"
-              featureCode="MF-04-01"
-              description="Recepción y registro de productos, semillas y materiales ingresados al almacén."
-            />
+            <IngresosView />
           </Show>
           <Show when={currentView() === 'egresos' && authStore.canAccessView('egresos')}>
-            <PlaceholderView
-              title="Registro de Egresos de Almacén"
-              featureCode="MF-08-03 / MF-09-01"
-              description="Salidas de productos: ventas, mermas, uso interno, trueques."
-            />
+            <EgresosView />
           </Show>
         </main>
       </div>

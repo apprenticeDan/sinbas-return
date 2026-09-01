@@ -406,6 +406,34 @@ tbody tr:hover td {
   color: var(--rust);
 }
 
+.pill-earth {
+  background: #F2EBE1;
+  color: var(--earth);
+}
+
+/* Almacen Module Custom Styling */
+.almacen-form-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.almacen-stats-bar {
+  padding: 10px 20px;
+  background: var(--surface-alt);
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  gap: 20px;
+  font-size: 12px;
+}
+
+.almacen-add-btn {
+  padding: 9px 12px;
+  height: 37px;
+  justify-content: center;
+}
+
 /* Login Page Styling */
 .login-container {
   min-height: 100vh;
