@@ -56,16 +56,6 @@ module Validacion =
         else
             Ok raw
 
-    /// Valida edad mínima (ej. 18 años) dada la fecha de nacimiento y la fecha de referencia (o fecha actual).
-    let validarMayorEdad (fechaNacimiento: DateOnly) (fechaReferencia: DateOnly) (edadMinima: int) : Result<unit, DomainError> =
-        let mutable edad = fechaReferencia.Year - fechaNacimiento.Year
-        if fechaReferencia < fechaNacimiento.AddYears(edad) then
-            edad <- edad - 1
-        if edad < edadMinima then
-            Error (EdadInsuficiente $"Se requiere una edad mínima de {edadMinima} años (edad calculada: {edad} años)")
-        else
-            Ok ()
-
     /// Sanitiza / valida entradas generales contra secuencias de inyección básicas o caracteres de control de forma proactiva.
     let sanitizarInput (raw: string) : Result<string, DomainError> =
         let texto = (raw |> Option.ofObj |> Option.defaultValue "").Trim()

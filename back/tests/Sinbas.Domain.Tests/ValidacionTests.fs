@@ -71,23 +71,6 @@ let ``validarPassword exige al menos 8 caracteres y rechaza passwords vacias`` (
     | Error (ValorRequerido msg) -> Assert.Contains("8 caracteres", msg)
     | res -> failwithf "Debería rechazar clave corta, obtuvo: %A" res
 
-[<Fact>]
-let ``validarMayorEdad comprueba correctamente limite de 18 años y fecha exacta`` () =
-    let hoy = DateOnly(2026, 8, 31)
-    
-    // Cumple 18 hoy exacto: Nacido 2008-08-31
-    let exacto18 = DateOnly(2008, 8, 31)
-    Assert.True(Validacion.validarMayorEdad exacto18 hoy 18 |> Result.isOk)
-
-    // Mayor de edad: Nacido 2000-01-01
-    let mayor = DateOnly(2000, 1, 1)
-    Assert.True(Validacion.validarMayorEdad mayor hoy 18 |> Result.isOk)
-
-    // Menor por 1 día: Nacido 2008-09-01 (mañana cumple 18)
-    let menorPorUnDia = DateOnly(2008, 9, 1)
-    match Validacion.validarMayorEdad menorPorUnDia hoy 18 with
-    | Error (EdadInsuficiente msg) -> Assert.Contains("18 años", msg)
-    | res -> failwithf "Debería haber fallado por menor de edad, obtuvo: %A" res
 
 [<Fact>]
 let ``sanitizarInput rechaza caracteres de control no permitidos como nulos`` () =

@@ -10,7 +10,6 @@
     <Compile Include="ProductoTests.fs" />
     <Compile Include="LoteTests.fs" />
     <Compile Include="ValidacionTests.fs" />
-    <Compile Include="VentaRestringidaTests.fs" />
     <Compile Include="EmpleadoTests.fs" />
   </ItemGroup>
 

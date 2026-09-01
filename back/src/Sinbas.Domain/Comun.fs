@@ -19,8 +19,6 @@ type DomainError =
     | StockInsuficiente of string
     | SimbolosNoPermitidos of string
     | LetrasNoPermitidas of string
-    | EdadInsuficiente of string
-    | VentaRestringida of string
     | EmpleadoDuplicado of string
 
 
