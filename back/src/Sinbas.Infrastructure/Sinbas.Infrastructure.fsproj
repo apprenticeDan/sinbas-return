@@ -12,6 +12,7 @@
     <Compile Include="AuthRepository.fs" />
     <Compile Include="CatalogRepository.fs" />
     <Compile Include="LoteRepository.fs" />
+    <Compile Include="InventoryRepository.fs" />
   </ItemGroup>
 
   <ItemGroup>

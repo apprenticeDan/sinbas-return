@@ -34,6 +34,89 @@ export interface EgresoItem {
   observaciones?: string;
 }
 
+// ─────────────────────────────────────────────────────────────
+// DTOs de Conexión Backend Real (F4 / F5 / F8 / F9)
+// ─────────────────────────────────────────────────────────────
+
+export interface RegistrarIngresoPayload {
+  productoId?: string;
+  loteId?: string;
+  descripcion?: string;
+  categoria?: string;
+  tipoIngreso: string;
+  cantidad: number;
+  unidad?: string;
+  procedencia?: string;
+  observaciones?: string;
+  fecha?: string;
+}
+
+/** Payload para POST /api/inventario/egreso (F8 / MF-08-03) */
+export interface RegistrarEgresoPayload {
+  /** UUID del producto. Vacío = resolución por descripción. */
+  productoId?: string;
+  descripcion?: string;
+  /** Venta | Merma | UsoLabor | UsoVivero | Intercambio */
+  tipoEgreso: string;
+  cantidad: number;
+  unidad?: string;
+  /** Nombre del cliente (Venta). Extensible a ClienteId con F6. */
+  contraparteNombre?: string;
+  /** Departamento solicitante (Uso Interno / F9). */
+  departamento?: string;
+  /** Nombre del solicitante interno (F9). */
+  solicitante?: string;
+  observaciones?: string;
+  fecha?: string;
+}
+
+export interface LineaMovimientoDto {
+  loteId: string;
+  codigoLote: string;
+  cantidad: number;
+  unidad: string;
+}
+
+export interface MovimientoInventarioDto {
+  id: string;
+  fecha: string;
+  responsableId: string;
+  tipo: string;
+  motivo: string;
+  contraparteNombre: string;
+  departamento: string;
+  solicitante: string;
+  observaciones: string;
+  lineas: LineaMovimientoDto[];
+}
+
+export interface StockLoteItem {
+  loteId: string;
+  codigo: string;
+  productoId: string;
+  nombreProducto: string;
+  fechaIngreso: string;
+  estado: string;
+  stockGramos: number;
+  stockDisplay: number;
+  unidad: string;
+}
+
+export interface StockProductoDto {
+  productoId: string;
+  nombreProducto: string;
+  stockTotalGramos: number;
+  stockDisponibleVentaGramos: number;
+  lotes: StockLoteItem[];
+}
+
+// ─────────────────────────────────────────────────────────────
+// EXTENSIBILITY NOTES:
+// 1. Clientes (F6): La búsqueda de destinatario/consignatario en egresos
+//    debe permitir filtro multivariable por nombre, apellido, NIT, teléfono y email.
+// 2. Uso Interno (F9): Egresos internos registrarán departamento/área y solicitante.
+// ─────────────────────────────────────────────────────────────
+
 /** Etiquetas amigables para los tipos de ingreso */
 export const TIPOS_INGRESO: { value: TipoIngreso; label: string }[] = [
   { value: 'Compra', label: 'Compra' },

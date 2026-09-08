@@ -1,14 +1,18 @@
 /**
- * Vista de Registro de Egresos de Almacén (Mock UI).
+ * Vista de Registro de Egresos de Almacén.
  *
  * Basado en wireframe: docs/borradores/wireframes/ui_com_egresos.png
- * Feature: F8 / F9 (MF-08-03 / MF-09-01) — Registro de Salidas, Venta, Merma y Uso Interno
+ * Feature: F8 / F9 (MF-08-03 / MF-09-01) — Registro de Salidas, Venta, Merma y Uso Interno con FIFO
  *
- * MOCK: Los datos son estáticos. No hay comunicación con backend.
+ * Conectado a backend real vía API REST con persistencia y resolución FIFO de lotes.
  * Incluye botón 'Solicitudes Egreso' (deshabilitado/próximamente) según requerimiento.
+ *
+ * EXTENSIBILITY:
+ * - F6 (Clientes): Cabecera preparada para filtro multifactorial (nombre, apellido, NIT, teléfono, email).
+ * - F9 (Uso Interno): Soporte para departamento y solicitante (cliente interno).
  */
 
-import { Component, createSignal, For, Show, createMemo } from 'solid-js';
+import { Component, createSignal, For, Show, createMemo, onMount } from 'solid-js';
 import { almacenStore } from '../store/almacenStore';
 import {
   CATEGORIAS,
@@ -29,6 +33,12 @@ export const EgresosView: Component = () => {
   const [formConsignatario, setFormConsignatario] = createSignal('');
   const [formCantidad, setFormCantidad] = createSignal<string>('');
   const [formCostoAdic, setFormCostoAdic] = createSignal<string>('');
+  const [formError, setFormError] = createSignal<string | null>(null);
+
+  // Cargar movimientos de egreso reales al montar (F8 / F9)
+  onMount(() => {
+    almacenStore.cargarEgresos();
+  });
 
   const descripcionesDisponibles = createMemo(() => {
     const cat = formCategoria();
@@ -36,26 +46,31 @@ export const EgresosView: Component = () => {
   });
 
   const canSubmit = createMemo(() => {
-    return formCategoria() !== '' && formTipo() !== '';
+    return formCategoria() !== '' && formDescripcion() !== '' && formTipo() !== '' && !almacenStore.loadingEgresos();
   });
 
-  function handleRegistrar() {
+  async function handleRegistrar() {
     if (!canSubmit()) return;
-    almacenStore.registrarEgreso({
-      fecha: formFecha(),
-      categoria: formCategoria() as CategoriaAlmacen,
-      descripcion: formDescripcion() || '-',
-      tipo: formTipo() as TipoEgreso,
-      cantidad: formCantidad() ? Number(formCantidad()) : null,
-      consignatario: formConsignatario(),
-      costoAdicional: formCostoAdic() ? Number(formCostoAdic()) : undefined,
-    });
-    // Reset parcial
-    setFormDescripcion('');
-    setFormTipo('');
-    setFormConsignatario('');
-    setFormCantidad('');
-    setFormCostoAdic('');
+    setFormError(null);
+    try {
+      await almacenStore.registrarEgreso({
+        fecha: formFecha(),
+        categoria: formCategoria() as CategoriaAlmacen,
+        descripcion: formDescripcion(),
+        tipo: formTipo() as TipoEgreso,
+        cantidad: formCantidad() ? Number(formCantidad()) : null,
+        consignatario: formConsignatario(),
+        costoAdicional: formCostoAdic() ? Number(formCostoAdic()) : undefined,
+      });
+      // Reset parcial
+      setFormDescripcion('');
+      setFormTipo('');
+      setFormConsignatario('');
+      setFormCantidad('');
+      setFormCostoAdic('');
+    } catch (err: any) {
+      setFormError(err.message || 'Error al registrar el egreso. Guardado localmente.');
+    }
   }
 
   // ─── Pill styles para tipo de egreso ──────────────────────────
@@ -251,17 +266,21 @@ export const EgresosView: Component = () => {
             </select>
           </div>
 
+          {/* EXTENSIBILITY (F6 / F9): Selector multivariable (nombre/apellido/nit/tel/email) para clientes y depto/solicitante para uso interno */}
           <div class="field" style={{ 'min-width': '130px' }}>
             <label>Consignatario</label>
-            <select
+            <input
+              type="text"
+              list="consignatarios-list"
+              placeholder="Destino / Cliente..."
               value={formConsignatario()}
-              onChange={(e) => setFormConsignatario(e.currentTarget.value)}
-            >
-              <option value="">— Destino —</option>
+              onInput={(e) => setFormConsignatario(e.currentTarget.value)}
+            />
+            <datalist id="consignatarios-list">
               <For each={CONSIGNATARIOS_MOCK}>
-                {(c) => <option value={c}>{c}</option>}
+                {(c) => <option value={c} />}
               </For>
-            </select>
+            </datalist>
           </div>
 
           <div class="field" style={{ 'min-width': '75px', 'max-width': '95px' }}>
@@ -290,7 +309,7 @@ export const EgresosView: Component = () => {
             class="btn btn-primary almacen-add-btn"
             onClick={handleRegistrar}
             disabled={!canSubmit()}
-            title={canSubmit() ? 'Registrar egreso' : 'Completa categoría y tipo de egreso'}
+            title={canSubmit() ? 'Registrar egreso' : 'Completa categoría, descripción y tipo de egreso'}
             style={{ 'align-self': 'flex-end' }}
           >
             <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -323,10 +342,24 @@ export const EgresosView: Component = () => {
         </p>
       </div>
 
+      <Show when={formError()}>
+        <div style={{
+          'background': 'rgba(231, 76, 60, 0.12)',
+          'border': '1px solid var(--rust, #e74c3c)',
+          'border-radius': '6px',
+          'padding': '8px 12px',
+          'margin-bottom': '10px',
+          'font-size': '12px',
+          'color': 'var(--rust, #c0392b)',
+        }}>
+          {formError()}
+        </div>
+      </Show>
+
       <DataTable
         columns={columns}
         data={almacenStore.filteredEgresos()}
-        loading={false}
+        loading={almacenStore.loadingEgresos()}
         emptyMessage="No se encontraron egresos registrados."
       />
     </section>

@@ -80,6 +80,7 @@ let main args =
     UserEndpoints.mapUserEndpoints app
     CatalogEndpoints.mapCatalogEndpoints app
     LoteEndpoints.mapEndpoints app
+    InventoryEndpoints.mapEndpoints app
 
     app.Run()
 

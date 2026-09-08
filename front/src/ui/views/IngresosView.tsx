@@ -9,7 +9,7 @@
  * que se agregan al store local en memoria.
  */
 
-import { Component, createSignal, For, Show, createMemo } from 'solid-js';
+import { Component, createSignal, For, Show, createMemo, onMount } from 'solid-js';
 import { almacenStore } from '../store/almacenStore';
 import {
   CATEGORIAS,
@@ -28,6 +28,12 @@ export const IngresosView: Component = () => {
   const [formTipo, setFormTipo] = createSignal<TipoIngreso | ''>('');
   const [formProcedencia, setFormProcedencia] = createSignal('');
   const [formCantidad, setFormCantidad] = createSignal<string>('');
+  const [formError, setFormError] = createSignal<string | null>(null);
+
+  // Cargar movimientos reales al montar (F4 / MF-04-01)
+  onMount(() => {
+    almacenStore.cargarIngresos();
+  });
 
   const descripcionesDisponibles = createMemo(() => {
     const cat = formCategoria();
@@ -35,24 +41,29 @@ export const IngresosView: Component = () => {
   });
 
   const canSubmit = createMemo(() => {
-    return formCategoria() !== '' && formDescripcion() !== '' && formTipo() !== '';
+    return formCategoria() !== '' && formDescripcion() !== '' && formTipo() !== '' && !almacenStore.loadingIngresos();
   });
 
-  function handleRegistrar() {
+  async function handleRegistrar() {
     if (!canSubmit()) return;
-    almacenStore.registrarIngreso({
-      fecha: formFecha(),
-      categoria: formCategoria() as CategoriaAlmacen,
-      descripcion: formDescripcion(),
-      tipo: formTipo() as TipoIngreso,
-      cantidad: formCantidad() ? Number(formCantidad()) : null,
-      procedencia: formProcedencia(),
-    });
-    // Reset form parcial (mantener fecha y categoría)
-    setFormDescripcion('');
-    setFormTipo('');
-    setFormProcedencia('');
-    setFormCantidad('');
+    setFormError(null);
+    try {
+      await almacenStore.registrarIngreso({
+        fecha: formFecha(),
+        categoria: formCategoria() as CategoriaAlmacen,
+        descripcion: formDescripcion(),
+        tipo: formTipo() as TipoIngreso,
+        cantidad: formCantidad() ? Number(formCantidad()) : null,
+        procedencia: formProcedencia(),
+      });
+      // Reset form parcial (mantener fecha y categoría)
+      setFormDescripcion('');
+      setFormTipo('');
+      setFormProcedencia('');
+      setFormCantidad('');
+    } catch (err: any) {
+      setFormError(err.message || 'Error al registrar el ingreso. Ingreso guardado localmente.');
+    }
   }
 
   // ─── Pill styles para tipo de ingreso ─────────────────────────
@@ -278,10 +289,23 @@ export const IngresosView: Component = () => {
         </p>
       </div>
 
+      <Show when={formError()}>
+        <div style={{
+          'background': 'rgba(231, 76, 60, 0.12)',
+          'border': '1px solid var(--rust, #e74c3c)',
+          'border-radius': '6px',
+          'padding': '8px 12px',
+          'margin-bottom': '10px',
+          'font-size': '12px',
+          'color': 'var(--rust, #c0392b)',
+        }}>
+          {formError()}
+        </div>
+      </Show>
       <DataTable
         columns={columns}
         data={almacenStore.filteredIngresos()}
-        loading={false}
+        loading={almacenStore.loadingIngresos()}
         emptyMessage="No se encontraron ingresos registrados."
       />
     </section>
