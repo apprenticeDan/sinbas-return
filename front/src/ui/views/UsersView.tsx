@@ -108,9 +108,14 @@ export const UsersView: Component = () => {
                           </span>
                         </td>
                         <td>
-                          <span title={`UUID Empleado: ${u.empleadoId}`} style={{ cursor: 'help', 'font-size': '13px', color: 'var(--ink)' }}>
-                            Empleado {formatDisplayId('EMP', idx(), u.empleadoId)}
-                          </span>
+                          <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px' }}>
+                            <span style={{ 'font-weight': '600', color: 'var(--ink)' }}>
+                              {u.nombreCompleto || 'Sin nombre'}
+                            </span>
+                            <span style={{ 'font-size': '11.5px', color: 'var(--ink-soft)' }}>
+                              CI: {u.ci || 'S/N'} {u.telefono ? `· Tel: ${u.telefono}` : ''}
+                            </span>
+                          </div>
                         </td>
                         <td style={{ 'font-weight': '600' }}>{u.nombreUsuario}</td>
                         <td>
@@ -139,7 +144,7 @@ export const UsersView: Component = () => {
                               style={{ padding: '4px 10px', 'font-size': '11.5px' }}
                               onClick={() => openEditModal(u)}
                             >
-                              Roles
+                              ✏️ Editar
                             </button>
                             <button
                               class={`btn ${u.activo ? 'btn-ghost' : 'btn-primary'}`}

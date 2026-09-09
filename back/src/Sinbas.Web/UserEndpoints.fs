@@ -13,9 +13,11 @@ module UserEndpoints =
         
         let buscarPorId = AuthRepository.buscarUsuarioPorId
         let buscarPorNombre = AuthRepository.buscarUsuarioPorNombre
+        let buscarUsuarioConEmpleado = AuthRepository.buscarUsuarioConEmpleadoPorId
         let guardarUsuario = AuthRepository.guardarUsuario
+        let guardarUsuarioYEmpleado = AuthRepository.guardarUsuarioYEmpleado
         let hashPassword = PasswordHasher.hash
-        let listarUsuarios = AuthRepository.listarUsuarios
+        let listarUsuarios = AuthRepository.listarUsuariosConEmpleado
 
         // GET /api/usuarios
         app.MapGet("/api/usuarios", Func<Threading.Tasks.Task<IResult>>(fun () ->
@@ -32,7 +34,7 @@ module UserEndpoints =
         // GET /api/usuarios/{id}
         app.MapGet("/api/usuarios/{id}", Func<Guid, Threading.Tasks.Task<IResult>>(fun id ->
             async {
-                let! result = UserUseCase.obtenerUsuarioPorId buscarPorId (UsuarioId id)
+                let! result = UserUseCase.obtenerUsuarioPorId buscarUsuarioConEmpleado (UsuarioId id)
                 match result with
                 | Ok user -> return Results.Ok(user)
                 | Error (ErrorInterno msg) -> return Results.Json({| error = msg |}, statusCode = Nullable 500)
@@ -48,7 +50,7 @@ module UserEndpoints =
         app.MapPost("/api/usuarios", Func<CreateUserCommand, Threading.Tasks.Task<IResult>>(fun cmd ->
             async {
                 printfn "[UserEndpoints] Petición POST /api/usuarios recibida: %+A" cmd
-                let! result = UserUseCase.crearUsuario buscarPorNombre guardarUsuario hashPassword cmd
+                let! result = UserUseCase.crearUsuario buscarPorNombre guardarUsuarioYEmpleado hashPassword cmd
                 match result with
                 | Ok () ->
                     printfn "[UserEndpoints] Usuario creado exitosamente: %s" cmd.NombreUsuario
@@ -64,6 +66,26 @@ module UserEndpoints =
         ))
             .RequireAuthorization("RequireAdmin")
             .WithName("CrearUsuario")
+            .WithTags("Usuarios")
+        |> ignore
+
+        // PUT /api/usuarios/{id}
+        app.MapPut("/api/usuarios/{id}", Func<Guid, UpdateUserCommand, Threading.Tasks.Task<IResult>>(fun id cmd ->
+            async {
+                let command = { cmd with UsuarioId = id }
+                let! result = UserUseCase.actualizarUsuario buscarUsuarioConEmpleado buscarPorNombre guardarUsuarioYEmpleado hashPassword command
+                match result with
+                | Ok () -> return Results.Ok()
+                | Error (err: AuthError) ->
+                    match err with
+                    | NombreUsuarioInvalido msg -> return Results.BadRequest({| error = msg |})
+                    | RolesRequeridos msg -> return Results.BadRequest({| error = msg |})
+                    | ErrorInterno msg -> return Results.Json({| error = msg |}, statusCode = Nullable 500)
+                    | _ -> return Results.BadRequest({| error = sprintf "%A" err |})
+            } |> Async.StartAsTask
+        ))
+            .RequireAuthorization("RequireAdmin")
+            .WithName("ActualizarUsuario")
             .WithTags("Usuarios")
         |> ignore
 

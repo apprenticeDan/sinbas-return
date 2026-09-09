@@ -1,5 +1,5 @@
 import { httpClient } from './HttpClient';
-import { UserItem, CreateUserDTO, SystemRole } from '../../domain/models/User';
+import { UserItem, CreateUserDTO, UpdateUserDTO, SystemRole } from '../../domain/models/User';
 
 export const ApiUserGateway = {
   getUsuarios: () => httpClient<UserItem[]>('/usuarios'),
@@ -7,6 +7,12 @@ export const ApiUserGateway = {
   createUsuario: (data: CreateUserDTO) =>
     httpClient<void>('/usuarios', {
       method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateUsuario: (id: string, data: UpdateUserDTO) =>
+    httpClient<void>(`/usuarios/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(data),
     }),
 

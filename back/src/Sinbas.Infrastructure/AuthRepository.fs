@@ -4,6 +4,7 @@ open System
 open Dapper
 open Dapper.FSharp.PostgreSQL
 open Sinbas.Domain
+open Sinbas.Application
 
 // ─────────────────────────────────────────────────────────────
 // Tipos de fila para mapeo con Dapper
@@ -24,9 +25,16 @@ type UsuarioRolRow =
 
 [<CLIMutable>]
 type EmpleadoRow =
-    { id             : Guid
-      nombre_completo: string
-      estado         : string }
+    { id              : Guid
+      nombres         : string option
+      apellido_paterno: string option
+      apellido_materno: string option
+      ci_numero       : string option
+      ci_complemento  : string option
+      telefono        : string option
+      email           : string option
+      nombre_completo : string
+      estado          : string }
 
 // ─────────────────────────────────────────────────────────────
 // Def de Tablas para Dapper.FSharp
@@ -42,6 +50,31 @@ module private AuthTables =
 // ─────────────────────────────────────────────────────────────
 
 module private AuthRepositoryHelpers =
+
+    let reconstruirEmpleado (row: EmpleadoRow) : Empleado =
+        let nombres = defaultArg row.nombres (if String.IsNullOrWhiteSpace row.nombre_completo then "Usuario" else row.nombre_completo)
+        let ci =
+            match row.ci_numero with
+            | Some n when not (String.IsNullOrWhiteSpace n) ->
+                match CI.crear n row.ci_complemento with
+                | Ok c -> c
+                | Error _ -> { Numero = n; Complemento = row.ci_complemento }
+            | _ -> { Numero = "-"; Complemento = None }
+
+        let estado =
+            match row.estado with
+            | "Inactivo" -> EstadoEmpleado.Inactivo
+            | _ -> EstadoEmpleado.Activo
+
+        Empleado.reconstruir
+            row.id
+            nombres
+            row.apellido_paterno
+            row.apellido_materno
+            ci
+            row.telefono
+            row.email
+            estado
 
     let reconstruirDesdeFilas (row: UsuarioRow) (roles: UsuarioRolRow seq) : Usuario =
         let rolSet =
@@ -186,6 +219,195 @@ module AuthRepository =
                 |> Seq.toList
         }
 
+    let buscarEmpleadoPorId (id: EmpleadoId) : Async<Empleado option> =
+        async {
+            use conn = DbConnection.crear ()
+            let (EmpleadoId rawId) = id
+            let! rows =
+                select {
+                    for e in AuthTables.empleadoTable do
+                    where (e.id = rawId)
+                }
+                |> conn.SelectAsync<EmpleadoRow>
+                |> Async.AwaitTask
+            return rows |> Seq.tryHead |> Option.map reconstruirEmpleado
+        }
+
+    let buscarUsuarioConEmpleadoPorId (id: UsuarioId) : Async<Result<UsuarioConEmpleado, AuthError>> =
+        async {
+            let! uRes = buscarUsuarioPorId id
+            match uRes with
+            | Error e -> return Error e
+            | Ok u ->
+                let! empOpt = buscarEmpleadoPorId (Usuario.empleadoId u)
+                let (EmpleadoId eid) = Usuario.empleadoId u
+                let emp =
+                    empOpt
+                    |> Option.defaultWith (fun () ->
+                        { Id = EmpleadoId eid
+                          Nombres = "Usuario"
+                          ApellidoPaterno = None
+                          ApellidoMaterno = None
+                          CI = { Numero = "-"; Complemento = None }
+                          Telefono = None
+                          Email = None
+                          Estado = EstadoEmpleado.Activo })
+                return Ok { Usuario = u; Empleado = emp }
+        }
+
+    let listarUsuariosConEmpleado () : Async<UsuarioConEmpleado list> =
+        async {
+            use conn = DbConnection.crear ()
+
+            let! filas =
+                select {
+                    for u in AuthTables.usuarioTable do
+                    orderBy u.nombre_usuario
+                }
+                |> conn.SelectAsync<UsuarioRow>
+                |> Async.AwaitTask
+
+            let! empleados =
+                select {
+                    for e in AuthTables.empleadoTable do
+                    selectAll
+                }
+                |> conn.SelectAsync<EmpleadoRow>
+                |> Async.AwaitTask
+
+            let empleadosPorId =
+                empleados
+                |> Seq.map (fun e -> e.id, reconstruirEmpleado e)
+                |> Map.ofSeq
+
+            let! roles =
+                select {
+                    for r in AuthTables.usuarioRolTable do
+                    selectAll
+                }
+                |> conn.SelectAsync<UsuarioRolRow>
+                |> Async.AwaitTask
+
+            let rolesPorUsuario =
+                roles
+                |> Seq.groupBy (fun r -> r.usuario_id)
+                |> Map.ofSeq
+
+            return
+                filas
+                |> Seq.map (fun row ->
+                    let rolesDelUsuario =
+                        rolesPorUsuario
+                        |> Map.tryFind row.id
+                        |> Option.defaultValue Seq.empty
+                    let usuario = reconstruirDesdeFilas row rolesDelUsuario
+                    let empleado =
+                        empleadosPorId
+                        |> Map.tryFind row.empleado_id
+                        |> Option.defaultWith (fun () ->
+                            { Id = EmpleadoId row.empleado_id
+                              Nombres = "Usuario"
+                              ApellidoPaterno = None
+                              ApellidoMaterno = None
+                              CI = { Numero = "-"; Complemento = None }
+                              Telefono = None
+                              Email = None
+                              Estado = EstadoEmpleado.Activo })
+                    { Usuario = usuario; Empleado = empleado })
+                |> Seq.toList
+        }
+
+    let guardarUsuarioYEmpleado (usuario: Usuario) (empleado: Empleado) : Async<Result<unit, AuthError>> =
+        async {
+            use conn = DbConnection.crear ()
+            let (UsuarioId id)     = Usuario.id usuario
+            let (EmpleadoId empId) = Usuario.empleadoId usuario
+            let nombre             = Usuario.nombreUsuario usuario |> NombreUsuario.valor
+            let (PasswordHash hash)= Usuario.hash usuario
+            let estadoUsuario      = sprintf "%A" (Usuario.estado usuario)
+            let roles              = Usuario.roles usuario
+
+            let empRow =
+                { id = empId
+                  nombres = Some empleado.Nombres
+                  apellido_paterno = empleado.ApellidoPaterno
+                  apellido_materno = empleado.ApellidoMaterno
+                  ci_numero = Some empleado.CI.Numero
+                  ci_complemento = empleado.CI.Complemento
+                  telefono = empleado.Telefono
+                  email = empleado.Email
+                  nombre_completo = empleado.NombreCompleto
+                  estado = sprintf "%A" empleado.Estado }
+
+            try
+                // 1. Guardar o actualizar empleado
+                let! empExistente =
+                    select {
+                        for e in AuthTables.empleadoTable do
+                        where (e.id = empId)
+                    }
+                    |> conn.SelectAsync<EmpleadoRow>
+                    |> Async.AwaitTask
+
+                if Seq.isEmpty empExistente then
+                    do! insert {
+                            into AuthTables.empleadoTable
+                            value empRow
+                        }
+                        |> conn.InsertAsync
+                        |> Async.AwaitTask
+                        |> Async.Ignore
+                else
+                    do! update {
+                            for e in AuthTables.empleadoTable do
+                            set empRow
+                            where (e.id = empId)
+                        }
+                        |> conn.UpdateAsync
+                        |> Async.AwaitTask
+                        |> Async.Ignore
+
+                // 2. Guardar o actualizar usuario
+                let! usuarioExistente =
+                    select {
+                        for u in AuthTables.usuarioTable do
+                        where (u.id = id)
+                    }
+                    |> conn.SelectAsync<UsuarioRow>
+                    |> Async.AwaitTask
+
+                let uRow =
+                    { id = id
+                      empleado_id = empId
+                      nombre_usuario = nombre
+                      password_hash = hash
+                      estado = estadoUsuario }
+
+                if Seq.isEmpty usuarioExistente then
+                    do! insert {
+                            into AuthTables.usuarioTable
+                            value uRow
+                        }
+                        |> conn.InsertAsync
+                        |> Async.AwaitTask
+                        |> Async.Ignore
+                else
+                    do! update {
+                            for u in AuthTables.usuarioTable do
+                            set uRow
+                            where (u.id = id)
+                        }
+                        |> conn.UpdateAsync
+                        |> Async.AwaitTask
+                        |> Async.Ignore
+
+                // 3. Persistir roles
+                do! persistirRoles conn id roles
+                return Ok ()
+            with ex ->
+                return Error (ErrorInterno ex.Message)
+        }
+
     let guardarUsuario (usuario: Usuario) : Async<Result<unit, AuthError>> =
         async {
             use conn = DbConnection.crear ()
@@ -207,7 +429,17 @@ module AuthRepository =
                     |> Async.AwaitTask
 
                 if Seq.isEmpty empleadoExistente then
-                    let nuevoEmpleado = { id = empId; nombre_completo = sprintf "Empleado #%s" (empId.ToString().Substring(0, 8)); estado = "Activo" }
+                    let nuevoEmpleado =
+                        { id = empId
+                          nombres = Some (sprintf "Empleado #%s" (empId.ToString().Substring(0, 8)))
+                          apellido_paterno = None
+                          apellido_materno = None
+                          ci_numero = Some "-"
+                          ci_complemento = None
+                          telefono = None
+                          email = None
+                          nombre_completo = sprintf "Empleado #%s" (empId.ToString().Substring(0, 8))
+                          estado = "Activo" }
                     do! insert {
                             into AuthTables.empleadoTable
                             value nuevoEmpleado

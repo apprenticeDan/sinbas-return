@@ -29,9 +29,24 @@ module DbConnection =
             let sqlAuth = """
 create table if not exists empleado (
     id              uuid primary key,
+    nombres         text,
+    apellido_paterno text,
+    apellido_materno text,
+    ci_numero       text,
+    ci_complemento  text,
+    telefono        text,
+    email           text,
     nombre_completo text    not null,
     estado          text    not null default 'Activo'
 );
+
+alter table empleado add column if not exists nombres text;
+alter table empleado add column if not exists apellido_paterno text;
+alter table empleado add column if not exists apellido_materno text;
+alter table empleado add column if not exists ci_numero text;
+alter table empleado add column if not exists ci_complemento text;
+alter table empleado add column if not exists telefono text;
+alter table empleado add column if not exists email text;
 
 create table if not exists usuario (
     id              uuid primary key,
@@ -50,9 +65,12 @@ create table if not exists usuario_rol (
     primary key (usuario_id, rol)
 );
 
-insert into empleado (id, nombre_completo, estado)
-values ('01917f3a-0001-7000-8000-000000000001', 'Administrador del Sistema', 'Activo')
-on conflict (id) do nothing;
+insert into empleado (id, nombres, apellido_paterno, apellido_materno, ci_numero, ci_complemento, telefono, email, nombre_completo, estado)
+values ('01917f3a-0001-7000-8000-000000000001', 'Administrador', 'del Sistema', null, '1234567', null, null, null, 'del Sistema, Administrador', 'Activo')
+on conflict (id) do update set
+    nombres = coalesce(empleado.nombres, excluded.nombres),
+    apellido_paterno = coalesce(empleado.apellido_paterno, excluded.apellido_paterno),
+    ci_numero = coalesce(empleado.ci_numero, excluded.ci_numero);
 
 insert into usuario (id, empleado_id, nombre_usuario, password_hash, estado)
 values (

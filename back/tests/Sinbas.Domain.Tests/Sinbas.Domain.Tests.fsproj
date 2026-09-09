@@ -12,6 +12,7 @@
     <Compile Include="ValidacionTests.fs" />
     <Compile Include="EmpleadoTests.fs" />
     <Compile Include="InventoryTests.fs" />
+    <Compile Include="UserTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sinbas.Domain\Sinbas.Domain.fsproj" />
+    <ProjectReference Include="..\..\src\Sinbas.Application\Sinbas.Application.fsproj" />
   </ItemGroup>
 
 </Project>
