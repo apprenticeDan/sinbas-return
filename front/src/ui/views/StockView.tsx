@@ -238,7 +238,7 @@ export const StockView: Component = () => {
                             <td onClick={() => stockStore.toggleExpandirLotes(p.productoId)}>
                               <div style={{ 'font-weight': '600', color: 'var(--ink)' }}>{p.nombreProducto}</div>
                               <div style={{ 'font-size': '11px', color: 'var(--ink-soft)' }}>
-                                {p.lotes.length} {p.lotes.length === 1 ? 'lote registrado' : 'lotes registrados'}
+                                {(p.lotes || []).length} {(p.lotes || []).length === 1 ? 'lote registrado' : 'lotes registrados'}
                               </div>
                             </td>
                             <td onClick={() => stockStore.toggleExpandirLotes(p.productoId)}>
@@ -279,16 +279,16 @@ export const StockView: Component = () => {
                               <td colspan="7" style={{ padding: '0', background: 'var(--surface-alt)' }}>
                                 <div style={{ padding: '14px 24px', 'border-bottom': '1px solid var(--border)' }}>
                                   <div style={{ 'font-size': '12px', 'font-weight': '700', color: 'var(--ink-soft)', 'margin-bottom': '8px', 'text-transform': 'uppercase', 'letter-spacing': '0.05em' }}>
-                                    Lotes Físicos Asociados ({p.lotes.length})
+                                    Lotes Físicos Asociados ({(p.lotes || []).length})
                                   </div>
 
-                                  <Show when={p.lotes.length === 0}>
+                                  <Show when={(p.lotes || []).length === 0}>
                                     <div style={{ 'font-size': '12px', color: 'var(--ink-faint)', padding: '6px 0' }}>
                                       No existen lotes físicos activos registrados para este producto.
                                     </div>
                                   </Show>
 
-                                  <Show when={p.lotes.length > 0}>
+                                  <Show when={(p.lotes || []).length > 0}>
                                     <table style={{ width: '100%', 'font-size': '12px', 'border-collapse': 'collapse' }}>
                                       <thead>
                                         <tr style={{ color: 'var(--ink-soft)', 'border-bottom': '1px solid var(--border-soft)' }}>
@@ -301,7 +301,7 @@ export const StockView: Component = () => {
                                         </tr>
                                       </thead>
                                       <tbody>
-                                        <For each={p.lotes}>
+                                        <For each={p.lotes || []}>
                                           {(lote) => (
                                             <tr style={{ 'border-bottom': '1px dotted var(--border-soft)' }}>
                                               <td style={{ padding: '6px', 'font-family': 'monospace', 'font-weight': '600' }}>

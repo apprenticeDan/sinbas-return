@@ -13,7 +13,7 @@ type LoteRow =
       cantidad_inicial: decimal
       cantidad_actual: decimal
       unidad: string
-      fecha_ingreso: DateTime
+      fecha_ingreso: DateOnly
       ubicacion: string
       estado: string
       observaciones: string }
@@ -60,7 +60,7 @@ module LoteRepository =
           Procedencia = Option.ofObj row.procedencia
           CantidadInicial = { Valor = row.cantidad_inicial; Unidad = unidad }
           CantidadActual = { Valor = row.cantidad_actual; Unidad = unidad }
-          FechaIngreso = DateOnly.FromDateTime(row.fecha_ingreso)
+          FechaIngreso = row.fecha_ingreso
           Ubicacion = Option.ofObj row.ubicacion
           Estado = estado
           Observaciones = Option.ofObj row.observaciones }
@@ -84,7 +84,7 @@ module LoteRepository =
           cantidad_inicial = lote.CantidadInicial.Valor
           cantidad_actual = lote.CantidadActual.Valor
           unidad = desmapearUnidad lote.CantidadInicial.Unidad
-          fecha_ingreso = lote.FechaIngreso.ToDateTime(TimeOnly.MinValue)
+          fecha_ingreso = lote.FechaIngreso
           ubicacion = Option.toObj lote.Ubicacion
           estado = estadoStr
           observaciones = Option.toObj lote.Observaciones }

@@ -4,6 +4,33 @@ open System
 open Npgsql
 open Dapper.FSharp.PostgreSQL
 
+open Dapper
+open System.Data
+
+type DateOnlyTypeHandler() =
+    inherit SqlMapper.TypeHandler<DateOnly>()
+    override _.SetValue(param: IDbDataParameter, value: DateOnly) =
+        param.DbType <- DbType.Date
+        param.Value <- value
+    override _.Parse(value: obj) : DateOnly =
+        match value with
+        | :? DateOnly as d -> d
+        | :? DateTime as dt -> DateOnly.FromDateTime(dt)
+        | :? string as s -> DateOnly.Parse(s)
+        | _ -> Convert.ToDateTime(value) |> DateOnly.FromDateTime
+
+type DateTimeTypeHandler() =
+    inherit SqlMapper.TypeHandler<DateTime>()
+    override _.SetValue(param: IDbDataParameter, value: DateTime) =
+        param.DbType <- DbType.DateTime
+        param.Value <- value
+    override _.Parse(value: obj) : DateTime =
+        match value with
+        | :? DateTime as dt -> dt
+        | :? DateOnly as d -> d.ToDateTime(TimeOnly.MinValue)
+        | :? string as s -> DateTime.Parse(s)
+        | _ -> Convert.ToDateTime(value)
+
 module DbConnection =
 
     /// Lee la cadena de conexión desde DATABASE_URL (variable de entorno).
@@ -22,6 +49,8 @@ module DbConnection =
         try
             // Registrar mapeo automático para F# Option en Dapper.FSharp
             OptionTypes.register()
+            SqlMapper.AddTypeHandler(DateOnlyTypeHandler())
+            SqlMapper.AddTypeHandler(DateTimeTypeHandler())
 
             use conn = crear ()
             conn.Open()

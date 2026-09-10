@@ -64,6 +64,20 @@ let main args =
     // Inicializar tablas y datos iniciales de la base de datos
     DbConnection.inicializar()
 
+    // Middleware global de infraestructura: transforma excepciones no controladas en JSON limpio
+    app.Use(fun context (next: Microsoft.AspNetCore.Http.RequestDelegate) ->
+        async {
+            try
+                do! next.Invoke(context) |> Async.AwaitTask
+            with ex ->
+                context.Response.StatusCode <- 500
+                context.Response.ContentType <- "application/json"
+                let payload = {| error = "Error interno de servidor o infraestructura"; detalle = ex.Message; tipo = ex.GetType().Name |}
+                let jsonBytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(payload)
+                do! context.Response.Body.WriteAsync(jsonBytes, 0, jsonBytes.Length) |> Async.AwaitTask
+        } |> Async.StartAsTask :> Threading.Tasks.Task
+    ) |> ignore
+
     app.UseCors("AllowAll") |> ignore
     app.UseAuthentication() |> ignore
     app.UseAuthorization() |> ignore

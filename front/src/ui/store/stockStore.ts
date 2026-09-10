@@ -94,7 +94,7 @@ export const stockStore = {
       // Filtro por búsqueda de texto
       if (q) {
         const coincideNombre = p.nombreProducto.toLowerCase().includes(q);
-        const coincideLote = p.lotes.some(
+        const coincideLote = (p.lotes || []).some(
           (l) =>
             l.codigo.toLowerCase().includes(q) ||
             (l.procedencia && l.procedencia.toLowerCase().includes(q))
