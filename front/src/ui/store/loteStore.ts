@@ -1,4 +1,4 @@
-import { createSignal, createMemo } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { LoteItem, CreateLotePayload, BloquearLotePayload } from '../../domain/models/Lote';
 import { ApiLoteGateway } from '../../infrastructure/api/ApiLoteGateway';
 
@@ -53,7 +53,7 @@ export const loteStore = {
     return actualizado;
   },
 
-  filteredLotes: createMemo(() => {
+  filteredLotes: () => {
     let list = lotes();
     const query = searchTerm().toLowerCase().trim();
     const st = stateFilter();
@@ -73,5 +73,5 @@ export const loteStore = {
     }
 
     return list;
-  }),
+  },
 };

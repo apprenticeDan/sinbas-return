@@ -1,4 +1,4 @@
-import { createSignal, createMemo } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { Product, CreateProductPayload, AssignPricePayload } from '../../domain/models/Product';
 import { CatalogUseCases } from '../../application/usecases/CatalogUseCases';
 
@@ -14,7 +14,7 @@ const [createModalOpen, setCreateModalOpen] = createSignal<boolean>(false);
 const [priceModalOpen, setPriceModalOpen] = createSignal<boolean>(false);
 const [selectedProductForPrice, setSelectedProductForPrice] = createSignal<Product | null>(null);
 
-export const filteredProducts = createMemo(() => {
+export const filteredProducts = () => {
   const term = searchTerm().toLowerCase().trim();
   return products().filter((p) => {
     const matchesSearch =
@@ -28,7 +28,7 @@ export const filteredProducts = createMemo(() => {
 
     return matchesSearch && matchesCategory && matchesState;
   });
-});
+};
 
 export const catalogStore = {
   products,

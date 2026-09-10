@@ -70,6 +70,9 @@ let main args =
             try
                 do! next.Invoke(context) |> Async.AwaitTask
             with ex ->
+                eprintfn "[SinbasError] 500 en %s %s: %s" context.Request.Method context.Request.Path.Value ex.Message
+                if not (isNull ex.InnerException) then
+                    eprintfn "[SinbasError] Causa interna: %s" ex.InnerException.Message
                 context.Response.StatusCode <- 500
                 context.Response.ContentType <- "application/json"
                 let payload = {| error = "Error interno de servidor o infraestructura"; detalle = ex.Message; tipo = ex.GetType().Name |}

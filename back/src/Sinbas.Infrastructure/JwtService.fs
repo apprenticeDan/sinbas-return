@@ -15,6 +15,7 @@ module JwtService =
         
         let claims = [
             Claim(JwtRegisteredClaimNames.Sub, (usuario |> Usuario.id |> fun (UsuarioId id) -> string id))
+            Claim("empleado_id", (usuario |> Usuario.empleadoId |> fun (EmpleadoId id) -> string id))
             Claim(JwtRegisteredClaimNames.UniqueName, (usuario |> Usuario.nombreUsuario |> NombreUsuario.valor))
         ]
         

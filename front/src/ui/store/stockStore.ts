@@ -1,4 +1,4 @@
-import { createSignal, createMemo } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { ApiInventoryGateway } from '../../infrastructure/api/ApiInventoryGateway';
 import type { StockConsolidadoProducto, KardexItem } from '../../domain/models/Stock';
 
@@ -71,7 +71,7 @@ export const stockStore = {
   // Métricas Computadas
   // ─────────────────────────────────────────────────────────────
 
-  productosFiltrados: createMemo(() => {
+  productosFiltrados: () => {
     const prods = productosStock();
     const cat = filtroCategoria();
     const q = filtroBusqueda().toLowerCase().trim();
@@ -104,18 +104,18 @@ export const stockStore = {
 
       return true;
     });
-  }),
+  },
 
-  totalProductosConStock: createMemo(() => {
+  totalProductosConStock: () => {
     return productosStock().filter((p) => p.stockTotalGramos > 0).length;
-  }),
+  },
 
-  stockTotalAlmacenKg: createMemo(() => {
+  stockTotalAlmacenKg: () => {
     const totalGramos = productosStock().reduce((acc, p) => acc + p.stockTotalGramos, 0);
     return Math.round((totalGramos / 1000) * 100) / 100;
-  }),
+  },
 
-  totalAlertasStock: createMemo(() => {
+  totalAlertasStock: () => {
     return productosStock().filter((p) => p.alerta === 'SinStock' || p.alerta === 'BajoStock').length;
-  }),
+  },
 };

@@ -41,10 +41,23 @@ export const IngresosView: Component = () => {
   });
 
   const canSubmit = createMemo(() => {
-    return formCategoria() !== '' && formDescripcion() !== '' && formTipo() !== '' && !almacenStore.loadingIngresos();
+    const cant = Number(formCantidad());
+    return (
+      formCategoria() !== '' &&
+      formDescripcion() !== '' &&
+      formTipo() !== '' &&
+      !isNaN(cant) &&
+      cant > 0 &&
+      !almacenStore.loadingIngresos()
+    );
   });
 
   async function handleRegistrar() {
+    const cant = Number(formCantidad());
+    if (isNaN(cant) || cant <= 0) {
+      setFormError('La cantidad a ingresar debe ser un número mayor a cero.');
+      return;
+    }
     if (!canSubmit()) return;
     setFormError(null);
     try {
@@ -53,7 +66,7 @@ export const IngresosView: Component = () => {
         categoria: formCategoria() as CategoriaAlmacen,
         descripcion: formDescripcion(),
         tipo: formTipo() as TipoIngreso,
-        cantidad: formCantidad() ? Number(formCantidad()) : null,
+        cantidad: cant,
         procedencia: formProcedencia(),
       });
       // Reset form parcial (mantener fecha y categoría)
@@ -256,7 +269,7 @@ export const IngresosView: Component = () => {
             class="btn btn-primary almacen-add-btn"
             onClick={handleRegistrar}
             disabled={!canSubmit()}
-            title={canSubmit() ? 'Registrar ingreso' : 'Completa categoría, descripción y tipo'}
+            title={canSubmit() ? 'Registrar ingreso' : 'Completa categoría, descripción, tipo y una cantidad mayor a 0'}
             style={{ 'align-self': 'flex-end' }}
           >
             <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">

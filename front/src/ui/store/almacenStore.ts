@@ -5,7 +5,7 @@
  * Mantiene mock y fallback para Egresos hasta la implementación de F8/F9.
  */
 
-import { createSignal, createMemo } from 'solid-js';
+import { createSignal } from 'solid-js';
 import type {
   IngresoItem,
   EgresoItem,
@@ -101,7 +101,7 @@ const [egresoFiltroSearch, setEgresoFiltroSearch] = createSignal('');
 
 // ─── Computed (filtrados) ─────────────────────────────────────────
 
-const filteredIngresos = createMemo(() => {
+const filteredIngresos = () => {
   let list = ingresos();
   const cat = ingresoFiltroCategoria();
   const tipo = ingresoFiltroTipo();
@@ -112,9 +112,9 @@ const filteredIngresos = createMemo(() => {
   if (search) list = list.filter((i) => i.descripcion.toLowerCase().includes(search));
 
   return list;
-});
+};
 
-const filteredEgresos = createMemo(() => {
+const filteredEgresos = () => {
   let list = egresos();
   const cat = egresoFiltroCategoria();
   const tipo = egresoFiltroTipo();
@@ -130,7 +130,7 @@ const filteredEgresos = createMemo(() => {
   }
 
   return list;
-});
+};
 
 // ─── Transformadores y Acciones ───────────────────────────────────
 

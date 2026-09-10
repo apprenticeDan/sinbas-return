@@ -13,6 +13,32 @@ module InventoryEndpoints =
 
     let mapEndpoints (app: WebApplication) =
 
+        let resolverEmpleadoId (ctx: HttpContext) : Async<Guid> =
+            async {
+                let defaultEmpleado = Guid.Parse("01917f3a-0001-7000-8000-000000000001")
+                let empClaim = ctx.User.FindFirst("empleado_id")
+                if not (isNull empClaim) then
+                    match Guid.TryParse(empClaim.Value) with
+                    | true, g -> return g
+                    | false, _ -> return defaultEmpleado
+                else
+                    let subClaim =
+                        let c1 = ctx.User.FindFirst(ClaimTypes.NameIdentifier)
+                        if isNull c1 then ctx.User.FindFirst(JwtRegisteredClaimNames.Sub) else c1
+                    if not (isNull subClaim) then
+                        match Guid.TryParse(subClaim.Value) with
+                        | true, uGuid ->
+                            let! uRes = AuthRepository.buscarUsuarioPorId (UsuarioId uGuid)
+                            match uRes with
+                            | Ok u ->
+                                let (EmpleadoId eId) = Usuario.empleadoId u
+                                return eId
+                            | Error _ -> return defaultEmpleado
+                        | false, _ -> return defaultEmpleado
+                    else
+                        return defaultEmpleado
+            }
+
         // ─────────────────────────────────────────────────────────
         // 1. POST /api/inventario/ingreso
         // Registra recepción física e ingreso de producto/lote a almacén (F4 / MF-04-01).
@@ -20,16 +46,7 @@ module InventoryEndpoints =
         // ─────────────────────────────────────────────────────────
         app.MapPost("/api/inventario/ingreso", Func<RegistrarIngresoRequest, HttpContext, Threading.Tasks.Task<IResult>>(fun req ctx ->
             async {
-                let defaultEmpleado = Guid.Parse("01917f3a-0001-7000-8000-000000000001")
-                let responsableId =
-                    let subClaim =
-                        let c1 = ctx.User.FindFirst(ClaimTypes.NameIdentifier)
-                        if isNull c1 then ctx.User.FindFirst(JwtRegisteredClaimNames.Sub) else c1
-                    if not (isNull subClaim) then
-                        match Guid.TryParse(subClaim.Value) with
-                        | true, g -> g
-                        | false, _ -> defaultEmpleado
-                    else defaultEmpleado
+                let! responsableId = resolverEmpleadoId ctx
 
                 let! res =
                     InventoryService.registrarIngreso
@@ -177,16 +194,7 @@ module InventoryEndpoints =
         // ─────────────────────────────────────────────────────────
         app.MapPost("/api/inventario/egreso", Func<RegistrarEgresoRequest, HttpContext, Threading.Tasks.Task<IResult>>(fun req ctx ->
             async {
-                let defaultEmpleado = Guid.Parse("01917f3a-0001-7000-8000-000000000001")
-                let responsableId =
-                    let subClaim =
-                        let c1 = ctx.User.FindFirst(ClaimTypes.NameIdentifier)
-                        if isNull c1 then ctx.User.FindFirst(JwtRegisteredClaimNames.Sub) else c1
-                    if not (isNull subClaim) then
-                        match Guid.TryParse(subClaim.Value) with
-                        | true, g -> g
-                        | false, _ -> defaultEmpleado
-                    else defaultEmpleado
+                let! responsableId = resolverEmpleadoId ctx
 
                 let! res =
                     InventoryService.registrarEgreso

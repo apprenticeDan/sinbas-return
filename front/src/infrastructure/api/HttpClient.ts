@@ -27,7 +27,9 @@ export async function httpClient<T>(endpoint: string, options: RequestInit = {})
     let errorMsg = `Error ${response.status}: ${response.statusText}`;
     try {
       const errData = await response.json();
-      if (errData.error) errorMsg = errData.error;
+      if (errData.error) {
+        errorMsg = errData.detalle ? `${errData.error} (${errData.detalle})` : errData.error;
+      }
     } catch (_) {}
     throw new ApiError(response.status, errorMsg);
   }

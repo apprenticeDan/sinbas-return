@@ -46,10 +46,23 @@ export const EgresosView: Component = () => {
   });
 
   const canSubmit = createMemo(() => {
-    return formCategoria() !== '' && formDescripcion() !== '' && formTipo() !== '' && !almacenStore.loadingEgresos();
+    const cant = Number(formCantidad());
+    return (
+      formCategoria() !== '' &&
+      formDescripcion() !== '' &&
+      formTipo() !== '' &&
+      !isNaN(cant) &&
+      cant > 0 &&
+      !almacenStore.loadingEgresos()
+    );
   });
 
   async function handleRegistrar() {
+    const cant = Number(formCantidad());
+    if (isNaN(cant) || cant <= 0) {
+      setFormError('La cantidad a egresar debe ser un número mayor a cero.');
+      return;
+    }
     if (!canSubmit()) return;
     setFormError(null);
     try {
@@ -58,7 +71,7 @@ export const EgresosView: Component = () => {
         categoria: formCategoria() as CategoriaAlmacen,
         descripcion: formDescripcion(),
         tipo: formTipo() as TipoEgreso,
-        cantidad: formCantidad() ? Number(formCantidad()) : null,
+        cantidad: cant,
         consignatario: formConsignatario(),
         costoAdicional: formCostoAdic() ? Number(formCostoAdic()) : undefined,
       });
@@ -309,7 +322,7 @@ export const EgresosView: Component = () => {
             class="btn btn-primary almacen-add-btn"
             onClick={handleRegistrar}
             disabled={!canSubmit()}
-            title={canSubmit() ? 'Registrar egreso' : 'Completa categoría, descripción y tipo de egreso'}
+            title={canSubmit() ? 'Registrar egreso' : 'Completa categoría, descripción, tipo y una cantidad mayor a 0'}
             style={{ 'align-self': 'flex-end' }}
           >
             <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
