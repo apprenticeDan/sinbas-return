@@ -9,6 +9,7 @@ import { PlaceholderView } from './ui/views/PlaceholderView';
 
 import { IngresosView } from './ui/views/IngresosView';
 import { EgresosView } from './ui/views/EgresosView';
+import { StockView } from './ui/views/StockView';
 
 export const App: Component = () => {
   const [currentView, setCurrentView] = createSignal(authStore.getDefaultView());
@@ -47,6 +48,9 @@ export const App: Component = () => {
           </Show>
           <Show when={currentView() === 'egresos' && authStore.canAccessView('egresos')}>
             <EgresosView />
+          </Show>
+          <Show when={currentView() === 'stock' && authStore.canAccessView('stock')}>
+            <StockView />
           </Show>
         </main>
       </div>

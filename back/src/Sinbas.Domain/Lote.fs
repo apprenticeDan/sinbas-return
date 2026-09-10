@@ -6,6 +6,7 @@ type EstadoLote =
     | Activo
     | Agotado
     | Bloqueado
+    | Rechazado
     | Archivado
 
 type Lote =

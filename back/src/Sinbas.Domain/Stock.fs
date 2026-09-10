@@ -53,3 +53,103 @@ module Stock =
             stock > 0m)
         |> List.sortBy (fun (l, _) ->
             l.FechaIngreso)
+
+    // ─────────────────────────────────────────────────────────────
+    // MF-05-02 & MF-05-03: Kardex Digital y Alertas de Stock
+    // ─────────────────────────────────────────────────────────────
+
+    type NivelAlertaStock =
+        | SinStock
+        | BajoStock of umbralMinimoGramos: decimal
+        | StockNormal
+
+    let evaluarAlertaStock (stockDisponibleGramos: decimal) (umbralMinimoGramos: decimal) : NivelAlertaStock =
+        if stockDisponibleGramos <= 0m then
+            SinStock
+        elif stockDisponibleGramos <= umbralMinimoGramos then
+            BajoStock umbralMinimoGramos
+        else
+            StockNormal
+
+    type KardexLinea =
+        { MovimientoId: MovimientoId
+          Fecha: System.DateTime
+          Tipo: TipoMovimiento
+          LoteId: LoteId
+          Cantidad: Cantidad
+          SaldoResultanteGramos: decimal
+          Responsable: EmpleadoId
+          Observaciones: string option }
+
+    let calcularKardexProducto
+        (productoId: ProductoId)
+        (lotes: Lote list)
+        (movimientos: MovimientoInventario list)
+        : KardexLinea list =
+
+        let lotesIds =
+            lotes
+            |> List.filter (fun l -> l.ProductoId = productoId)
+            |> List.map (fun l -> l.Id)
+            |> Set.ofList
+
+        let movsOrdenados =
+            movimientos
+            |> List.sortBy (fun m -> m.Fecha)
+
+        let (_saldoFinal, lineasKardexInvertidas) =
+            movsOrdenados
+            |> List.fold (fun (saldoAcum, acc) mov ->
+                let signo = TipoMovimiento.signo mov.Tipo
+                let lineasProducto =
+                    mov.Lineas
+                    |> List.filter (fun l -> Set.contains l.Referencia lotesIds)
+
+                let (nuevoSaldo, lineasGeneradas) =
+                    lineasProducto
+                    |> List.fold (fun (s, accLineas) linea ->
+                        let cantGramos = Cantidad.enGramos linea.Cantidad
+                        let sActual = s + (signo * cantGramos)
+                        let kl =
+                            { MovimientoId = mov.Id
+                              Fecha = mov.Fecha
+                              Tipo = mov.Tipo
+                              LoteId = linea.Referencia
+                              Cantidad = linea.Cantidad
+                              SaldoResultanteGramos = sActual
+                              Responsable = mov.Responsable
+                              Observaciones = mov.Observaciones }
+                        (sActual, kl :: accLineas)
+                    ) (saldoAcum, [])
+
+                (nuevoSaldo, lineasGeneradas @ acc)
+            ) (0m, [])
+
+        List.rev lineasKardexInvertidas
+
+    type StockConsolidadoProducto =
+        { ProductoId: ProductoId
+          StockTotalGramos: decimal
+          StockDisponibleVentaGramos: decimal
+          Alerta: NivelAlertaStock
+          LotesStock: (Lote * decimal) list }
+
+    let proyectarStockConsolidado
+        (productos: Producto list)
+        (lotes: Lote list)
+        (movimientos: MovimientoInventario list)
+        (umbralMinimoDefaultGramos: decimal)
+        : StockConsolidadoProducto list =
+
+        productos
+        |> List.map (fun prod ->
+            let prodId = prod.Base.Id
+            let totalG = stockProducto prodId lotes movimientos
+            let dispVentaG = disponibleParaVenta prodId lotes movimientos
+            let alerta = evaluarAlertaStock dispVentaG umbralMinimoDefaultGramos
+            let lotesDisp = lotesDisponibles prodId lotes movimientos
+            { ProductoId = prodId
+              StockTotalGramos = totalG
+              StockDisponibleVentaGramos = dispVentaG
+              Alerta = alerta
+              LotesStock = lotesDisp })

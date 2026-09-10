@@ -50,6 +50,8 @@ export const authStore = {
         return userRoles.some((r) => ['Almacen', 'Comercial', 'Gerencia'].includes(r));
       case 'egresos':
         return userRoles.some((r) => ['Almacen', 'Comercial', 'Gerencia'].includes(r));
+      case 'stock':
+        return userRoles.some((r) => ['Almacen', 'Comercial', 'Gerencia'].includes(r));
       default:
         return false;
     }

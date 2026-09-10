@@ -82,8 +82,37 @@ module InventoryEndpoints =
         |> ignore
 
         // ─────────────────────────────────────────────────────────
-        // 3. GET /api/inventario/stock/{productoId}
-        // Consulta de existencias por producto y desglose de lotes (F5 / MF-05-01).
+        // ─────────────────────────────────────────────────────────
+        // 3. GET /api/inventario/stock
+        // Consulta de existencias consolidadas por producto con alertas y desglose de lotes (F5 / MF-05-01 / MF-05-03).
+        // ─────────────────────────────────────────────────────────
+        app.MapGet("/api/inventario/stock", Func<HttpContext, Threading.Tasks.Task<IResult>>(fun ctx ->
+            async {
+                let umbralMinimo =
+                    if ctx.Request.Query.ContainsKey("umbralMinimo") then
+                        match Decimal.TryParse(ctx.Request.Query.["umbralMinimo"].ToString()) with
+                        | true, v -> Some v
+                        | false, _ -> None
+                    else None
+
+                let! dtos =
+                    InventoryService.consultarStockConsolidado
+                        CatalogRepository.listarTodos
+                        LoteRepository.listar
+                        InventoryRepository.listarTodosMovimientosDominio
+                        umbralMinimo
+
+                return Results.Ok(dtos)
+            } |> Async.StartAsTask
+        ))
+            .RequireAuthorization()
+            .WithName("ConsultarStockConsolidado")
+            .WithTags("Inventario")
+        |> ignore
+
+        // ─────────────────────────────────────────────────────────
+        // 4. GET /api/inventario/stock/{productoId}
+        // Consulta de existencias de un producto específico y desglose de lotes (F5 / MF-05-01).
         // ─────────────────────────────────────────────────────────
         app.MapGet("/api/inventario/stock/{productoId}", Func<string, Threading.Tasks.Task<IResult>>(fun productoId ->
             async {
@@ -101,6 +130,41 @@ module InventoryEndpoints =
         ))
             .RequireAuthorization()
             .WithName("ConsultarStockProducto")
+            .WithTags("Inventario")
+        |> ignore
+
+        // ─────────────────────────────────────────────────────────
+        // 5. GET /api/inventario/kardex
+        // Kardex digital cronológico con saldo acumulado paso a paso (F5 / MF-05-02).
+        // Soporta filtros opcionales ?productoId=&loteId=
+        // ─────────────────────────────────────────────────────────
+        app.MapGet("/api/inventario/kardex", Func<HttpContext, Threading.Tasks.Task<IResult>>(fun ctx ->
+            async {
+                let prodIdFilter =
+                    if ctx.Request.Query.ContainsKey("productoId") then
+                        let v = ctx.Request.Query.["productoId"].ToString()
+                        if String.IsNullOrWhiteSpace v then None else Some v
+                    else None
+
+                let loteIdFilter =
+                    if ctx.Request.Query.ContainsKey("loteId") then
+                        let v = ctx.Request.Query.["loteId"].ToString()
+                        if String.IsNullOrWhiteSpace v then None else Some v
+                    else None
+
+                let! dtos =
+                    InventoryService.consultarKardex
+                        CatalogRepository.listarTodos
+                        LoteRepository.listar
+                        InventoryRepository.listarTodosMovimientosDominio
+                        prodIdFilter
+                        loteIdFilter
+
+                return Results.Ok(dtos)
+            } |> Async.StartAsTask
+        ))
+            .RequireAuthorization()
+            .WithName("ConsultarKardexDigital")
             .WithTags("Inventario")
         |> ignore
 

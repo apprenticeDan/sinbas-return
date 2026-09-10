@@ -72,6 +72,7 @@ type StockLoteDto =
       Codigo: string
       ProductoId: string
       NombreProducto: string
+      Procedencia: string
       FechaIngreso: string
       Estado: string
       StockGramos: decimal
@@ -85,6 +86,36 @@ type StockProductoDto =
       StockTotalGramos: decimal
       StockDisponibleVentaGramos: decimal
       Lotes: StockLoteDto list }
+
+[<CLIMutable>]
+type StockConsolidadoProductoDto =
+    { ProductoId: string
+      NombreProducto: string
+      Categoria: string
+      UnidadMedida: string
+      StockTotalGramos: decimal
+      StockTotalDisplay: decimal
+      StockDisponibleVentaGramos: decimal
+      StockDisponibleVentaDisplay: decimal
+      Alerta: string
+      Lotes: StockLoteDto list }
+
+[<CLIMutable>]
+type KardexMovimientoDto =
+    { MovimientoId: string
+      Fecha: string
+      Tipo: string
+      Motivo: string
+      ProductoId: string
+      NombreProducto: string
+      LoteId: string
+      CodigoLote: string
+      Cantidad: decimal
+      Unidad: string
+      SaldoResultanteGramos: decimal
+      SaldoResultanteDisplay: decimal
+      ResponsableId: string
+      Observaciones: string }
 
 // ─────────────────────────────────────────────────────────────
 // Servicio de Aplicación: InventoryService
@@ -379,12 +410,14 @@ module InventoryService =
                                 | Activo -> "Activo"
                                 | Agotado -> "Agotado"
                                 | Bloqueado -> "Bloqueado"
+                                | Rechazado -> "Rechazado"
                                 | Archivado -> "Archivado"
 
                             { LoteId = lId.ToString()
                               Codigo = CodigoLote.valor l.Codigo
                               ProductoId = pId.ToString()
                               NombreProducto = Producto.nombreVisible prod
+                              Procedencia = defaultArg l.Procedencia ""
                               FechaIngreso = l.FechaIngreso.ToString("yyyy-MM-dd")
                               Estado = estadoStr
                               StockGramos = stockG
@@ -396,6 +429,181 @@ module InventoryService =
                                 StockTotalGramos = stockTotalGramos
                                 StockDisponibleVentaGramos = stockVentaGramos
                                 Lotes = lotesDtos }
+        }
+
+    let consultarStockConsolidado
+        (listarProductos: unit -> Async<Producto list>)
+        (listarLotes: ProductoId option -> EstadoLote option -> Async<Lote list>)
+        (listarMovimientos: unit -> Async<MovimientoInventario list>)
+        (umbralMinimoGramos: decimal option)
+        : Async<StockConsolidadoProductoDto list> =
+        async {
+            let! productos = listarProductos ()
+            let! lotes = listarLotes None None
+            let! movimientos = listarMovimientos ()
+
+            let umbral = defaultArg umbralMinimoGramos 5000m // 5 kg por defecto
+            let consolidado = Stock.proyectarStockConsolidado productos lotes movimientos umbral
+
+            let dtos =
+                productos
+                |> List.map (fun prod ->
+                    let prodId = prod.Base.Id
+                    let (ProductoId pGuid) = prodId
+                    let item = consolidado |> List.find (fun c -> c.ProductoId = prodId)
+
+                    let categoriaStr =
+                        match prod.Categoria with
+                        | Semilla _ -> "Semilla"
+                        | Plantin _ -> "Plantin"
+                        | Insumo _ -> "Insumo"
+                        | Otro _ -> "Otro"
+
+                    let alertaStr =
+                        match item.Alerta with
+                        | Stock.SinStock -> "SinStock"
+                        | Stock.BajoStock _ -> "BajoStock"
+                        | Stock.StockNormal -> "StockNormal"
+
+                    let unidadStr = desmapearUnidad prod.Base.UnidadManejo
+
+                    let lotesProducto =
+                        lotes
+                        |> List.filter (fun l -> l.ProductoId = prodId)
+                        |> List.map (fun l ->
+                            let (LoteId lId) = l.Id
+                            let stockG = Stock.cantidadLote l.Id movimientos
+                            let estadoStr =
+                                match l.Estado with
+                                | Activo -> "Activo"
+                                | Agotado -> "Agotado"
+                                | Bloqueado -> "Bloqueado"
+                                | Rechazado -> "Rechazado"
+                                | Archivado -> "Archivado"
+
+                            { LoteId = lId.ToString()
+                              Codigo = CodigoLote.valor l.Codigo
+                              ProductoId = pGuid.ToString()
+                              NombreProducto = Producto.nombreVisible prod
+                              Procedencia = defaultArg l.Procedencia ""
+                              FechaIngreso = l.FechaIngreso.ToString("yyyy-MM-dd")
+                              Estado = estadoStr
+                              StockGramos = stockG
+                              StockDisplay = if l.CantidadActual.Unidad = Kilogramo then stockG / 1000m else stockG
+                              Unidad = desmapearUnidad l.CantidadActual.Unidad })
+
+                    let totalDisp = if prod.Base.UnidadManejo = Kilogramo then item.StockTotalGramos / 1000m else item.StockTotalGramos
+                    let ventaDisp = if prod.Base.UnidadManejo = Kilogramo then item.StockDisponibleVentaGramos / 1000m else item.StockDisponibleVentaGramos
+
+                    { ProductoId = pGuid.ToString()
+                      NombreProducto = Producto.nombreVisible prod
+                      Categoria = categoriaStr
+                      UnidadMedida = unidadStr
+                      StockTotalGramos = item.StockTotalGramos
+                      StockTotalDisplay = totalDisp
+                      StockDisponibleVentaGramos = item.StockDisponibleVentaGramos
+                      StockDisponibleVentaDisplay = ventaDisp
+                      Alerta = alertaStr
+                      Lotes = lotesProducto })
+
+            return dtos
+        }
+
+    let consultarKardex
+        (listarProductos: unit -> Async<Producto list>)
+        (listarLotes: ProductoId option -> EstadoLote option -> Async<Lote list>)
+        (listarMovimientos: unit -> Async<MovimientoInventario list>)
+        (productoIdFilter: string option)
+        (loteIdFilter: string option)
+        : Async<KardexMovimientoDto list> =
+        async {
+            let! productos = listarProductos ()
+            let! lotes = listarLotes None None
+            let! movimientos = listarMovimientos ()
+
+            let prodsFiltrados =
+                match productoIdFilter with
+                | Some pid when not (String.IsNullOrWhiteSpace pid) ->
+                    match Guid.TryParse(pid) with
+                    | true, g -> productos |> List.filter (fun p -> let (ProductoId id) = p.Base.Id in id = g)
+                    | false, _ -> productos
+                | _ -> productos
+
+            let lineasKardexTodas =
+                prodsFiltrados
+                |> List.collect (fun prod ->
+                    let lineas = Stock.calcularKardexProducto prod.Base.Id lotes movimientos
+                    lineas
+                    |> List.map (fun kl -> (prod, kl)))
+
+            let lineasFiltradas =
+                match loteIdFilter with
+                | Some lid when not (String.IsNullOrWhiteSpace lid) ->
+                    match Guid.TryParse(lid) with
+                    | true, g ->
+                        lineasKardexTodas
+                        |> List.filter (fun (_, kl) -> let (LoteId id) = kl.LoteId in id = g)
+                    | false, _ -> lineasKardexTodas
+                | _ -> lineasKardexTodas
+
+            let dtos =
+                lineasFiltradas
+                |> List.sortByDescending (fun (_, kl) -> kl.Fecha)
+                |> List.map (fun (prod, kl) ->
+                    let (MovimientoId mId) = kl.MovimientoId
+                    let (ProductoId pId) = prod.Base.Id
+                    let (LoteId lId) = kl.LoteId
+                    let (EmpleadoId empId) = kl.Responsable
+
+                    let codigoLoteStr =
+                        lotes
+                        |> List.tryFind (fun l -> l.Id = kl.LoteId)
+                        |> Option.map (fun l -> CodigoLote.valor l.Codigo)
+                        |> Option.defaultValue (lId.ToString().Substring(0, 8))
+
+                    let tipoStr =
+                        match kl.Tipo with
+                        | Entrada _ -> "Entrada"
+                        | Salida _ -> "Salida"
+
+                    let motivoStr =
+                        match kl.Tipo with
+                        | Entrada m ->
+                            match m with
+                            | Recoleccion det -> sprintf "Recolección: %s" det
+                            | Compra _ -> "Compra"
+                            | TruequeEntrada _ -> "Trueque / Intercambio"
+                            | DonacionRecibida don -> sprintf "Donación: %s" don
+                            | Devolucion _ -> "Devolución"
+                        | Salida m ->
+                            match m with
+                            | Venta _ -> "Venta"
+                            | Merma causa -> sprintf "Merma: %s" causa
+                            | MuestraLab _ -> "Muestra Lab"
+                            | UsoInterno desc -> sprintf "Uso Interno: %s" desc
+                            | DonacionEnviada dest -> sprintf "Donación: %s" dest
+                            | TruequeSalida _ -> "Trueque / Intercambio"
+
+                    let dispResultante =
+                        if kl.Cantidad.Unidad = Kilogramo then kl.SaldoResultanteGramos / 1000m
+                        else kl.SaldoResultanteGramos
+
+                    { MovimientoId = mId.ToString()
+                      Fecha = kl.Fecha.ToString("yyyy-MM-dd HH:mm")
+                      Tipo = tipoStr
+                      Motivo = motivoStr
+                      ProductoId = pId.ToString()
+                      NombreProducto = Producto.nombreVisible prod
+                      LoteId = lId.ToString()
+                      CodigoLote = codigoLoteStr
+                      Cantidad = kl.Cantidad.Valor
+                      Unidad = desmapearUnidad kl.Cantidad.Unidad
+                      SaldoResultanteGramos = kl.SaldoResultanteGramos
+                      SaldoResultanteDisplay = dispResultante
+                      ResponsableId = empId.ToString()
+                      Observaciones = kl.Observaciones |> Option.defaultValue "" })
+
+            return dtos
         }
 
     // ─────────────────────────────────────────────────────────

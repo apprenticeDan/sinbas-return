@@ -50,6 +50,7 @@ module LoteRepository =
             | "Activo" -> Activo
             | "Agotado" -> Agotado
             | "Bloqueado" -> Bloqueado
+            | "Rechazado" -> Rechazado
             | "Archivado" -> Archivado
             | _ -> Activo
 
@@ -73,6 +74,7 @@ module LoteRepository =
             | Activo -> "Activo"
             | Agotado -> "Agotado"
             | Bloqueado -> "Bloqueado"
+            | Rechazado -> "Rechazado"
             | Archivado -> "Archivado"
 
         { id = lId

@@ -95,6 +95,7 @@ export interface StockLoteItem {
   codigo: string;
   productoId: string;
   nombreProducto: string;
+  procedencia?: string;
   fechaIngreso: string;
   estado: string;
   stockGramos: number;

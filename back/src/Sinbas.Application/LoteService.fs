@@ -51,6 +51,7 @@ module LoteService =
             | Activo -> "Activo"
             | Agotado -> "Agotado"
             | Bloqueado -> "Bloqueado"
+            | Rechazado -> "Rechazado"
             | Archivado -> "Archivado"
 
         { Id = lId.ToString()
