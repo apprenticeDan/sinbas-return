@@ -19,7 +19,11 @@ module AuthEndpoints =
                 let secreto = defaultArg (Option.ofObj (config.["Jwt:Secret"])) "SuperSecretKeyForSinbasDevSecurityOnly"
                 let emisor = defaultArg (Option.ofObj (config.["Jwt:Issuer"])) "Sinbas"
                 let audiencia = defaultArg (Option.ofObj (config.["Jwt:Audience"])) "SinbasClient"
-                let expHoras = 24.0
+                let expHorasStr = config.["Jwt:ExpiracionHoras"]
+                let expHoras =
+                    match System.Double.TryParse(if isNull expHorasStr then "" else expHorasStr) with
+                    | true, v when v > 0.0 -> v
+                    | _ -> 4.0
                 
                 let emitirToken = JwtService.emitirToken secreto emisor audiencia expHoras
                 
