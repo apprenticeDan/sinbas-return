@@ -15,7 +15,7 @@ let crearSemillaValida () =
     | Ok nc ->
         let nomComun = match NombreComun.crear "Caoba" with Ok c -> c | Error e -> failwithf "%A" e
         let cat = Semilla(nc, [nomComun])
-        Producto.crearBorrador prodId Kilogramo PorLote cat (Some "Observación inicial")
+        Producto.crearBorradorConUnidad prodId Kilogramo PorLote cat (Some "Observación inicial")
 
 [<Fact>]
 let ``Creacion de Producto Semilla en borrador sin precio queda en estado PendientePrecioBorrador y no es apto para venta`` () =
@@ -90,3 +90,16 @@ let ``Filtro de catalogo: funcion pura filtra correctamente productos comercialm
     let aptosParaVenta = productos |> List.filter Producto.esAptoParaVenta
     Assert.Single(aptosParaVenta) |> ignore
     Assert.Equal(p2.Base.Id, aptosParaVenta.[0].Base.Id)
+
+[<Fact>]
+let ``Insumo formatea nombreVisible incluyendo su marca si esta definida`` () =
+    let insumoConMarca =
+        let cat = Insumo("Sustrato Turbio", Some "BioGrow", Some "Sustrato para germinación")
+        Producto.crearBorradorConUnidad (ProductoId (Guid.NewGuid())) Kilogramo Simple cat None
+
+    let insumoSinMarca =
+        let cat = Insumo("Bolsa Polietileno 10x15", None, None)
+        Producto.crearBorradorConUnidad (ProductoId (Guid.NewGuid())) UnidadDiscreta Simple cat None
+
+    Assert.Equal("Sustrato Turbio (BioGrow)", Producto.nombreVisible insumoConMarca)
+    Assert.Equal("Bolsa Polietileno 10x15", Producto.nombreVisible insumoSinMarca)

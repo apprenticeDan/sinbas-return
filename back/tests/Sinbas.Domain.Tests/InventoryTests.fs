@@ -95,8 +95,8 @@ let ``Stock disponible para venta excluye lotes bloqueados`` () =
     let lotes = [ loteActivo; loteBloqueado ]
     let movimientos = [ mov1; mov2 ]
 
-    let stockTotal = Stock.stockProducto productoId lotes movimientos
-    let stockVenta = Stock.disponibleParaVenta productoId lotes movimientos
+    let stockTotal = Stock.stockProducto productoId lotes
+    let stockVenta = Stock.disponibleParaVenta productoId lotes
     let stockLoteBloqueado = Stock.cantidadLote loteBloqueado.Id movimientos
 
     Assert.Equal(5000m, stockTotal)
@@ -158,7 +158,7 @@ let ``Fifo resuelve asignación de lotes en orden cronológico`` () =
 
     // Pedir 3000 gramos: debe tomar 2000g del lote viejo y 1000g del lote nuevo
     let requerida = { Valor = 3000m; Unidad = Gramo }
-    let resFifo = Fifo.resolverFIFO productoId requerida lotes movimientos
+    let resFifo = Fifo.resolverFIFO productoId requerida lotes
 
     match resFifo with
     | Error err -> Assert.True(false, sprintf "Fallo FIFO: %A" err)
@@ -188,17 +188,8 @@ let ``Fifo retorna error cuando la cantidad requerida supera el stock disponible
           Estado = Activo
           Observaciones = None }
 
-    let mov1 : MovimientoInventario =
-        { Id = MovimientoId (Identidad.nuevo ())
-          Fecha = DateTime(2026, 7, 10)
-          Responsable = empleadoId
-          Tipo = Entrada (Recoleccion "Campaña 1")
-          OrdenOrigen = None
-          Lineas = [ { Referencia = loteId; Cantidad = { Valor = 1000m; Unidad = Gramo } } ]
-          Observaciones = None }
-
     let requerida = { Valor = 2000m; Unidad = Gramo }
-    let resFifo = Fifo.resolverFIFO productoId requerida [ lote ] [ mov1 ]
+    let resFifo = Fifo.resolverFIFO productoId requerida [ lote ]
 
     match resFifo with
     | Error (StockInsuficiente _) -> Assert.True(true)

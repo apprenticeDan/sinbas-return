@@ -45,12 +45,13 @@ type ListarProductos = unit -> Async<Producto list>
 
 module CatalogService =
 
-    let private mapUnidad (u: string) (g: decimal option) =
-        match u with
-        | "Gramo" -> Gramo
-        | "Kilogramo" -> Kilogramo
-        | "Bolsa" -> Bolsa (defaultArg g 1000m)
-        | _ -> Unidad_
+    let private mapUnidad (u: string) : UnidadMedida =
+        match (if isNull u then "" else u.Trim().ToLowerInvariant()) with
+        | "gramo" | "g" -> Gramo
+        | "kilogramo" | "kg" -> Kilogramo
+        | "mililitro" | "ml" -> Mililitro
+        | "litro" | "l" -> Litro
+        | _ -> UnidadDiscreta
 
     let aDto (p: Producto) : ProductoDto =
         let (ProductoId rawId) = p.Base.Id
@@ -61,7 +62,6 @@ module CatalogService =
             | Semilla _ -> "Semilla"
             | Plantin _ -> "Plantin"
             | Insumo _ -> "Insumo"
-            | Otro _ -> "Otro"
 
         { Id = rawId
           NombreVisible = Producto.nombreVisible p
@@ -69,12 +69,7 @@ module CatalogService =
           Genero = nc |> Option.map (fun x -> x.Genero)
           Epiteto = nc |> Option.map (fun x -> x.Epiteto)
           NombresComunes = ncs
-          UnidadManejo =
-            match p.Base.UnidadManejo with
-            | Gramo -> "Gramo"
-            | Kilogramo -> "Kilogramo"
-            | Unidad_ -> "Unidad_"
-            | Bolsa g -> sprintf "Bolsa(%g g)" (float g)
+          UnidadManejo = UnidadMedida.aTexto p.Base.Presentacion.Unidad
           Trazabilidad = (if p.Base.Trazabilidad = PorLote then "PorLote" else "Simple")
           PrecioOficial = p.PrecioOficial |> Option.map (fun x -> x.Valor)
           Moneda = p.PrecioOficial |> Option.map (fun x -> x.Moneda)
@@ -85,7 +80,7 @@ module CatalogService =
 
     let crearProducto (guardar: GuardarProducto) (req: CrearProductoRequest) : Async<Result<ProductoDto, string>> =
         async {
-            let unidad = mapUnidad req.UnidadManejo req.GramosNominales
+            let unidad = mapUnidad req.UnidadManejo
             let trazabilidad = if req.Trazabilidad = "PorLote" then PorLote else Simple
 
             let resCat =
@@ -107,15 +102,21 @@ module CatalogService =
                 | "Insumo" ->
                     let nom = defaultArg req.NombreInsumo "Insumo sin nombre"
                     Ok (Insumo(nom, req.MarcaInsumo, req.DescripcionInsumo))
-                | _ ->
-                    let nom = defaultArg req.NombreInsumo "Producto general"
-                    Ok (Otro(nom, req.DescripcionInsumo))
+                | catInvalida ->
+                    // NOTA REFACTOR (observaciones_resumen.txt):
+                    // Se elimina la categoría comodín 'Otro'. El sistema exige que todo producto
+                    // pertenezca estrictamente a Semilla, Plantin o Insumo.
+                    Error $"Categoría no permitida: '{catInvalida}'. Las categorías oficiales de BASFOR son: Semilla, Plantin e Insumo."
 
             match resCat with
             | Error err -> return Error err
             | Ok categoria ->
                 let prodId = ProductoId (Identidad.nuevo ())
-                let producto = Producto.crearBorrador prodId unidad trazabilidad categoria req.Observaciones
+                let pres =
+                    { Empaque = "Unidad"
+                      ContenidoNominal = defaultArg req.GramosNominales 1m
+                      Unidad = unidad }
+                let producto = Producto.crearBorrador prodId pres trazabilidad categoria req.Observaciones
                 
                 let! resGuardar = guardar producto
                 match resGuardar with
@@ -155,7 +156,6 @@ module CatalogService =
                             | Semilla _ -> cat = "Semilla"
                             | Plantin _ -> cat = "Plantin"
                             | Insumo _ -> cat = "Insumo"
-                            | Otro _ -> cat = "Otro"
                     let matchEstado =
                         match estadoFiltro with
                         | None | Some "" -> true

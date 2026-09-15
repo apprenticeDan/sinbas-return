@@ -56,25 +56,27 @@ module private AuthRepositoryHelpers =
         let ci =
             match row.ci_numero with
             | Some n when not (String.IsNullOrWhiteSpace n) ->
-                match CI.crear n row.ci_complemento with
+                match CI.crear n row.ci_complemento None with
                 | Ok c -> c
-                | Error _ -> { Numero = n; Complemento = row.ci_complemento }
-            | _ -> { Numero = "-"; Complemento = None }
+                | Error _ -> { Numero = n; Complemento = row.ci_complemento; Extension = None }
+            | _ -> { Numero = "-"; Complemento = None; Extension = None }
 
         let estado =
             match row.estado with
             | "Inactivo" -> EstadoEmpleado.Inactivo
             | _ -> EstadoEmpleado.Activo
 
-        Empleado.reconstruir
-            row.id
-            nombres
-            row.apellido_paterno
-            row.apellido_materno
-            ci
-            row.telefono
-            row.email
-            estado
+        let persona =
+            Persona.reconstruir
+                row.id
+                nombres
+                row.apellido_paterno
+                row.apellido_materno
+                ci
+                row.telefono
+                row.email
+
+        Empleado.reconstruir row.id persona estado
 
     let reconstruirDesdeFilas (row: UsuarioRow) (roles: UsuarioRolRow seq) : Usuario =
         let rolSet =
@@ -88,7 +90,7 @@ module private AuthRepositoryHelpers =
         let estado =
             match row.estado with
             | "Activo" -> EstadoUsuario.Activo
-            | _        -> EstadoUsuario.Bloqueado
+            | _        -> EstadoUsuario.Desactivado
 
         Usuario.reconstruir
             row.id
@@ -244,14 +246,16 @@ module AuthRepository =
                 let emp =
                     empOpt
                     |> Option.defaultWith (fun () ->
-                        { Id = EmpleadoId eid
-                          Nombres = "Usuario"
-                          ApellidoPaterno = None
-                          ApellidoMaterno = None
-                          CI = { Numero = "-"; Complemento = None }
-                          Telefono = None
-                          Email = None
-                          Estado = EstadoEmpleado.Activo })
+                        let persona =
+                            Persona.reconstruir
+                                eid
+                                "Usuario"
+                                None
+                                None
+                                { Numero = "-"; Complemento = None; Extension = None }
+                                None
+                                None
+                        Empleado.reconstruir eid persona EstadoEmpleado.Activo)
                 return Ok { Usuario = u; Empleado = emp }
         }
 
@@ -305,14 +309,16 @@ module AuthRepository =
                         empleadosPorId
                         |> Map.tryFind row.empleado_id
                         |> Option.defaultWith (fun () ->
-                            { Id = EmpleadoId row.empleado_id
-                              Nombres = "Usuario"
-                              ApellidoPaterno = None
-                              ApellidoMaterno = None
-                              CI = { Numero = "-"; Complemento = None }
-                              Telefono = None
-                              Email = None
-                              Estado = EstadoEmpleado.Activo })
+                            let persona =
+                                Persona.reconstruir
+                                    row.empleado_id
+                                    "Usuario"
+                                    None
+                                    None
+                                    { Numero = "-"; Complemento = None; Extension = None }
+                                    None
+                                    None
+                            Empleado.reconstruir row.empleado_id persona EstadoEmpleado.Activo)
                     { Usuario = usuario; Empleado = empleado })
                 |> Seq.toList
         }

@@ -123,19 +123,16 @@ type KardexMovimientoDto =
 
 module InventoryService =
 
-    let private mapearUnidad (uStr: string) : Unidad =
-        match uStr with
-        | "Gramo" -> Gramo
-        | "Kilogramo" -> Kilogramo
-        | "Unidad_" -> Unidad_
-        | _ -> Kilogramo
+    let private mapearUnidad (uStr: string) : UnidadMedida =
+        match (if isNull uStr then "" else uStr.Trim().ToLowerInvariant()) with
+        | "gramo" | "g" -> Gramo
+        | "kilogramo" | "kg" -> Kilogramo
+        | "mililitro" | "ml" -> Mililitro
+        | "litro" | "l" -> Litro
+        | _ -> UnidadDiscreta
 
-    let private desmapearUnidad (u: Unidad) : string =
-        match u with
-        | Gramo -> "Gramo"
-        | Kilogramo -> "Kilogramo"
-        | Unidad_ -> "Unidad_"
-        | Bolsa _ -> "Bolsa"
+    let private desmapearUnidad (u: UnidadMedida) : string =
+        UnidadMedida.aTexto u
 
     // ─────────────────────────────────────────────────────────
     // EXTENSIBILITY: Búsqueda y Validación de Clientes (F6)
@@ -243,7 +240,6 @@ module InventoryService =
                                             | Semilla(nc, _) -> (nc.Genero, nc.Epiteto)
                                             | Plantin(nc, _, _) -> (nc.Genero, nc.Epiteto)
                                             | Insumo(n, _, _) -> (n, "INS")
-                                            | Otro(n, _) -> (n, "OTR")
 
                                         let! lotesTotal = listarLotes (Some prodId) None
                                         let secuencia = min 99 (lotesTotal.Length + 1)
@@ -396,15 +392,15 @@ module InventoryService =
                     let! lotes = listarLotesPorProducto (Some prodId) None
                     let! movimientos = listarTodosMovimientos ()
 
-                    let stockTotalGramos = Stock.stockProducto prodId lotes movimientos
-                    let stockVentaGramos = Stock.disponibleParaVenta prodId lotes movimientos
+                    let stockTotalGramos = Stock.stockProducto prodId lotes
+                    let stockVentaGramos = Stock.disponibleParaVenta prodId lotes
 
                     let lotesDtos =
                         lotes
                         |> List.map (fun l ->
                             let (LoteId lId) = l.Id
                             let (ProductoId pId) = l.ProductoId
-                            let stockG = Stock.cantidadLote l.Id movimientos
+                            let stockG = Stock.stockLote l
                             let estadoStr =
                                 match l.Estado with
                                 | Activo -> "Activo"
@@ -443,7 +439,7 @@ module InventoryService =
             let! movimientos = listarMovimientos ()
 
             let umbral = defaultArg umbralMinimoGramos 5000m // 5 kg por defecto
-            let consolidado = Stock.proyectarStockConsolidado productos lotes movimientos umbral
+            let consolidado = Stock.proyectarStockConsolidado productos lotes umbral
 
             let dtos =
                 productos
@@ -457,7 +453,6 @@ module InventoryService =
                         | Semilla _ -> "Semilla"
                         | Plantin _ -> "Plantin"
                         | Insumo _ -> "Insumo"
-                        | Otro _ -> "Otro"
 
                     let alertaStr =
                         match item.Alerta with
@@ -465,14 +460,14 @@ module InventoryService =
                         | Stock.BajoStock _ -> "BajoStock"
                         | Stock.StockNormal -> "StockNormal"
 
-                    let unidadStr = desmapearUnidad prod.Base.UnidadManejo
+                    let unidadStr = desmapearUnidad prod.Base.Presentacion.Unidad
 
                     let lotesProducto =
                         lotes
                         |> List.filter (fun l -> l.ProductoId = prodId)
                         |> List.map (fun l ->
                             let (LoteId lId) = l.Id
-                            let stockG = Stock.cantidadLote l.Id movimientos
+                            let stockG = Stock.stockLote l
                             let estadoStr =
                                 match l.Estado with
                                 | Activo -> "Activo"
@@ -667,8 +662,8 @@ module InventoryService =
                         let! lotesActivos = listarLotes (Some prodId) (Some Activo)
                         let! todosMovimientos = listarTodosMovimientos ()
 
-                        // 4. Resolver FIFO — domain determina qué lotes y cuánto de cada uno
-                        match Fifo.resolverFIFO prodId cantidadEgreso lotesActivos todosMovimientos with
+                        // 4. Resolver FIFO — domain determina qué lotes y cuánto de cada uno directamente desde lotes activos
+                        match Fifo.resolverFIFO prodId cantidadEgreso lotesActivos with
                         | Error fifoErr ->
                             return Error (sprintf "Stock insuficiente para el egreso: %A" fifoErr)
                         | Ok resolucionesFifo ->
@@ -677,12 +672,9 @@ module InventoryService =
                             for linea in resolucionesFifo do
                                 match lotesActivos |> List.tryFind (fun (l: Sinbas.Domain.Lote) -> l.Id = linea.Referencia) with
                                 | Some lote ->
-                                    let stockActual = Stock.cantidadLote lote.Id todosMovimientos
                                     let cantDeducidaGramos = Cantidad.enGramos linea.Cantidad
-                                    let stockNuevo = max 0m (stockActual - cantDeducidaGramos)
-                                    let nuevaCant : Cantidad = { Valor = stockNuevo; Unidad = lote.CantidadActual.Unidad }
-                                    let nuevoEstado = if nuevaCant.Valor <= 0m then Agotado else Activo
-                                    let loteActualizado : Sinbas.Domain.Lote = { lote with CantidadActual = nuevaCant; Estado = nuevoEstado }
+                                    let saldoRestante = max 0m (Cantidad.enGramos lote.CantidadActual - cantDeducidaGramos)
+                                    let loteActualizado = Lote.actualizarSaldo saldoRestante lote
                                     do! actualizarLoteStock loteActualizado
                                 | None -> ()
 

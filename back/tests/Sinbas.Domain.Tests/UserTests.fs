@@ -30,6 +30,7 @@ let ``Crear usuario exitosamente con solo apellido materno (caso docente)`` () =
               ApellidoMaterno = Some "Torrico"
               CiNumero = "9876543"
               CiComplemento = Some "CB"
+              CiExtension = Some "CB"
               Telefono = Some "+591 72223344"
               Email = Some "gabriel.torrico@umss.edu.bo"
               NombreUsuario = "gtorrico"
@@ -55,6 +56,7 @@ let ``Crear usuario falla si no tiene ningun apellido`` () =
               ApellidoMaterno = None
               CiNumero = "1234567"
               CiComplemento = None
+              CiExtension = None
               Telefono = None
               Email = None
               NombreUsuario = "jdaniel"
@@ -81,6 +83,7 @@ let ``Crear usuario falla si el nombre contiene numeros`` () =
               ApellidoMaterno = None
               CiNumero = "1234567"
               CiComplemento = None
+              CiExtension = None
               Telefono = None
               Email = None
               NombreUsuario = "gtorrico"
@@ -91,15 +94,15 @@ let ``Crear usuario falla si el nombre contiene numeros`` () =
         match res with
         | Error (NombreUsuarioInvalido msg) ->
             Assert.Contains("números", msg)
-        | res -> failwithf "Debería haber fallado por números en el nombre, obtuvo: %A" res
+        | res -> failwithf "Debería haber fallado por nombre inválido, obtuvo: %A" res
     }
 
 [<Fact>]
 let ``Crear usuario falla si el nombre de usuario ya esta registrado`` () =
     async {
         let usuarioExistente =
-            let ci = match CI.crear "111" None with Ok c -> c | Error _ -> failwith "CI"
-            let emp = match Empleado.crear "Admin" (Some "User") None ci None None with Ok e -> e | Error _ -> failwith "Emp"
+            let ci = match CI.crear "111" None None with Ok c -> c | Error _ -> failwith "CI"
+            let emp = match Empleado.crearDeDatos "Admin" (Some "User") None ci None None with Ok e -> e | Error _ -> failwith "Emp"
             let nombre = match Usuario.validarNombreUsuario "admin" with Ok u -> u | _ -> failwith "nombre"
             let roles = Set.ofList [ match NombreRol.fromString "Administrador" with Ok r -> r | _ -> failwith "rol" ]
             Usuario.crear emp.Id nombre (PasswordHash "h") roles
@@ -115,6 +118,7 @@ let ``Crear usuario falla si el nombre de usuario ya esta registrado`` () =
               ApellidoMaterno = None
               CiNumero = "9876543"
               CiComplemento = None
+              CiExtension = None
               Telefono = None
               Email = None
               NombreUsuario = "admin"
@@ -133,9 +137,9 @@ let ``Actualizar usuario modifica datos de empleado, usuario y roles`` () =
     async {
         let uid = Guid.NewGuid()
         let eid = Guid.NewGuid()
-        let ci = match CI.crear "1234567" None with Ok c -> c | Error _ -> failwith "CI"
-        let empleadoOriginal =
-            Empleado.reconstruir eid "Pedro" (Some "Ramos") None ci None None EstadoEmpleado.Activo
+        let ci = match CI.crear "1234567" None None with Ok c -> c | Error _ -> failwith "CI"
+        let personaOriginal = Persona.reconstruir eid "Pedro" (Some "Ramos") None ci None None
+        let empleadoOriginal = Empleado.reconstruir eid personaOriginal EstadoEmpleado.Activo
         let usuarioOriginal =
             Usuario.reconstruir uid eid "pedro" "hash_antiguo" (Set.singleton NombreRol.Almacen) EstadoUsuario.Activo
 
@@ -164,6 +168,7 @@ let ``Actualizar usuario modifica datos de empleado, usuario y roles`` () =
               ApellidoMaterno = Some "Suárez"
               CiNumero = "1234567"
               CiComplemento = Some "CB"
+              CiExtension = Some "CB"
               Telefono = Some "+591 77788999"
               Email = Some "pedro@empresa.com"
               NombreUsuario = "pedro.nuevo"
@@ -181,8 +186,9 @@ let ``Actualizar usuario falla si el nuevo username ya pertenece a otra cuenta``
     async {
         let uid = Guid.NewGuid()
         let eid = Guid.NewGuid()
-        let ci = match CI.crear "1234567" None with Ok c -> c | Error _ -> failwith "CI"
-        let emp = Empleado.reconstruir eid "Pedro" (Some "Ramos") None ci None None EstadoEmpleado.Activo
+        let ci = match CI.crear "1234567" None None with Ok c -> c | Error _ -> failwith "CI"
+        let persona = Persona.reconstruir eid "Pedro" (Some "Ramos") None ci None None
+        let emp = Empleado.reconstruir eid persona EstadoEmpleado.Activo
         let usr = Usuario.reconstruir uid eid "pedro" "hash_antiguo" (Set.singleton NombreRol.Almacen) EstadoUsuario.Activo
 
         let otroUsr = Usuario.reconstruir (Guid.NewGuid()) (Guid.NewGuid()) "admin" "hash" (Set.singleton NombreRol.Administrador) EstadoUsuario.Activo
@@ -200,6 +206,7 @@ let ``Actualizar usuario falla si el nuevo username ya pertenece a otra cuenta``
               ApellidoMaterno = None
               CiNumero = "1234567"
               CiComplemento = None
+              CiExtension = None
               Telefono = None
               Email = None
               NombreUsuario = "admin"
@@ -212,3 +219,18 @@ let ``Actualizar usuario falla si el nuevo username ya pertenece a otra cuenta``
             Assert.Contains("otra cuenta", msg)
         | res -> failwithf "Debería haber fallado por username en uso, obtuvo: %A" res
     }
+
+[<Fact>]
+let ``Rol Comercial permite gestionar ventas y desactivar pasa estado a Desactivado`` () =
+    let uid = Guid.NewGuid()
+    let eid = Guid.NewGuid()
+    let uComercial =
+        Usuario.reconstruir uid eid "ventas1" "hash" (Set.singleton NombreRol.Comercial) EstadoUsuario.Activo
+    
+    Assert.True(Usuario.puedeGestionarVentas uComercial)
+    Assert.False(Usuario.esAdministrador uComercial)
+
+    let desactivado = Usuario.desactivar uComercial
+    Assert.Equal(EstadoUsuario.Desactivado, Usuario.estado desactivado)
+    Assert.False(Usuario.activo desactivado)
+    Assert.False(Usuario.puedeIniciarSesion desactivado)

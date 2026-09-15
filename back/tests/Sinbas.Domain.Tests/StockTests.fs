@@ -40,7 +40,7 @@ let private crearMovSalida loteId cantGramos fecha responsableId motivo =
       Observaciones = None }
 
 // ─────────────────────────────────────────────────────────────
-// MF-05-01: Proyección Pura de Stock Disponible (Fold)
+// MF-05-01: Proyección Pura de Stock Disponible (Unificado en CantidadActual)
 // ─────────────────────────────────────────────────────────────
 
 [<Fact>]
@@ -58,35 +58,34 @@ let ``MF-05-01: Proyección pura calcula stock acumulado por lote y producto con
           crearMovSalida lote1.Id 1500m (ahora.AddDays(-5.0)) empId (UsoInterno "Laboratorio")
           crearMovSalida lote2.Id 500m (ahora.AddDays(-2.0)) empId (UsoInterno "Vivero") ]
 
+    // 1. Verificación por Kardex/Movimientos acumulados
     let stockL1 = Stock.cantidadLote lote1.Id movs
     let stockL2 = Stock.cantidadLote lote2.Id movs
-    let stockTotal = Stock.stockProducto prodId [ lote1; lote2 ] movs
-    let stockDisponible = Stock.disponibleParaVenta prodId [ lote1; lote2 ] movs
-
     Assert.Equal(3500m, stockL1)
     Assert.Equal(2500m, stockL2)
+
+    // 2. Verificación operacional unificada leyendo directamente de los lotes actualizados
+    let lote1Actualizado = Lote.actualizarSaldo stockL1 lote1
+    let lote2Actualizado = Lote.actualizarSaldo stockL2 lote2
+
+    let stockTotal = Stock.stockProducto prodId [ lote1Actualizado; lote2Actualizado ]
+    let stockDisponible = Stock.disponibleParaVenta prodId [ lote1Actualizado; lote2Actualizado ]
+
     Assert.Equal(6000m, stockTotal)
     Assert.Equal(6000m, stockDisponible)
 
 [<Fact>]
 let ``MF-05-01: RN12 Exclusión estricta de lotes en estado Rechazado del stock disponible`` () =
     let prodId = ProductoId (Identidad.nuevo ())
-    let empId = EmpleadoId (Identidad.nuevo ())
-    let ahora = DateTime.UtcNow
 
     let loteAprobado = crearLote prodId "SWIETMAC-02608-01" Activo 4000m (DateOnly(2026, 8, 1))
     let loteRechazado = crearLote prodId "SWIETMAC-02608-02" Rechazado 4000m (DateOnly(2026, 8, 2))
     let loteBloqueado = crearLote prodId "SWIETMAC-02608-03" Bloqueado 2000m (DateOnly(2026, 8, 3))
 
-    let movs =
-        [ crearMovEntrada loteAprobado.Id 4000m (ahora.AddDays(-5.0)) empId
-          crearMovEntrada loteRechazado.Id 4000m (ahora.AddDays(-4.0)) empId
-          crearMovEntrada loteBloqueado.Id 2000m (ahora.AddDays(-3.0)) empId ]
-
     let lotes = [ loteAprobado; loteRechazado; loteBloqueado ]
-    let stockTotal = Stock.stockProducto prodId lotes movs
-    let stockVenta = Stock.disponibleParaVenta prodId lotes movs
-    let lotesDisponibles = Stock.lotesDisponibles prodId lotes movs
+    let stockTotal = Stock.stockProducto prodId lotes
+    let stockVenta = Stock.disponibleParaVenta prodId lotes
+    let lotesDisponibles = Stock.lotesDisponibles prodId lotes
 
     // El stock total activo incluye solo lotes activos; disponible para venta excluye Rechazado y Bloqueado
     Assert.Equal(4000m, stockTotal)

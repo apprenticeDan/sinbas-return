@@ -35,12 +35,13 @@ type BloquearLoteRequest =
 
 module LoteService =
 
-    let private desmapearUnidad (uStr: string) : Unidad =
-        match uStr with
-        | "Gramo" -> Gramo
-        | "Kilogramo" -> Kilogramo
-        | "Unidad_" -> Unidad_
-        | _ -> Kilogramo
+    let private desmapearUnidad (uStr: string) : UnidadMedida =
+        match (if isNull uStr then "" else uStr.Trim().ToLowerInvariant()) with
+        | "gramo" | "g" -> Gramo
+        | "kilogramo" | "kg" -> Kilogramo
+        | "mililitro" | "ml" -> Mililitro
+        | "litro" | "l" -> Litro
+        | _ -> UnidadDiscreta
 
     let private aLoteDto (nombreProducto: string) (lote: Lote) : LoteDto =
         let (LoteId lId) = lote.Id
@@ -98,7 +99,6 @@ module LoteService =
                                 | Semilla(nc, _) -> (nc.Genero, nc.Epiteto)
                                 | Plantin(nc, _, _) -> (nc.Genero, nc.Epiteto)
                                 | Insumo(nombre, _, _) -> (nombre, "INS")
-                                | Otro(nombre, _) -> (nombre, "OTR")
 
                             // Generar código estándar
                             CodigoLote.generar genero epiteto fecha 1

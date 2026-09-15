@@ -14,6 +14,7 @@ type CreateUserCommand =
       ApellidoMaterno: string option
       CiNumero: string
       CiComplemento: string option
+      CiExtension: string option
       Telefono: string option
       Email: string option
       NombreUsuario: string
@@ -27,6 +28,7 @@ type UpdateUserCommand =
       ApellidoMaterno: string option
       CiNumero: string
       CiComplemento: string option
+      CiExtension: string option
       Telefono: string option
       Email: string option
       NombreUsuario: string
@@ -60,6 +62,7 @@ type UserListItem =
       Ci: string
       CiNumero: string
       CiComplemento: string option
+      CiExtension: string option
       Telefono: string option
       Email: string option
       Roles: string list
@@ -78,6 +81,7 @@ module UserUseCase =
           Ci = CI.formatear e.CI
           CiNumero = e.CI.Numero
           CiComplemento = e.CI.Complemento
+          CiExtension = e.CI.Extension |> Option.map DepartamentoExpedicion.aTexto
           Telefono = e.Telefono
           Email = e.Email
           Roles = Usuario.roles u |> Set.toList |> List.map NombreRol.toString
@@ -107,11 +111,12 @@ module UserUseCase =
                 | Ok _ ->
                     return Error (NombreUsuarioInvalido "El nombre de usuario ya está registrado")
                 | Error _ ->
-                    match CI.crear cmd.CiNumero cmd.CiComplemento with
+                    let ext = cmd.CiExtension |> Option.bind DepartamentoExpedicion.desdeTexto
+                    match CI.crear cmd.CiNumero cmd.CiComplemento ext with
                     | Error (CIInvalido msg) -> return Error (NombreUsuarioInvalido msg)
                     | Error err -> return Error (NombreUsuarioInvalido (sprintf "%A" err))
                     | Ok ci ->
-                        match Empleado.crear cmd.Nombres cmd.ApellidoPaterno cmd.ApellidoMaterno ci cmd.Telefono cmd.Email with
+                        match Empleado.crearDeDatos cmd.Nombres cmd.ApellidoPaterno cmd.ApellidoMaterno ci cmd.Telefono cmd.Email with
                         | Error (ValorRequerido msg) -> return Error (NombreUsuarioInvalido msg)
                         | Error (SimbolosNoPermitidos msg) -> return Error (NombreUsuarioInvalido msg)
                         | Error (LetrasNoPermitidas msg) -> return Error (NombreUsuarioInvalido msg)
@@ -161,7 +166,8 @@ module UserUseCase =
                 match validarNombreRes with
                 | Error e -> return Error e
                 | Ok nuevoNombreUsuario ->
-                    match CI.crear cmd.CiNumero cmd.CiComplemento with
+                    let ext = cmd.CiExtension |> Option.bind DepartamentoExpedicion.desdeTexto
+                    match CI.crear cmd.CiNumero cmd.CiComplemento ext with
                     | Error (CIInvalido msg) -> return Error (NombreUsuarioInvalido msg)
                     | Error err -> return Error (NombreUsuarioInvalido (sprintf "%A" err))
                     | Ok ci ->

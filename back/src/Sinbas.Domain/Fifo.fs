@@ -3,15 +3,15 @@ namespace Sinbas.Domain
 module Fifo =
 
     /// Resuelve la asignación de lotes para una cantidad requerida usando FIFO (First In, First Out).
-    /// Retorna una lista de LineaMovimiento (que asocia LoteId y Cantidad consumida de cada lote).
+    /// Retorna una lista de LineaMovimiento (asocia LoteId y Cantidad consumida de cada lote).
+    /// Desacoplado de la lista histórica de movimientos: consulta directamente el saldo de lotes activos.
     let resolverFIFO
         (productoId: ProductoId)
         (cantidadRequerida: Cantidad)
         (lotes: Lote list)
-        (movimientos: MovimientoInventario list)
         : Result<LineaMovimiento list, DomainError> =
 
-        let disponibles = Stock.lotesDisponibles productoId lotes movimientos
+        let disponibles = Stock.lotesDisponibles productoId lotes
         let totalDisponibleGramos = disponibles |> List.sumBy snd
         let reqGramos = Cantidad.enGramos cantidadRequerida
 

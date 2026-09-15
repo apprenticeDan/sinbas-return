@@ -70,41 +70,22 @@ let ``Stock total del producto suma solo lotes activos`` () =
     
     let lotes = [loteActivo; loteAgotado; loteBloqueado]
     
-    let movimientos = [
-        makeMovimiento g101 DateTime.Now (Entrada (Recoleccion "Campaña A")) [
-            makeLinea g10 100m
-            makeLinea g11 50m
-            makeLinea g12 80m
-        ]
-    ]
-    
-    // stockProducto solo debe sumar el lote activo (lote 10, con 100g)
-    let stockTotal = Stock.stockProducto (ProductoId g1) lotes movimientos
+    // stockProducto suma directamente la CantidadActual de los lotes activos
+    let stockTotal = Stock.stockProducto (ProductoId g1) lotes
     Assert.Equal(100m, stockTotal)
 
 [<Fact>]
 let ``Resolver FIFO asigna lotes en orden cronologico de ingreso`` () =
-    // Lotes activos con diferentes fechas de ingreso: A (1-Ene), C (5-Ene), B (10-Ene)
-    let loteA = makeLote g10 g1 10 (DateOnly(2026, 1, 1)) Activo
-    let loteB = makeLote g11 g1 11 (DateOnly(2026, 1, 10)) Activo
-    let loteC = makeLote g12 g1 12 (DateOnly(2026, 1, 5)) Activo
+    // Lotes activos con diferentes fechas de ingreso: A (1-Ene, 70g saldo), C (5-Ene, 150g saldo), B (10-Ene, 200g saldo)
+    let loteA = { makeLote g10 g1 10 (DateOnly(2026, 1, 1)) Activo with CantidadActual = { Valor = 70m; Unidad = Gramo } }
+    let loteB = { makeLote g11 g1 11 (DateOnly(2026, 1, 10)) Activo with CantidadActual = { Valor = 200m; Unidad = Gramo } }
+    let loteC = { makeLote g12 g1 12 (DateOnly(2026, 1, 5)) Activo with CantidadActual = { Valor = 150m; Unidad = Gramo } }
     
     let lotes = [loteB; loteA; loteC] // desordenado intencionalmente
     
-    let movimientos = [
-        makeMovimiento g101 DateTime.Now (Entrada (Recoleccion "Campaña A")) [
-            makeLinea g10 100m
-            makeLinea g12 150m
-            makeLinea g11 200m
-        ]
-        makeMovimiento g102 DateTime.Now (Salida (Merma "Deterioro")) [
-            makeLinea g10 30m // Stock Lote 10 (A): 70g
-        ]
-    ]
-    
     // Test 1: Consumo parcial del primer lote (A)
     let req1 = { Valor = 50m; Unidad = Gramo }
-    match Fifo.resolverFIFO (ProductoId g1) req1 lotes movimientos with
+    match Fifo.resolverFIFO (ProductoId g1) req1 lotes with
     | Error err -> failwithf "Debería haber resuelto: %A" err
     | Ok lineas ->
         Assert.Single(lineas) |> ignore
@@ -114,7 +95,7 @@ let ``Resolver FIFO asigna lotes en orden cronologico de ingreso`` () =
 
     // Test 2: Consumo que agota lote A y consume parte de lote C
     let req2 = { Valor = 150m; Unidad = Gramo }
-    match Fifo.resolverFIFO (ProductoId g1) req2 lotes movimientos with
+    match Fifo.resolverFIFO (ProductoId g1) req2 lotes with
     | Error err -> failwithf "Debería haber resuelto: %A" err
     | Ok lineas ->
         Assert.Equal(2, lineas.Length)
@@ -127,9 +108,9 @@ let ``Resolver FIFO asigna lotes en orden cronologico de ingreso`` () =
         Assert.Equal(LoteId g12, l2.Referencia)
         Assert.Equal(80m, l2.Cantidad.Valor)
 
-    // Test 3: Consumo que supera todo el stock disponible
+    // Test 3: Consumo que supera todo el stock disponible (70 + 150 + 200 = 420g)
     let req3 = { Valor = 450m; Unidad = Gramo }
-    match Fifo.resolverFIFO (ProductoId g1) req3 lotes movimientos with
+    match Fifo.resolverFIFO (ProductoId g1) req3 lotes with
     | Error (StockInsuficiente _) -> ()
     | res -> failwithf "Debería haber fallado por stock insuficiente, obtuvo: %A" res
 
@@ -155,6 +136,7 @@ let ``Usuario updates are immutable and return updated copy`` () =
     // Desactivar
     let inactiveUser = Usuario.desactivar user
     Assert.False(Usuario.activo inactiveUser)
+    Assert.Equal(EstadoUsuario.Desactivado, Usuario.estado inactiveUser)
     Assert.True(Usuario.activo user) // original remains active
     
     // Assign new roles
@@ -167,5 +149,6 @@ let ``Usuario updates are immutable and return updated copy`` () =
     Assert.True(Usuario.tieneRol Administrador user)
     Assert.True(Usuario.esAdministrador user)
     Assert.True(Usuario.puedeGestionarUsuarios user)
+    Assert.True(Usuario.puedeGestionarVentas updatedRolesUser)
     Assert.False(Usuario.tieneRol Laboratorio user)
     Assert.True(Usuario.puedeRegistrarAnalisis updatedRolesUser)

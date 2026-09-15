@@ -43,19 +43,16 @@ module private InventoryTables =
 
 module InventoryRepository =
 
-    let private mapearUnidad (uStr: string) : Unidad =
-        match uStr with
-        | "Gramo" -> Gramo
-        | "Kilogramo" -> Kilogramo
-        | "Unidad_" -> Unidad_
-        | _ -> Kilogramo
+    let private mapearUnidad (uStr: string) : UnidadMedida =
+        match (if isNull uStr then "" else uStr.Trim().ToLowerInvariant()) with
+        | "gramo" | "g" -> Gramo
+        | "kilogramo" | "kg" -> Kilogramo
+        | "mililitro" | "ml" -> Mililitro
+        | "litro" | "l" -> Litro
+        | _ -> UnidadDiscreta
 
-    let private desmapearUnidad (u: Unidad) : string =
-        match u with
-        | Gramo -> "Gramo"
-        | Kilogramo -> "Kilogramo"
-        | Unidad_ -> "Unidad_"
-        | Bolsa _ -> "Bolsa"
+    let private desmapearUnidad (u: UnidadMedida) : string =
+        UnidadMedida.aTexto u
 
     let private mapearTipoMovimiento
         (tipoStr: string)

@@ -51,105 +51,228 @@ type UbicacionId = UbicacionId of Guid
 type TruequeId = TruequeId of Guid
 type MovimientoId = MovimientoId of Guid
 // ─────────────────────────────────────────────────────────────
-// CI boliviana — número + complemento opcional
+// CI boliviana — número + complemento opcional + extensión
 // ─────────────────────────────────────────────────────────────
+
+type DepartamentoExpedicion =
+    | LP // La Paz
+    | CB // Cochabamba
+    | SC // Santa Cruz
+    | OR // Oruro
+    | PT // Potosí
+    | TJ // Tarija
+    | CH // Chuquisaca
+    | BE // Beni
+    | PD // Pando
+    | Extranjero
+
+module DepartamentoExpedicion =
+    let aTexto = function
+        | LP -> "LP"
+        | CB -> "CB"
+        | SC -> "SC"
+        | OR -> "OR"
+        | PT -> "PT"
+        | TJ -> "TJ"
+        | CH -> "CH"
+        | BE -> "BE"
+        | PD -> "PD"
+        | Extranjero -> "Extranjero"
+
+    let desdeTexto (s: string) : DepartamentoExpedicion option =
+        if String.IsNullOrWhiteSpace s then None
+        else
+            match s.Trim().ToUpperInvariant() with
+            | "LP" | "LA PAZ" -> Some LP
+            | "CB" | "COCHABAMBA" -> Some CB
+            | "SC" | "SANTA CRUZ" -> Some SC
+            | "OR" | "ORURO" -> Some OR
+            | "PT" | "POTOSI" | "POTOSÍ" -> Some PT
+            | "TJ" | "TARIJA" -> Some TJ
+            | "CH" | "CHUQUISACA" -> Some CH
+            | "BE" | "BENI" -> Some BE
+            | "PD" | "PANDO" -> Some PD
+            | "EXTRANJERO" | "EXT" -> Some Extranjero
+            | _ -> None
 
 type CI =
     { Numero: string
-      Complemento: string option }
+      Complemento: string option
+      Extension: DepartamentoExpedicion option }
 
 module CI =
     let formatear (ci: CI) =
-        match ci.Complemento with
-        | None -> ci.Numero
-        | Some c -> sprintf "%s-%s" ci.Numero c
+        let baseNum =
+            match ci.Complemento with
+            | None -> ci.Numero
+            | Some c -> sprintf "%s-%s" ci.Numero c
 
-    let crear (numero: string) (complemento: string option) : Result<CI, DomainError> =
-        let n = numero.Trim()
+        match ci.Extension with
+        | None -> baseNum
+        | Some ext -> sprintf "%s %s" baseNum (DepartamentoExpedicion.aTexto ext)
+
+    let crear (numero: string) (complemento: string option) (extension: DepartamentoExpedicion option) : Result<CI, DomainError> =
+        let n = if isNull numero then "" else numero.Trim()
 
         if String.IsNullOrWhiteSpace(n) then
             Error(CIInvalido "El número de CI no puede estar vacío")
         elif n |> Seq.exists (fun c -> not (Char.IsDigit(c))) then
-            Error(CIInvalido(sprintf "CI inválido: '%s'" n))
+            Error(CIInvalido(sprintf "El número base de CI debe contener solo dígitos: '%s'" n))
         else
+            let compLimpio =
+                complemento
+                |> Option.map (fun s -> s.Trim().ToUpperInvariant())
+                |> Option.bind (fun s -> if String.IsNullOrWhiteSpace(s) then None else Some s)
+
             Ok
                 { Numero = n
-                  Complemento = complemento |> Option.map (fun s -> s.Trim().ToUpperInvariant()) }
+                  Complemento = compLimpio
+                  Extension = extension }
 
 // ─────────────────────────────────────────────────────────────
-// Unidades de medida
+// Unidades de medida estrictas por dimensión física
 // ─────────────────────────────────────────────────────────────
 
-type Unidad =
+type UnidadMedida =
+    // Masa / Peso (Semillas)
     | Gramo
     | Kilogramo
-    | Unidad_ // sufijo para no chocar con la keyword 'unit' de F#
-    | Bolsa of gramosNominales: decimal
+    // Volumen (Insumos líquidos)
+    | Mililitro
+    | Litro
+    // Conteo Discreto (Plantines, piezas)
+    | UnidadDiscreta
 
-module Unidad =
-    let etiqueta =
-        function
+module UnidadMedida =
+    let etiqueta = function
         | Gramo -> "g"
         | Kilogramo -> "kg"
-        | Unidad_ -> "u"
-        | Bolsa g -> sprintf "bolsa(%.0fg)" g
+        | Mililitro -> "ml"
+        | Litro -> "l"
+        | UnidadDiscreta -> "u"
 
-    /// Convierte cualquier unidad a gramos para comparaciones
-    let aGramos (u: Unidad) (cantidad: decimal) : decimal =
-        match u with
+    let aTexto = function
+        | Gramo -> "Gramo"
+        | Kilogramo -> "Kilogramo"
+        | Mililitro -> "Mililitro"
+        | Litro -> "Litro"
+        | UnidadDiscreta -> "UnidadDiscreta"
+
+    let desdeTexto (s: string) : Result<UnidadMedida, DomainError> =
+        match (if isNull s then "" else s.Trim().ToLowerInvariant()) with
+        | "gramo" | "g" -> Ok Gramo
+        | "kilogramo" | "kg" -> Ok Kilogramo
+        | "mililitro" | "ml" -> Ok Mililitro
+        | "litro" | "l" -> Ok Litro
+        | "unidad" | "unidad_" | "u" | "unidaddiscreta" -> Ok UnidadDiscreta
+        | otro -> Error (UnidadIncompatible (sprintf "Unidad desconocida: '%s'" otro))
+
+    /// Factor de conversión a la unidad base de su misma dimensión física
+    /// (Masa -> Gramos, Volumen -> Mililitros, Conteo -> Unidades)
+    let aUnidadBase (unidad: UnidadMedida) (cantidad: decimal) : decimal =
+        match unidad with
         | Gramo -> cantidad
         | Kilogramo -> cantidad * 1000m
-        | Unidad_ -> cantidad
-        | Bolsa g -> cantidad * g
+        | Mililitro -> cantidad
+        | Litro -> cantidad * 1000m
+        | UnidadDiscreta -> cantidad
 
-    /// Dos unidades son compatibles si pueden sumarse (misma familia)
-    let sonCompatibles a b =
-        match a, b with
-        | Gramo, Gramo -> true
-        | Gramo, Kilogramo -> true
-        | Kilogramo, Gramo -> true
-        | Kilogramo, Kilogramo -> true
-        | Bolsa _, Bolsa _ -> true
-        | Unidad_, Unidad_ -> true
-        | _, _ -> false
+    /// Valida si dos unidades pertenecen a la misma dimensión física y pueden operarse
+    let sonCompatibles (u1: UnidadMedida) (u2: UnidadMedida) : bool =
+        match u1, u2 with
+        | (Gramo | Kilogramo), (Gramo | Kilogramo) -> true
+        | (Mililitro | Litro), (Mililitro | Litro) -> true
+        | UnidadDiscreta, UnidadDiscreta -> true
+        | _ -> false
+
+type Unidad = UnidadMedida
+
+module Unidad =
+    let etiqueta = UnidadMedida.etiqueta
+    let aTexto = UnidadMedida.aTexto
+    let desdeTexto = UnidadMedida.desdeTexto
+    let aGramos = UnidadMedida.aUnidadBase
+    let sonCompatibles = UnidadMedida.sonCompatibles
 
 // ─────────────────────────────────────────────────────────────
-// Cantidad con unidad — tipo central del inventario
+// Presentación de producto
 // ─────────────────────────────────────────────────────────────
 
-type Cantidad = { Valor: decimal; Unidad: Unidad }
+/// Define el empaque y el contenido nominal de un producto
+/// Ej: Empaque = "Bolsa", ContenidoNominal = 500m, Unidad = Gramo -> "Bolsa 500 g"
+type Presentacion =
+    { Empaque: string
+      ContenidoNominal: decimal
+      Unidad: UnidadMedida }
+
+module Presentacion =
+    let crear (empaque: string) (contenido: decimal) (unidad: UnidadMedida) : Result<Presentacion, DomainError> =
+        let empLimpio = if String.IsNullOrWhiteSpace(empaque) then "Unidad" else empaque.Trim()
+        if contenido <= 0m then
+            Error(CantidadInvalida "El contenido nominal de la presentación debe ser mayor a cero")
+        else
+            Ok { Empaque = empLimpio
+                 ContenidoNominal = contenido
+                 Unidad = unidad }
+
+    let aTexto (p: Presentacion) : string =
+        sprintf "%s %g %s" p.Empaque (float p.ContenidoNominal) (UnidadMedida.etiqueta p.Unidad)
+
+// ─────────────────────────────────────────────────────────────
+// Cantidad con unidad estricta por dimensión física
+// ─────────────────────────────────────────────────────────────
+
+type Cantidad =
+    { Valor: decimal
+      Unidad: UnidadMedida }
 
 module Cantidad =
-    let crear (valor: decimal) (unidad: Unidad) : Result<Cantidad, DomainError> =
+    let crear (valor: decimal) (unidad: UnidadMedida) : Result<Cantidad, DomainError> =
         if valor <= 0m then
-            Error(CantidadInvalida(sprintf "El valor debe ser mayor a cero, recibido: %M" valor))
+            Error(CantidadInvalida(sprintf "La cantidad debe ser mayor a cero, recibido: %M" valor))
         else
             Ok { Valor = valor; Unidad = unidad }
 
-    let enGramos (c: Cantidad) : decimal = Unidad.aGramos c.Unidad c.Valor
+    let enGramos (c: Cantidad) : decimal =
+        match c.Unidad with
+        | Gramo | Kilogramo -> UnidadMedida.aUnidadBase c.Unidad c.Valor
+        | _ -> c.Valor
 
-    /// Suma dos cantidades — convierte todo a gramos si las unidades difieren
+    let aUnidadBase (c: Cantidad) : decimal =
+        UnidadMedida.aUnidadBase c.Unidad c.Valor
+
+    let sonCompatibles (a: Cantidad) (b: Cantidad) : bool =
+        UnidadMedida.sonCompatibles a.Unidad b.Unidad
+
+    /// Suma dos cantidades asegurando que pertenezcan a la misma dimensión física
     let sumar (a: Cantidad) (b: Cantidad) : Result<Cantidad, DomainError> =
-        if not (Unidad.sonCompatibles a.Unidad b.Unidad) then
+        if not (UnidadMedida.sonCompatibles a.Unidad b.Unidad) then
             Error(
                 UnidadIncompatible(
-                    sprintf "No se puede sumar %s con %s" (Unidad.etiqueta a.Unidad) (Unidad.etiqueta b.Unidad)
+                    sprintf "No se puede sumar %s con %s"
+                        (UnidadMedida.etiqueta a.Unidad)
+                        (UnidadMedida.etiqueta b.Unidad)
                 )
             )
         else
-            // normaliza ambos a gramos
-            let totalGramos = enGramos a + enGramos b
-            Ok { Valor = totalGramos; Unidad = Gramo }
+            let baseA = aUnidadBase a
+            let baseB = aUnidadBase b
+
+            // Retorna el resultado en la unidad del primer término
+            match a.Unidad with
+            | Kilogramo -> Ok { Valor = (baseA + baseB) / 1000m; Unidad = Kilogramo }
+            | Litro -> Ok { Valor = (baseA + baseB) / 1000m; Unidad = Litro }
+            | otraUnidad -> Ok { Valor = baseA + baseB; Unidad = otraUnidad }
 
     /// ¿Hay suficiente stock para cubrir el pedido?
     let esSuficiente (disponible: Cantidad) (pedido: Cantidad) : Result<bool, DomainError> =
-        if not (Unidad.sonCompatibles disponible.Unidad pedido.Unidad) then
+        if not (UnidadMedida.sonCompatibles disponible.Unidad pedido.Unidad) then
             Error(UnidadIncompatible "Unidades incompatibles para comparación")
         else
-            Ok(enGramos disponible >= enGramos pedido)
+            Ok(aUnidadBase disponible >= aUnidadBase pedido)
 
     let formatear (c: Cantidad) : string =
-        sprintf "%g %s" (float c.Valor) (Unidad.etiqueta c.Unidad)
+        sprintf "%g %s" (float c.Valor) (UnidadMedida.etiqueta c.Unidad)
 
 // ─────────────────────────────────────────────────────────────
 // Código visible de negocio para lotes

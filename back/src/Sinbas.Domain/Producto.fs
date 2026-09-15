@@ -19,12 +19,18 @@ module NombreCientifico =
         elif String.IsNullOrWhiteSpace epiteto then
             Error(NombreInvalido "El epíteto no puede estar vacío")
         else
+            let obsLimpia =
+                obs
+                |> Option.bind (fun s ->
+                    let t = s.Trim()
+                    if String.IsNullOrWhiteSpace t then None else Some t)
+
             Ok
                 { Genero = genero.Trim()
                   Epiteto = epiteto.Trim()
-                  Observaciones = obs |> Option.map (fun s -> s.Trim()) }
+                  Observaciones = obsLimpia }
 
-    let formatear n =
+    let formatear (n: NombreCientifico) : string =
         match n.Observaciones with
         | None -> sprintf "%s %s" n.Genero n.Epiteto
         | Some obs -> sprintf "%s %s %s" n.Genero n.Epiteto obs
@@ -37,13 +43,13 @@ type NombreComun = NombreComun of string
 
 module NombreComun =
 
-    let crear s =
+    let crear (s: string) : Result<NombreComun, DomainError> =
         if String.IsNullOrWhiteSpace s then
             Error(NombreInvalido "El nombre común no puede estar vacío")
         else
             Ok(NombreComun(s.Trim()))
 
-    let valor (NombreComun n) = n
+    let valor (NombreComun n) : string = n
 
 // ─────────────────────────────────────────────────────────────
 // Trazabilidad
@@ -81,28 +87,35 @@ type PrecioOficial =
       FechaActualizacion: DateTime option }
 
 // ─────────────────────────────────────────────────────────────
-// Base común
-// ─────────────────────────────────────────────────────────────
-
-type ProductoBase =
-    { Id: ProductoId
-      UnidadManejo: Unidad
-      Trazabilidad: Trazabilidad
-      Activo: bool
-      Observaciones: string option }
-
-// ─────────────────────────────────────────────────────────────
-// Categorías
+// Categorías del Catálogo de BASFOR
+//
+// NOTA DE DOMINIO / REFACTOR (observaciones_resumen.txt):
+// Se elimina formalmente la categoría comodín 'Otro' para restringir
+// el dominio y asegurar estados legales representables en compilación (DDD).
+// En BASFOR todo producto comercializable o almacenable pertenece
+// exclusivamente a una de estas tres familias:
+//   1. Semilla: Material forestal/botánico identificado por nombre científico y nombres comunes.
+//   2. Plantin: Material vivo con etapa de desarrollo (vivero, plantón, etc.).
+//   3. Insumo: Bienes e insumos agroforestales (sustratos, fungicidas, bolsas, herramientas)
+//              con nombre genérico y marca opcional.
 // ─────────────────────────────────────────────────────────────
 
 type CategoriaProducto =
     | Semilla of nombreCientifico: NombreCientifico * nombresComunes: NombreComun list
-
     | Plantin of nombreCientifico: NombreCientifico * nombresComunes: NombreComun list * etapaDesarrollo: string option
-
     | Insumo of nombre: string * marca: string option * descripcion: string option
 
-    | Otro of nombre: string * descripcion: string option
+// ─────────────────────────────────────────────────────────────
+// Base común del producto
+// ─────────────────────────────────────────────────────────────
+
+type ProductoBase =
+    { Id: ProductoId
+      Presentacion: Presentacion
+      Trazabilidad: Trazabilidad
+      Activo: bool
+      Observaciones: string option }
+    member this.UnidadManejo = this.Presentacion.Unidad
 
 // ─────────────────────────────────────────────────────────────
 // Producto
@@ -116,10 +129,10 @@ type Producto =
 
 module Producto =
 
-    let crearBorrador id unidad trazabilidad categoria observaciones =
+    let crearBorrador id (presentacion: Presentacion) trazabilidad categoria observaciones =
         { Base =
             { Id = id
-              UnidadManejo = unidad
+              Presentacion = presentacion
               Trazabilidad = trazabilidad
               Activo = true
               Observaciones = observaciones }
@@ -127,6 +140,13 @@ module Producto =
           PrecioOficial = None
           EstadoComercial = PendientePrecioBorrador }
 
+    /// Helper de conveniencia para crear borrador especificando únicamente la UnidadMedida
+    let crearBorradorConUnidad id (unidad: UnidadMedida) trazabilidad categoria observaciones =
+        let pres =
+            { Empaque = "Unidad"
+              ContenidoNominal = 1m
+              Unidad = unidad }
+        crearBorrador id pres trazabilidad categoria observaciones
 
     let asignarPrecio (monto: decimal) (moneda: string option) (usuarioId: UsuarioId option) (p: Producto) : Result<Producto, DomainError> =
         if monto <= 0m then
@@ -139,35 +159,38 @@ module Producto =
                   FechaActualizacion = Some DateTime.UtcNow }
             Ok { p with PrecioOficial = Some nuevoPrecio; EstadoComercial = ActivoParaVenta }
 
-    let esAptoParaVenta p =
+    let esAptoParaVenta (p: Producto) : bool =
         p.Base.Activo && p.EstadoComercial = ActivoParaVenta && Option.isSome p.PrecioOficial
 
-    let desactivar p =
+    let desactivar (p: Producto) : Producto =
         { p with Base = { p.Base with Activo = false }; EstadoComercial = Inactivo }
 
-    let nombreVisible p =
+    let nombreVisible (p: Producto) : string =
         match p.Categoria with
         | Semilla(nc, _) -> NombreCientifico.formatear nc
-
         | Plantin(nc, _, _) -> NombreCientifico.formatear nc
+        | Insumo(nombre, marcaOpt, _) ->
+            match marcaOpt with
+            | Some marca when not (String.IsNullOrWhiteSpace marca) -> sprintf "%s (%s)" nombre (marca.Trim())
+            | _ -> nombre
 
-        | Insumo(nombre, _, _) -> nombre
-
-        | Otro(nombre, _) -> nombre
-
-    let nombresComunes p =
+    let nombresComunes (p: Producto) : NombreComun list =
         match p.Categoria with
         | Semilla(_, ncs) -> ncs
         | Plantin(_, ncs, _) -> ncs
-        | _ -> []
+        | Insumo _ -> []
 
-    let nombreCientifico (p: Producto) =
+    let nombreCientifico (p: Producto) : NombreCientifico option =
         match p.Categoria with
         | Semilla(nc, _) -> Some nc
         | Plantin(nc, _, _) -> Some nc
-        | _ -> None
+        | Insumo _ -> None
 
-    let requiereLote p = p.Base.Trazabilidad = PorLote
+    let requiereLote (p: Producto) : bool =
+        p.Base.Trazabilidad = PorLote
 
-    let unidad p = p.Base.UnidadManejo
+    let presentacion (p: Producto) : Presentacion =
+        p.Base.Presentacion
 
+    let unidad (p: Producto) : UnidadMedida =
+        p.Base.Presentacion.Unidad

@@ -31,6 +31,8 @@ module AuthEndpoints =
                     | CredencialesInvalidas -> return Results.Unauthorized()
                     | UsuarioInactivo -> return Results.StatusCode(403)
                     | NombreUsuarioInvalido msg -> return Results.BadRequest({| error = msg |})
+                    | NombreUsuarioExistente msg -> return Results.Conflict({| error = msg |})
+                    | EmpleadoYaTieneUsuario msg -> return Results.Conflict({| error = msg |})
                     | RolesRequeridos msg -> return Results.BadRequest({| error = msg |})
                     | ErrorInterno msg -> return Results.Json({| error = msg |}, statusCode = Nullable 500)
             } |> Async.StartAsTask

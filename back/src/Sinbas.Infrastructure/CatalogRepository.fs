@@ -33,23 +33,24 @@ module private CatalogTables =
 
 module CatalogRepository =
 
-    let private mapUnidad (nombre: string) (gramos: decimal option) : Unidad =
-        match nombre with
-        | "Gramo" -> Gramo
-        | "Kilogramo" -> Kilogramo
-        | "Bolsa" -> Bolsa (defaultArg gramos 1000m)
-        | _ -> Unidad_
+    let private mapUnidad (nombre: string) : UnidadMedida =
+        match (if isNull nombre then "" else nombre.Trim().ToLowerInvariant()) with
+        | "gramo" | "g" -> Gramo
+        | "kilogramo" | "kg" -> Kilogramo
+        | "mililitro" | "ml" -> Mililitro
+        | "litro" | "l" -> Litro
+        | _ -> UnidadDiscreta
 
-    let private mapUnidadTexto (u: Unidad) : string * decimal option =
-        match u with
-        | Gramo -> "Gramo", None
-        | Kilogramo -> "Kilogramo", None
-        | Unidad_ -> "Unidad_", None
-        | Bolsa g -> "Bolsa", Some g
+    let private mapUnidadTexto (u: UnidadMedida) : string =
+        UnidadMedida.aTexto u
 
     let private reconstruirProducto (row: ProductoRow) : Producto =
         let prodId = ProductoId row.id
-        let unidad = mapUnidad row.unidad_manejo row.gramos_nominales
+        let unidad = mapUnidad row.unidad_manejo
+        let presentacion =
+            { Empaque = "Unidad"
+              ContenidoNominal = defaultArg row.gramos_nominales 1m
+              Unidad = unidad }
         let trazabilidad = if row.trazabilidad = "PorLote" then PorLote else Simple
         
         let nombresComunesList =
@@ -80,7 +81,10 @@ module CatalogRepository =
             | "Insumo" ->
                 Insumo(defaultArg row.nombre_insumo "Insumo", row.marca_insumo, row.descripcion_insumo)
             | _ ->
-                Otro(defaultArg row.nombre_insumo "Producto", row.observaciones)
+                // NOTA REFACTOR: Se eliminó la variante 'Otro'.
+                // Registros de productos antiguos o desconocidos se asignan con seguridad
+                // a la categoría 'Insumo' con su marca y descripción correspondientes.
+                Insumo(defaultArg row.nombre_insumo "Insumo General", None, row.observaciones)
 
         let precioOpt =
             row.precio_oficial
@@ -94,7 +98,7 @@ module CatalogRepository =
 
         { Base =
             { Id = prodId
-              UnidadManejo = unidad
+              Presentacion = presentacion
               Trazabilidad = trazabilidad
               Activo = row.activo
               Observaciones = row.observaciones }
@@ -106,7 +110,8 @@ module CatalogRepository =
         async {
             use conn = DbConnection.crear ()
             let (ProductoId pId) = producto.Base.Id
-            let unidadTexto, gramos = mapUnidadTexto producto.Base.UnidadManejo
+            let unidadTexto = mapUnidadTexto producto.Base.Presentacion.Unidad
+            let gramos = Some producto.Base.Presentacion.ContenidoNominal
 
             let (catTexto, genero, epiteto, obsNc, nomComunes, etapa, nomInsumo, marcaInsumo, descInsumo) =
                 match producto.Categoria with
@@ -118,8 +123,6 @@ module CatalogRepository =
                     ("Plantin", Some nc.Genero, Some nc.Epiteto, nc.Observaciones, Some coms, etapa, None, None, None)
                 | Insumo(n, m, d) ->
                     ("Insumo", None, None, None, None, None, Some n, m, d)
-                | Otro(n, d) ->
-                    ("Otro", None, None, None, None, None, Some n, None, d)
 
             let (precioValor, moneda, precioFecha, usuarioId) =
                 match producto.PrecioOficial with

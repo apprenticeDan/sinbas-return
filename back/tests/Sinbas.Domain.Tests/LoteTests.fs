@@ -66,6 +66,17 @@ let ``Intento de descontar mas stock del disponible retorna error StockInsuficie
     | res -> failwithf "Debería haber fallado por stock insuficiente: %A" res
 
 [<Fact>]
+let ``Lote.actualizarSaldo actualiza saldo y transiciona bidireccionalmente entre Activo y Agotado`` () =
+    let lote = crearLoteValido ()
+    let agotado = Lote.actualizarSaldo 0m lote
+    Assert.Equal(Agotado, agotado.Estado)
+    Assert.Equal(0m, agotado.CantidadActual.Valor)
+
+    let reactivado = Lote.actualizarSaldo 1500m agotado
+    Assert.Equal(Activo, reactivado.Estado)
+    Assert.Equal(1500m, reactivado.CantidadActual.Valor)
+
+[<Fact>]
 let ``Bloqueo de lote acumula observaciones de justificacion inmutablemente`` () =
     let lote = crearLoteValido ()
     let bloqueado = Lote.bloquear "Alerta de plaga por muestra de laboratorio" lote

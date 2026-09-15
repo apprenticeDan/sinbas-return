@@ -50,6 +50,20 @@ module Lote =
                   Estado = Activo
                   Observaciones = observaciones }
 
+    /// Actualiza el saldo proyectado del lote y reevalúa su estado si llega a cero
+    let actualizarSaldo (nuevoSaldoGramos: decimal) (lote: Lote) : Lote =
+        let saldoNormalizado = max 0m nuevoSaldoGramos
+        let nuevaCantidad = { Valor = saldoNormalizado; Unidad = Gramo }
+
+        let nuevoEstado =
+            if saldoNormalizado = 0m then Agotado
+            elif lote.Estado = Agotado && saldoNormalizado > 0m then Activo
+            else lote.Estado
+
+        { lote with
+            CantidadActual = nuevaCantidad
+            Estado = nuevoEstado }
+
     let descontarStock (cantidadADescontar: Cantidad) (lote: Lote) : Result<Lote, DomainError> =
         match Cantidad.esSuficiente lote.CantidadActual cantidadADescontar with
         | Error err -> Error err
@@ -67,26 +81,10 @@ module Lote =
             let disponibleGramos = Cantidad.enGramos lote.CantidadActual
             let aDescontarGramos = Cantidad.enGramos cantidadADescontar
             let restanteGramos = disponibleGramos - aDescontarGramos
-
-            let nuevaCantidadActual =
-                { Valor = restanteGramos
-                  Unidad = Gramo }
-
-            let nuevoEstado =
-                if restanteGramos <= 0m then
-                    Agotado
-                else
-                    lote.Estado
-
-            Ok
-                { lote with
-                    CantidadActual = nuevaCantidadActual
-                    Estado = nuevoEstado }
+            Ok (actualizarSaldo restanteGramos lote)
 
     let marcarAgotado lote =
-        { lote with
-            CantidadActual = { lote.CantidadActual with Valor = 0m }
-            Estado = Agotado }
+        actualizarSaldo 0m lote
 
     let bloquear motivo lote =
         let observaciones =

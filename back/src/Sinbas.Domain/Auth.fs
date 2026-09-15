@@ -33,7 +33,7 @@ module NombreRol =
 
 type EstadoUsuario =
     | Activo
-    | Bloqueado
+    | Desactivado
 
 type Usuario =
     private
@@ -48,14 +48,16 @@ type AuthError =
     | CredencialesInvalidas
     | UsuarioInactivo
     | NombreUsuarioInvalido of string
+    | NombreUsuarioExistente of string
+    | EmpleadoYaTieneUsuario of EmpleadoId
     | RolesRequeridos of string
     | ErrorInterno of string
 
-module Usuario =
+module NombreUsuario =
 
     let private regex = Regex(@"^[a-zA-Z0-9_.]{3,20}$")
 
-    let validarNombreUsuario raw =
+    let crear raw =
         let t = (raw |> Option.ofObj |> Option.defaultValue "").Trim()
 
         if regex.IsMatch t then
@@ -63,9 +65,15 @@ module Usuario =
         else
             Error(NombreUsuarioInvalido raw)
 
+    let valor (NombreUsuario n) = n
+
+module Usuario =
+
+    let validarNombreUsuario = NombreUsuario.crear
+
     let crear empleadoId nombreUsuario hash roles =
         if Set.isEmpty roles then
-            Error (RolesRequeridos "El usuario debe tener al menos un rol")
+            Error (RolesRequeridos "El usuario debe tener al menos un rol asignado")
         else
             Ok { Id = UsuarioId (Identidad.nuevo ())
                  EmpleadoId = empleadoId
@@ -106,7 +114,7 @@ module Usuario =
         { usuario with Estado = Activo }
 
     let desactivar (usuario: Usuario) =
-        { usuario with Estado = Bloqueado }
+        { usuario with Estado = Desactivado }
 
     let cambiarHash nuevoHash (usuario: Usuario) =
         { usuario with Hash = nuevoHash }
@@ -121,7 +129,7 @@ module Usuario =
         u.Roles.Contains rol
 
     let esAdministrador u =
-        tieneRol Administrador u
+        tieneRol Administrador u || tieneRol Gerencia u
 
     let puedeGestionarUsuarios u =
         esAdministrador u
@@ -132,6 +140,5 @@ module Usuario =
     let puedePrepararPedidos u =
         tieneRol Almacen u
 
-module NombreUsuario =
-
-    let valor (NombreUsuario n) = n
+    let puedeGestionarVentas u =
+        tieneRol Comercial u
