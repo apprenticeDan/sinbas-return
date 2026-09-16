@@ -109,7 +109,7 @@ module UserUseCase =
                 let! existenteResult = buscarPorNombre nombreUsuario
                 match existenteResult with
                 | Ok _ ->
-                    return Error (NombreUsuarioInvalido "El nombre de usuario ya está registrado")
+                    return Error (NombreUsuarioExistente "El nombre de usuario ya está registrado")
                 | Error _ ->
                     let ext = cmd.CiExtension |> Option.bind DepartamentoExpedicion.desdeTexto
                     match CI.crear cmd.CiNumero cmd.CiComplemento ext with
@@ -157,7 +157,7 @@ module UserUseCase =
                             | Ok nuevoNombre ->
                                 let! existente = buscarPorNombre nuevoNombre
                                 match existente with
-                                | Ok _ -> return Error (NombreUsuarioInvalido "El nombre de usuario ya está registrado por otra cuenta")
+                                | Ok _ -> return Error (NombreUsuarioExistente "El nombre de usuario ya está registrado por otra cuenta")
                                 | Error _ -> return Ok nuevoNombre
                         else
                             return Usuario.validarNombreUsuario cmd.NombreUsuario

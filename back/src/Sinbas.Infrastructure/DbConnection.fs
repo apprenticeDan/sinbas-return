@@ -63,6 +63,7 @@ create table if not exists empleado (
     apellido_materno text,
     ci_numero       text,
     ci_complemento  text,
+    ci_extension    text,
     telefono        text,
     email           text,
     nombre_completo text    not null,
@@ -74,6 +75,7 @@ alter table empleado add column if not exists apellido_paterno text;
 alter table empleado add column if not exists apellido_materno text;
 alter table empleado add column if not exists ci_numero text;
 alter table empleado add column if not exists ci_complemento text;
+alter table empleado add column if not exists ci_extension text;
 alter table empleado add column if not exists telefono text;
 alter table empleado add column if not exists email text;
 
@@ -129,6 +131,7 @@ create table if not exists producto (
     nombre_insumo       text,
     marca_insumo        text,
     descripcion_insumo  text,
+    empaque             text,
     unidad_manejo       text not null,
     gramos_nominales    numeric(12,2),
     trazabilidad        text not null,
@@ -140,6 +143,8 @@ create table if not exists producto (
     activo              boolean not null default true,
     observaciones       text
 );
+
+alter table producto add column if not exists empaque text;
 
 create index if not exists ix_producto_categoria on producto(categoria);
 create index if not exists ix_producto_estado on producto(estado_comercial);

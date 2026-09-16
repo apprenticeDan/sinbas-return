@@ -59,9 +59,11 @@ module UserEndpoints =
                     printfn "[UserEndpoints] Error al crear usuario: %+A" err
                     match err with
                     | NombreUsuarioInvalido msg -> return Results.BadRequest({| error = msg |})
+                    | NombreUsuarioExistente msg -> return Results.Conflict({| error = msg |})
+                    | EmpleadoYaTieneUsuario _ -> return Results.Conflict({| error = "El empleado ya tiene un usuario asociado" |})
                     | RolesRequeridos msg -> return Results.BadRequest({| error = msg |})
-                    | ErrorInterno msg -> return Results.Json({| error = msg |}, statusCode = Nullable 500)
-                    | _ -> return Results.BadRequest({| error = sprintf "%A" err |})
+                    | ErrorInterno _ -> return Results.Json({| error = "Ocurrió un error interno en el servidor" |}, statusCode = Nullable 500)
+                    | _ -> return Results.BadRequest({| error = "Datos de usuario inválidos o inconsistentes" |})
             } |> Async.StartAsTask
         ))
             .RequireAuthorization("RequireAdmin")
@@ -77,11 +79,14 @@ module UserEndpoints =
                 match result with
                 | Ok () -> return Results.Ok()
                 | Error (err: AuthError) ->
+                    printfn "[UserEndpoints] Error al actualizar usuario: %+A" err
                     match err with
                     | NombreUsuarioInvalido msg -> return Results.BadRequest({| error = msg |})
+                    | NombreUsuarioExistente msg -> return Results.Conflict({| error = msg |})
+                    | EmpleadoYaTieneUsuario _ -> return Results.Conflict({| error = "El empleado ya tiene un usuario asociado" |})
                     | RolesRequeridos msg -> return Results.BadRequest({| error = msg |})
-                    | ErrorInterno msg -> return Results.Json({| error = msg |}, statusCode = Nullable 500)
-                    | _ -> return Results.BadRequest({| error = sprintf "%A" err |})
+                    | ErrorInterno _ -> return Results.Json({| error = "Ocurrió un error interno en el servidor" |}, statusCode = Nullable 500)
+                    | _ -> return Results.BadRequest({| error = "Datos de actualización inválidos o inconsistentes" |})
             } |> Async.StartAsTask
         ))
             .RequireAuthorization("RequireAdmin")

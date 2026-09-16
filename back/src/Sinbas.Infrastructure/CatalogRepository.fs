@@ -17,6 +17,7 @@ type ProductoRow =
       nombre_insumo       : string option
       marca_insumo        : string option
       descripcion_insumo  : string option
+      empaque             : string option
       unidad_manejo       : string
       gramos_nominales    : decimal option
       trazabilidad        : string
@@ -47,8 +48,9 @@ module CatalogRepository =
     let private reconstruirProducto (row: ProductoRow) : Producto =
         let prodId = ProductoId row.id
         let unidad = mapUnidad row.unidad_manejo
+        let empaque = defaultArg row.empaque "Unidad"
         let presentacion =
-            { Empaque = "Unidad"
+            { Empaque = empaque
               ContenidoNominal = defaultArg row.gramos_nominales 1m
               Unidad = unidad }
         let trazabilidad = if row.trazabilidad = "PorLote" then PorLote else Simple
@@ -140,6 +142,7 @@ module CatalogRepository =
                   nombre_insumo = nomInsumo
                   marca_insumo = marcaInsumo
                   descripcion_insumo = descInsumo
+                  empaque = Some producto.Base.Presentacion.Empaque
                   unidad_manejo = unidadTexto
                   gramos_nominales = gramos
                   trazabilidad = (if producto.Base.Trazabilidad = PorLote then "PorLote" else "Simple")

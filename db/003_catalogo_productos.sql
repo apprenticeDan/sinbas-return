@@ -13,7 +13,8 @@ create table if not exists producto (
     nombre_insumo       text,
     marca_insumo        text,
     descripcion_insumo  text,
-    unidad_manejo       text not null, -- 'Gramo', 'Kilogramo', 'Unidad_', 'Bolsa'
+    empaque             text, -- 'Bolsa', 'Frasco', 'Sobre', 'Unidad', etc.
+    unidad_manejo       text not null, -- 'Gramo', 'Kilogramo', 'Mililitro', 'Litro', 'UnidadDiscreta'
     gramos_nominales    numeric(12,2),
     trazabilidad        text not null, -- 'PorLote', 'Simple'
     precio_oficial      numeric(12,2),
@@ -24,6 +25,8 @@ create table if not exists producto (
     activo              boolean not null default true,
     observaciones       text
 );
+
+alter table producto add column if not exists empaque text;
 
 create index if not exists ix_producto_categoria on producto(categoria);
 create index if not exists ix_producto_estado on producto(estado_comercial);

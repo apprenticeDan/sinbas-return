@@ -75,10 +75,12 @@ export function CatalogView() {
       ),
     },
     {
-      header: 'Unidad / Trazabilidad',
+      header: 'Presentación / Trazabilidad',
       cell: (p) => (
         <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px' }}>
-          <div style={{ 'font-weight': '500', color: 'var(--ink)' }}>{p.unidadManejo}</div>
+          <div style={{ 'font-weight': '500', color: 'var(--ink)' }}>
+            {p.presentacionTexto || (p.empaque ? `${p.empaque} (${p.unidadManejo})` : p.unidadManejo)}
+          </div>
           <div>
             <span
               class={p.trazabilidad === 'PorLote' ? 'pill pill-amber' : 'pill'}

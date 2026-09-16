@@ -13,6 +13,7 @@ type CrearProductoRequest =
       NombreInsumo: string option
       MarcaInsumo: string option
       DescripcionInsumo: string option
+      Empaque: string option
       UnidadManejo: string
       GramosNominales: decimal option
       Trazabilidad: string
@@ -30,7 +31,10 @@ type ProductoDto =
       Genero: string option
       Epiteto: string option
       NombresComunes: string list
+      Empaque: string
+      PresentacionTexto: string
       UnidadManejo: string
+      ContenidoNominal: decimal
       Trazabilidad: string
       PrecioOficial: decimal option
       Moneda: string option
@@ -69,7 +73,10 @@ module CatalogService =
           Genero = nc |> Option.map (fun x -> x.Genero)
           Epiteto = nc |> Option.map (fun x -> x.Epiteto)
           NombresComunes = ncs
+          Empaque = p.Base.Presentacion.Empaque
+          PresentacionTexto = Presentacion.aTexto p.Base.Presentacion
           UnidadManejo = UnidadMedida.aTexto p.Base.Presentacion.Unidad
+          ContenidoNominal = p.Base.Presentacion.ContenidoNominal
           Trazabilidad = (if p.Base.Trazabilidad = PorLote then "PorLote" else "Simple")
           PrecioOficial = p.PrecioOficial |> Option.map (fun x -> x.Valor)
           Moneda = p.PrecioOficial |> Option.map (fun x -> x.Moneda)
@@ -112,8 +119,14 @@ module CatalogService =
             | Error err -> return Error err
             | Ok categoria ->
                 let prodId = ProductoId (Identidad.nuevo ())
+                let empLimpio =
+                    req.Empaque
+                    |> Option.bind (fun s ->
+                        let t = s.Trim()
+                        if String.IsNullOrWhiteSpace t then None else Some t)
+                    |> Option.defaultValue "Unidad"
                 let pres =
-                    { Empaque = "Unidad"
+                    { Empaque = empLimpio
                       ContenidoNominal = defaultArg req.GramosNominales 1m
                       Unidad = unidad }
                 let producto = Producto.crearBorrador prodId pres trazabilidad categoria req.Observaciones

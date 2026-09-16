@@ -11,7 +11,10 @@ export interface Product {
   genero?: string;
   epiteto?: string;
   nombresComunes: string[];
+  empaque?: string;
+  presentacionTexto?: string;
   unidadManejo: UnidadMedida | string;
+  contenidoNominal?: number;
   trazabilidad: Traceability;
   precioOficial?: number;
   moneda?: string;
@@ -31,6 +34,7 @@ export interface CreateProductPayload {
   nombreInsumo?: string;
   marcaInsumo?: string;
   descripcionInsumo?: string;
+  empaque?: string;
   unidadManejo: UnidadMedida | string;
   gramosNominales?: number;
   trazabilidad: Traceability;

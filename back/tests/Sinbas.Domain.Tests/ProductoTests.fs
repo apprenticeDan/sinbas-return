@@ -103,3 +103,28 @@ let ``Insumo formatea nombreVisible incluyendo su marca si esta definida`` () =
 
     Assert.Equal("Sustrato Turbio (BioGrow)", Producto.nombreVisible insumoConMarca)
     Assert.Equal("Bolsa Polietileno 10x15", Producto.nombreVisible insumoSinMarca)
+
+[<Fact>]
+let ``Presentacion define empaque, contenido y unidad correctamente y valida contenido mayor a cero`` () =
+    match Presentacion.crear "Bolsa" 500m Gramo with
+    | Error e -> failwithf "Falló creación de presentación: %A" e
+    | Ok p ->
+        Assert.Equal("Bolsa", p.Empaque)
+        Assert.Equal(500m, p.ContenidoNominal)
+        Assert.Equal(Gramo, p.Unidad)
+        Assert.Equal("Bolsa 500 g", Presentacion.aTexto p)
+
+    match Presentacion.crear "Bolsa" 0m Gramo with
+    | Error (CantidadInvalida msg) -> Assert.Contains("mayor a cero", msg)
+    | res -> failwithf "Debería haber fallado con contenido 0, obtuvo: %A" res
+
+[<Fact>]
+let ``Producto creado con Presentacion personalizada preserva empaque y contenido nominal`` () =
+    let pres = match Presentacion.crear "Frasco" 1000m Mililitro with Ok p -> p | Error _ -> failwith "pres"
+    let cat = Insumo("Fungicida Cobre", Some "Bayer", None)
+    let prod = Producto.crearBorrador (ProductoId (Guid.NewGuid())) pres Simple cat None
+
+    Assert.Equal("Frasco", prod.Base.Presentacion.Empaque)
+    Assert.Equal(1000m, prod.Base.Presentacion.ContenidoNominal)
+    Assert.Equal(Mililitro, prod.Base.Presentacion.Unidad)
+    Assert.Equal("Frasco 1000 ml", Presentacion.aTexto prod.Base.Presentacion)

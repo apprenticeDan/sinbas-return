@@ -31,6 +31,7 @@ type EmpleadoRow =
       apellido_materno: string option
       ci_numero       : string option
       ci_complemento  : string option
+      ci_extension    : string option
       telefono        : string option
       email           : string option
       nombre_completo : string
@@ -53,12 +54,13 @@ module private AuthRepositoryHelpers =
 
     let reconstruirEmpleado (row: EmpleadoRow) : Empleado =
         let nombres = defaultArg row.nombres (if String.IsNullOrWhiteSpace row.nombre_completo then "Usuario" else row.nombre_completo)
+        let ext = row.ci_extension |> Option.bind DepartamentoExpedicion.desdeTexto
         let ci =
             match row.ci_numero with
             | Some n when not (String.IsNullOrWhiteSpace n) ->
-                match CI.crear n row.ci_complemento None with
+                match CI.crear n row.ci_complemento ext with
                 | Ok c -> c
-                | Error _ -> { Numero = n; Complemento = row.ci_complemento; Extension = None }
+                | Error _ -> { Numero = n; Complemento = row.ci_complemento; Extension = ext }
             | _ -> { Numero = "-"; Complemento = None; Extension = None }
 
         let estado =
@@ -340,6 +342,7 @@ module AuthRepository =
                   apellido_materno = empleado.ApellidoMaterno
                   ci_numero = Some empleado.CI.Numero
                   ci_complemento = empleado.CI.Complemento
+                  ci_extension = empleado.CI.Extension |> Option.map DepartamentoExpedicion.aTexto
                   telefono = empleado.Telefono
                   email = empleado.Email
                   nombre_completo = empleado.NombreCompleto
@@ -442,6 +445,7 @@ module AuthRepository =
                           apellido_materno = None
                           ci_numero = Some "-"
                           ci_complemento = None
+                          ci_extension = None
                           telefono = None
                           email = None
                           nombre_completo = sprintf "Empleado #%s" (empId.ToString().Substring(0, 8))

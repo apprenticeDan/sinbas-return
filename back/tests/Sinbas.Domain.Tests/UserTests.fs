@@ -127,7 +127,7 @@ let ``Crear usuario falla si el nombre de usuario ya esta registrado`` () =
 
         let! res = UserUseCase.crearUsuario buscarPorNombre guardarUsuarioYEmpleado hashFake cmd
         match res with
-        | Error (NombreUsuarioInvalido msg) ->
+        | Error (NombreUsuarioExistente msg) ->
             Assert.Contains("ya está registrado", msg)
         | res -> failwithf "Debería haber fallado por usuario duplicado, obtuvo: %A" res
     }
@@ -215,7 +215,7 @@ let ``Actualizar usuario falla si el nuevo username ya pertenece a otra cuenta``
 
         let! res = UserUseCase.actualizarUsuario buscarUsuarioConEmpleado buscarPorNombre guardarUsuarioYEmpleado hashFake cmd
         match res with
-        | Error (NombreUsuarioInvalido msg) ->
+        | Error (NombreUsuarioExistente msg) ->
             Assert.Contains("otra cuenta", msg)
         | res -> failwithf "Debería haber fallado por username en uso, obtuvo: %A" res
     }

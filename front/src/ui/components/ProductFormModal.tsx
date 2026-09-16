@@ -12,6 +12,7 @@ export function ProductFormModal() {
   const [nombreInsumo, setNombreInsumo] = createSignal<string>('');
   const [marcaInsumo, setMarcaInsumo] = createSignal<string>('');
   const [descripcionInsumo, setDescripcionInsumo] = createSignal<string>('');
+  const [empaque, setEmpaque] = createSignal<string>('');
   const [unidadManejo, setUnidadManejo] = createSignal<string>('Kilogramo');
   const [gramosNominales, setGramosNominales] = createSignal<number | undefined>(undefined);
   const [trazabilidad, setTrazabilidad] = createSignal<Traceability>('PorLote');
@@ -38,6 +39,7 @@ export function ProductFormModal() {
       nombreInsumo: nombreInsumo().trim() || undefined,
       marcaInsumo: marcaInsumo().trim() || undefined,
       descripcionInsumo: descripcionInsumo().trim() || undefined,
+      empaque: empaque().trim() || undefined,
       unidadManejo: unidadManejo(),
       gramosNominales: gramosNominales(),
       trazabilidad: trazabilidad(),
@@ -158,10 +160,31 @@ export function ProductFormModal() {
               </div>
             </Show>
 
-            {/* Unidad de Manejo & Trazabilidad */}
-            <div style={{ display: 'grid', 'grid-template-columns': '1fr 1fr', gap: '10px' }}>
+            {/* Presentación & Trazabilidad */}
+            <div style={{ display: 'grid', 'grid-template-columns': '1.2fr 1fr 1fr', gap: '10px' }}>
               <div class="field">
-                <label>Unidad de Manejo</label>
+                <label>Empaque <span style={{ 'font-size': '11px', color: 'var(--ink-soft)' }}>(opc.)</span></label>
+                <input
+                  type="text"
+                  placeholder="Ej. Bolsa, Frasco, Sobre"
+                  value={empaque()}
+                  onInput={(e) => setEmpaque(e.currentTarget.value)}
+                />
+              </div>
+
+              <div class="field">
+                <label>Cont. Nominal <span style={{ 'font-size': '11px', color: 'var(--ink-soft)' }}>(opc.)</span></label>
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="Ej. 500, 1"
+                  value={gramosNominales() ?? ''}
+                  onInput={(e) => setGramosNominales(e.currentTarget.value ? parseFloat(e.currentTarget.value) : undefined)}
+                />
+              </div>
+
+              <div class="field">
+                <label>Unidad de Medida</label>
                 <select
                   value={unidadManejo()}
                   onChange={(e) => setUnidadManejo(e.currentTarget.value)}
@@ -173,17 +196,17 @@ export function ProductFormModal() {
                   <option value="UnidadDiscreta">Unidad (ud)</option>
                 </select>
               </div>
+            </div>
 
-              <div class="field">
-                <label>Trazabilidad</label>
-                <select
-                  value={trazabilidad()}
-                  onChange={(e) => setTrazabilidad(e.currentTarget.value as Traceability)}
-                >
-                  <option value="PorLote">Por Lote (Requerido para Semillas)</option>
-                  <option value="Simple">Simple (Sin lote)</option>
-                </select>
-              </div>
+            <div class="field">
+              <label>Trazabilidad</label>
+              <select
+                value={trazabilidad()}
+                onChange={(e) => setTrazabilidad(e.currentTarget.value as Traceability)}
+              >
+                <option value="PorLote">Por Lote (Requerido para Semillas)</option>
+                <option value="Simple">Simple (Sin lote)</option>
+              </select>
             </div>
 
             {/* Observaciones */}

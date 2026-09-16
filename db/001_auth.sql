@@ -9,6 +9,7 @@ create table if not exists empleado (
     apellido_materno text,
     ci_numero       text,
     ci_complemento  text,
+    ci_extension    text,
     telefono        text,
     email           text,
     nombre_completo text    not null,
@@ -20,6 +21,7 @@ alter table empleado add column if not exists apellido_paterno text;
 alter table empleado add column if not exists apellido_materno text;
 alter table empleado add column if not exists ci_numero text;
 alter table empleado add column if not exists ci_complemento text;
+alter table empleado add column if not exists ci_extension text;
 alter table empleado add column if not exists telefono text;
 alter table empleado add column if not exists email text;
 
