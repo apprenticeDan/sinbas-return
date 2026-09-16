@@ -1,6 +1,8 @@
-export type Category = 'Semilla' | 'Plantin' | 'Insumo' | 'Otro';
+export type Category = 'Semilla' | 'Plantin' | 'Insumo';
 export type Traceability = 'PorLote' | 'Simple';
 export type CommercialState = 'PendientePrecioBorrador' | 'ActivoParaVenta' | 'Inactivo';
+
+export type UnidadMedida = 'Kilogramo' | 'Gramo' | 'Mililitro' | 'Litro' | 'UnidadDiscreta';
 
 export interface Product {
   id: string;
@@ -9,7 +11,7 @@ export interface Product {
   genero?: string;
   epiteto?: string;
   nombresComunes: string[];
-  unidadManejo: string;
+  unidadManejo: UnidadMedida | string;
   trazabilidad: Traceability;
   precioOficial?: number;
   moneda?: string;
@@ -29,7 +31,7 @@ export interface CreateProductPayload {
   nombreInsumo?: string;
   marcaInsumo?: string;
   descripcionInsumo?: string;
-  unidadManejo: string;
+  unidadManejo: UnidadMedida | string;
   gramosNominales?: number;
   trazabilidad: Traceability;
   observaciones?: string;

@@ -1,6 +1,8 @@
 import { SystemRole } from './Role';
 export type { SystemRole };
 
+export type DepartamentoExpedicion = 'LP' | 'CB' | 'SC' | 'OR' | 'PT' | 'TJ' | 'CH' | 'BE' | 'PD' | 'Extranjero';
+
 export interface UserItem {
   id: string;
   empleadoId: string;
@@ -12,6 +14,7 @@ export interface UserItem {
   ci: string;
   ciNumero: string;
   ciComplemento?: string | null;
+  ciExtension?: DepartamentoExpedicion | string | null;
   telefono?: string | null;
   email?: string | null;
   roles: SystemRole[];
@@ -25,6 +28,7 @@ export interface CreateUserDTO {
   apellidoMaterno?: string;
   ciNumero: string;
   ciComplemento?: string;
+  ciExtension?: DepartamentoExpedicion | string | null;
   telefono?: string;
   email?: string;
   nombreUsuario: string;
@@ -39,6 +43,7 @@ export interface UpdateUserDTO {
   apellidoMaterno?: string;
   ciNumero: string;
   ciComplemento?: string;
+  ciExtension?: DepartamentoExpedicion | string | null;
   telefono?: string;
   email?: string;
   nombreUsuario: string;

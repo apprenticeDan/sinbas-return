@@ -179,7 +179,6 @@ export function CatalogView() {
                 <option value="Semilla">Semilla</option>
                 <option value="Plantin">Plantín</option>
                 <option value="Insumo">Insumo</option>
-                <option value="Otro">Otro</option>
               </select>
             </div>
 

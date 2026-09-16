@@ -24,6 +24,10 @@ export async function httpClient<T>(endpoint: string, options: RequestInit = {})
   });
 
   if (!response.ok) {
+    if (response.status === 409) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new ApiError(409, errorData.error || 'Conflicto: El recurso ya existe.');
+    }
     let errorMsg = `Error ${response.status}: ${response.statusText}`;
     try {
       const errData = await response.json();

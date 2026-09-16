@@ -23,3 +23,21 @@ export function formatDisplayId(prefix: string, index?: number, uuid?: string): 
   }
   return `#${prefix}-001`;
 }
+
+/**
+ * Formatea un Carnet de Identidad (CI) boliviano según el estándar del dominio:
+ * Número + Complemento opcional + Extensión departamental opcional.
+ * Ejemplos:
+ * - formatCI("1234567") -> "1234567"
+ * - formatCI("1234567", "1A") -> "1234567-1A"
+ * - formatCI("1234567", null, "CB") -> "1234567 CB"
+ * - formatCI("1234567", "1A", "CB") -> "1234567-1A CB"
+ */
+export function formatCI(num?: string | null, comp?: string | null, ext?: string | null): string {
+  const n = num ? num.trim() : '';
+  if (!n) return '';
+  const c = comp ? comp.trim() : '';
+  const e = ext ? ext.trim() : '';
+  const base = c ? `${n}-${c}` : n;
+  return e ? `${base} ${e}` : base;
+}

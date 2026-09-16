@@ -2,7 +2,7 @@ import { Component, createSignal, onMount, For, Show } from 'solid-js';
 import { UserItem } from '../../domain/models/User';
 import { UserUseCases } from '../../application/usecases/UserUseCases';
 import { UserModal } from '../components/UserModal';
-import { formatDisplayId } from '../utils/formatters';
+import { formatDisplayId, formatCI } from '../utils/formatters';
 
 export const UsersView: Component = () => {
   const [users, setUsers] = createSignal<UserItem[]>([]);
@@ -113,7 +113,7 @@ export const UsersView: Component = () => {
                               {u.nombreCompleto || 'Sin nombre'}
                             </span>
                             <span style={{ 'font-size': '11.5px', color: 'var(--ink-soft)' }}>
-                              CI: {u.ci || 'S/N'} {u.telefono ? `· Tel: ${u.telefono}` : ''}
+                              CI: {formatCI(u.ciNumero, u.ciComplemento, u.ciExtension) || u.ci || 'S/N'} {u.telefono ? `· Tel: ${u.telefono}` : ''}
                             </span>
                           </div>
                         </td>

@@ -150,7 +150,6 @@ export const StockView: Component = () => {
               <option value="Semilla">Semillas</option>
               <option value="Plantin">Plantines</option>
               <option value="Insumo">Insumos</option>
-              <option value="Otro">Otros</option>
             </select>
 
             {/* Filtro de Alerta */}

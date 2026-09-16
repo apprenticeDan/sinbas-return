@@ -1,5 +1,5 @@
 import { Component, createSignal, createEffect, Show } from 'solid-js';
-import { UserItem, SystemRole } from '../../domain/models/User';
+import { UserItem, SystemRole, DepartamentoExpedicion } from '../../domain/models/User';
 import { UserUseCases } from '../../application/usecases/UserUseCases';
 import { RoleSelect } from './RoleSelect';
 
@@ -18,6 +18,7 @@ export const UserModal: Component<UserModalProps> = (props) => {
   const [apellidoMaterno, setApellidoMaterno] = createSignal('');
   const [ciNumero, setCiNumero] = createSignal('');
   const [ciComplemento, setCiComplemento] = createSignal('');
+  const [ciExtension, setCiExtension] = createSignal<string>('');
   const [telefono, setTelefono] = createSignal('');
   const [email, setEmail] = createSignal('');
 
@@ -35,6 +36,7 @@ export const UserModal: Component<UserModalProps> = (props) => {
     setApellidoMaterno('');
     setCiNumero('');
     setCiComplemento('');
+    setCiExtension('');
     setTelefono('');
     setEmail('');
     setUsername('');
@@ -51,6 +53,7 @@ export const UserModal: Component<UserModalProps> = (props) => {
       setApellidoMaterno(u.apellidoMaterno || '');
       setCiNumero(u.ciNumero || '');
       setCiComplemento(u.ciComplemento || '');
+      setCiExtension(u.ciExtension || '');
       setTelefono(u.telefono || '');
       setEmail(u.email || '');
       setUsername(u.nombreUsuario || '');
@@ -111,6 +114,7 @@ export const UserModal: Component<UserModalProps> = (props) => {
           apellidoMaterno: apellidoMaterno().trim() || undefined,
           ciNumero: ciNumero().trim(),
           ciComplemento: ciComplemento().trim() || undefined,
+          ciExtension: (ciExtension().trim() as DepartamentoExpedicion) || undefined,
           telefono: telefono().trim() || undefined,
           email: email().trim() || undefined,
           nombreUsuario: username().trim(),
@@ -124,6 +128,7 @@ export const UserModal: Component<UserModalProps> = (props) => {
           apellidoMaterno: apellidoMaterno().trim() || undefined,
           ciNumero: ciNumero().trim(),
           ciComplemento: ciComplemento().trim() || undefined,
+          ciExtension: (ciExtension().trim() as DepartamentoExpedicion) || undefined,
           telefono: telefono().trim() || undefined,
           email: email().trim() || undefined,
           nombreUsuario: username().trim(),
@@ -209,9 +214,9 @@ export const UserModal: Component<UserModalProps> = (props) => {
               ℹ️ Se requiere al menos un apellido (paterno o materno según documento de identidad).
             </span>
 
-            <div style={{ display: 'grid', 'grid-template-columns': '2fr 1fr', gap: '10px' }}>
+            <div style={{ display: 'grid', 'grid-template-columns': '2fr 1fr 1.3fr', gap: '10px' }}>
               <div class="field">
-                <label>C.I. (Carnet de Identidad) <span style={{ color: 'var(--rust)' }}>*</span></label>
+                <label>C.I. (Número) <span style={{ color: 'var(--rust)' }}>*</span></label>
                 <input
                   type="text"
                   value={ciNumero()}
@@ -226,9 +231,28 @@ export const UserModal: Component<UserModalProps> = (props) => {
                   type="text"
                   value={ciComplemento()}
                   onInput={(e) => setCiComplemento(e.currentTarget.value)}
-                  placeholder="ej. LP, 1A"
+                  placeholder="ej. 1A"
                   maxlength="5"
                 />
+              </div>
+              <div class="field">
+                <label>Extensión <span style={{ 'font-size': '11px', color: 'var(--ink-soft)' }}>(opc.)</span></label>
+                <select
+                  value={ciExtension()}
+                  onChange={(e) => setCiExtension(e.currentTarget.value)}
+                >
+                  <option value="">Sin extensión</option>
+                  <option value="LP">LP (La Paz)</option>
+                  <option value="CB">CB (Cochabamba)</option>
+                  <option value="SC">SC (Santa Cruz)</option>
+                  <option value="OR">OR (Oruro)</option>
+                  <option value="PT">PT (Potosí)</option>
+                  <option value="TJ">TJ (Tarija)</option>
+                  <option value="CH">CH (Chuquisaca)</option>
+                  <option value="BE">BE (Beni)</option>
+                  <option value="PD">PD (Pando)</option>
+                  <option value="Extranjero">Extranjero</option>
+                </select>
               </div>
             </div>
 

@@ -84,7 +84,6 @@ export function ProductFormModal() {
                 <option value="Semilla">Semilla Forestal</option>
                 <option value="Plantin">Plantín</option>
                 <option value="Insumo">Insumo / Agroquímico</option>
-                <option value="Otro">Otro Producto</option>
               </select>
             </div>
 
@@ -136,10 +135,10 @@ export function ProductFormModal() {
               </Show>
             </Show>
 
-            {/* Campos condicionales para Insumo / Otro */}
-            <Show when={categoria() === 'Insumo' || categoria() === 'Otro'}>
+            {/* Campos condicionales para Insumo */}
+            <Show when={categoria() === 'Insumo'}>
               <div class="field">
-                <label>Nombre del Insumo / Producto *</label>
+                <label>Nombre del Insumo *</label>
                 <input
                   type="text"
                   required
@@ -148,17 +147,15 @@ export function ProductFormModal() {
                   onInput={(e) => setNombreInsumo(e.currentTarget.value)}
                 />
               </div>
-              <Show when={categoria() === 'Insumo'}>
-                <div class="field">
-                  <label>Marca</label>
-                  <input
-                    type="text"
-                    placeholder="Ej. Yura, Yara"
-                    value={marcaInsumo()}
-                    onInput={(e) => setMarcaInsumo(e.currentTarget.value)}
-                  />
-                </div>
-              </Show>
+              <div class="field">
+                <label>Marca</label>
+                <input
+                  type="text"
+                  placeholder="Ej. Yura, Yara"
+                  value={marcaInsumo()}
+                  onInput={(e) => setMarcaInsumo(e.currentTarget.value)}
+                />
+              </div>
             </Show>
 
             {/* Unidad de Manejo & Trazabilidad */}
@@ -171,8 +168,9 @@ export function ProductFormModal() {
                 >
                   <option value="Kilogramo">Kilogramo (kg)</option>
                   <option value="Gramo">Gramo (g)</option>
-                  <option value="Unidad_">Unidad (ud)</option>
-                  <option value="Bolsa">Bolsa</option>
+                  <option value="Mililitro">Mililitro (ml)</option>
+                  <option value="Litro">Litro (l)</option>
+                  <option value="UnidadDiscreta">Unidad (ud)</option>
                 </select>
               </div>
 
