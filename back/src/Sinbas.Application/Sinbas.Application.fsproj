@@ -11,6 +11,7 @@
     <Compile Include="CatalogService.fs" />
     <Compile Include="LoteService.fs" />
     <Compile Include="InventoryService.fs" />
+    <Compile Include="LabService.fs" />
   </ItemGroup>
 
   <ItemGroup>

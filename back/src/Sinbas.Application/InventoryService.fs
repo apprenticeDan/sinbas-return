@@ -117,6 +117,24 @@ type KardexMovimientoDto =
       ResponsableId: string
       Observaciones: string }
 
+[<CLIMutable>]
+type LoteCandidatoDespachoDto =
+    { LoteId: string
+      CodigoLote: string
+      ProductoId: string
+      NombreProducto: string
+      Procedencia: string option
+      FechaIngreso: string
+      CantidadDisponible: decimal
+      Unidad: string
+      EsSugeridoFifo: bool
+      TieneAnalisis: bool
+      Germinacion: Nullable<decimal>
+      Pureza: Nullable<decimal>
+      Humedad: Nullable<decimal>
+      Viabilidad: Nullable<decimal>
+      Dictamen: string option }
+
 // ─────────────────────────────────────────────────────────────
 // Servicio de Aplicación: InventoryService
 // ─────────────────────────────────────────────────────────────
@@ -763,4 +781,70 @@ module InventoryService =
                                   Lineas = lineasDto }
 
                             return Ok dto
+        }
+
+    /// F3 / RN03: Lista lotes disponibles para despacho de un producto ordenados por FIFO
+    /// enriquecidos con especificaciones de laboratorio más recientes para decisión informada del almacenero
+    let listarLotesCandidatosDespacho
+        (obtenerProductoPorId: ProductoId -> Async<Producto option>)
+        (listarLotes: ProductoId option -> EstadoLote option -> Async<Lote list>)
+        (obtenerUltimoAnalisis: LoteId -> Async<AnalisisLaboratorio option>)
+        (productoIdRaw: string)
+        : Async<Result<LoteCandidatoDespachoDto list, string>> =
+        async {
+            match Guid.TryParse(productoIdRaw) with
+            | false, _ -> return Error "Identificador de producto inválido (formato UUID requerido)"
+            | true, pGuid ->
+                let prodId = ProductoId pGuid
+                let! prodOpt = obtenerProductoPorId prodId
+                match prodOpt with
+                | None -> return Error (sprintf "No se encontró el producto con ID '%s'" productoIdRaw)
+                | Some prod ->
+                    let! lotesActivos = listarLotes (Some prodId) (Some Activo)
+                    let lotesOrdenadosFifo =
+                        lotesActivos
+                        |> List.filter (fun l -> l.CantidadActual.Valor > 0m)
+                        |> List.sortBy (fun l -> l.FechaIngreso)
+
+                    let lotesConIndices = lotesOrdenadosFifo |> List.mapi (fun idx l -> (idx, l))
+                    let! dtos =
+                        lotesConIndices
+                        |> List.map (fun (idx, lote) ->
+                            async {
+                                let! analisisOpt = obtenerUltimoAnalisis lote.Id
+                                let (LoteId lId) = lote.Id
+                                return
+                                    { LoteId = lId.ToString()
+                                      CodigoLote = CodigoLote.valor lote.Codigo
+                                      ProductoId = pGuid.ToString()
+                                      NombreProducto = Producto.nombreVisible prod
+                                      Procedencia = lote.Procedencia
+                                      FechaIngreso = lote.FechaIngreso.ToString("yyyy-MM-dd")
+                                      CantidadDisponible = lote.CantidadActual.Valor
+                                      Unidad = desmapearUnidad lote.CantidadActual.Unidad
+                                      EsSugeridoFifo = (idx = 0)
+                                      TieneAnalisis = Option.isSome analisisOpt
+                                      Germinacion =
+                                          analisisOpt
+                                          |> Option.map (fun a -> Nullable (PorcentajeCalidad.valor a.Germinacion))
+                                          |> Option.defaultValue (Nullable())
+                                      Pureza =
+                                          analisisOpt
+                                          |> Option.map (fun a -> Nullable (PorcentajeCalidad.valor a.Pureza))
+                                          |> Option.defaultValue (Nullable())
+                                      Humedad =
+                                          analisisOpt
+                                          |> Option.map (fun a -> Nullable (PorcentajeCalidad.valor a.Humedad))
+                                          |> Option.defaultValue (Nullable())
+                                      Viabilidad =
+                                          analisisOpt
+                                          |> Option.map (fun a -> Nullable (PorcentajeCalidad.valor a.Viabilidad))
+                                          |> Option.defaultValue (Nullable())
+                                      Dictamen =
+                                          analisisOpt
+                                          |> Option.map (fun a -> DictamenCalidad.aTexto a.Dictamen) }
+                            })
+                        |> Async.Parallel
+
+                    return Ok (dtos |> Array.toList)
         }

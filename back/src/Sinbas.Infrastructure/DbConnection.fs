@@ -310,6 +310,27 @@ create table if not exists linea_movimiento (
 
 create index if not exists ix_linea_movimiento_id on linea_movimiento(movimiento_id);
 create index if not exists ix_linea_lote_id on linea_movimiento(lote_id);
+
+-- ─────────────────────────────────────────────────────────────
+-- Análisis de Laboratorio y Calidad (F3)
+-- ─────────────────────────────────────────────────────────────
+
+create table if not exists analisis_laboratorio (
+    id                  uuid primary key,
+    lote_id             uuid not null references lote(id) on delete cascade,
+    fecha_analisis      date not null default current_date,
+    germinacion         numeric(5,2) not null,
+    pureza              numeric(5,2) not null,
+    humedad             numeric(5,2) not null,
+    viabilidad          numeric(5,2) not null,
+    semillas_puras_kg   integer not null default 0,
+    semillas_impurezas_kg integer not null default 0,
+    dictamen            text not null, -- 'Aprobado' | 'Rechazado'
+    observaciones       text
+);
+
+create index if not exists ix_analisis_lote_id on analisis_laboratorio(lote_id);
+create index if not exists ix_analisis_fecha on analisis_laboratorio(fecha_analisis);
 """
             use cmd = new NpgsqlCommand(sqlAuth, conn)
             cmd.ExecuteNonQuery() |> ignore

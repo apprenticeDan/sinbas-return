@@ -98,6 +98,7 @@ let main args =
     CatalogEndpoints.mapCatalogEndpoints app
     LoteEndpoints.mapEndpoints app
     InventoryEndpoints.mapEndpoints app
+    LabEndpoints.mapEndpoints app
 
     app.Run()
 
