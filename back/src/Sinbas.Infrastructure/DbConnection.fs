@@ -331,6 +331,40 @@ create table if not exists analisis_laboratorio (
 
 create index if not exists ix_analisis_lote_id on analisis_laboratorio(lote_id);
 create index if not exists ix_analisis_fecha on analisis_laboratorio(fecha_analisis);
+
+-- ─────────────────────────────────────────────────────────────
+-- Gestión de Clientes (F6)
+-- ─────────────────────────────────────────────────────────────
+
+create table if not exists cliente (
+    id                  uuid primary key,
+    tipo                text not null, -- 'Natural' | 'Juridica'
+    nombres             text,
+    apellido_paterno    text,
+    apellido_materno    text,
+    ci_numero           text,
+    ci_complemento      text,
+    ci_extension        text,
+    razon_social        text,
+    nit                 text,
+    rep_nombres         text,
+    rep_apellido_paterno text,
+    rep_apellido_materno text,
+    rep_ci_numero       text,
+    rep_ci_complemento  text,
+    rep_ci_extension    text,
+    rep_telefono        text,
+    rep_email           text,
+    telefono            text,
+    email               text,
+    direccion           text,
+    estado              text not null default 'Activo'
+);
+
+create index if not exists ix_cliente_tipo on cliente(tipo);
+create index if not exists ix_cliente_nit on cliente(nit);
+create index if not exists ix_cliente_ci on cliente(ci_numero);
+create index if not exists ix_cliente_razon_social on cliente(razon_social);
 """
             use cmd = new NpgsqlCommand(sqlAuth, conn)
             cmd.ExecuteNonQuery() |> ignore

@@ -15,6 +15,7 @@
     <Compile Include="InventoryRepository.fs" />
     <Compile Include="LabRepository.fs" />
     <Compile Include="PdfEtiquetaService.fs" />
+    <Compile Include="ClientRepository.fs" />
   </ItemGroup>
 
   <ItemGroup>

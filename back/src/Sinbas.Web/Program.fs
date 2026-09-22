@@ -47,6 +47,7 @@ let main args =
         options.AddPolicy("RequireGerencia", fun policy -> policy.RequireRole("Administrador", "Gerencia") |> ignore)
         options.AddPolicy("RequireAlmacen", fun policy -> policy.RequireRole("Administrador", "Almacen") |> ignore)
         options.AddPolicy("RequireLaboratorio", fun policy -> policy.RequireRole("Administrador", "Laboratorio") |> ignore)
+        options.AddPolicy("RequireComercial", fun policy -> policy.RequireRole("Administrador", "Gerencia", "Comercial") |> ignore)
     ) |> ignore
 
     // Configurar JSON serialization para DTOs
@@ -99,6 +100,7 @@ let main args =
     LoteEndpoints.mapEndpoints app
     InventoryEndpoints.mapEndpoints app
     LabEndpoints.mapEndpoints app
+    ClientEndpoints.mapEndpoints app
 
     app.Run()
 

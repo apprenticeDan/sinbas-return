@@ -17,6 +17,7 @@
     <Compile Include="Stock.fs" />
     <Compile Include="Fifo.fs" />
     <Compile Include="Persona.fs" />
+    <Compile Include="Cliente.fs" />
     <Compile Include="Empleado.fs" />
     <Compile Include="Auth.fs" />
   </ItemGroup>
