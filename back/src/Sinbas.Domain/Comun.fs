@@ -20,6 +20,10 @@ type DomainError =
     | SimbolosNoPermitidos of string
     | LetrasNoPermitidas of string
     | EmpleadoDuplicado of string
+    | SinAnalisisLaboratorio of string
+    | LoteRechazado of string
+    | PorcentajeInvalido of string
+    | FechaInvalida of string
 
 
 // ─────────────────────────────────────────────────────────────

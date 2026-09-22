@@ -8,8 +8,10 @@
   <ItemGroup>
     <Compile Include="Comun.fs" />
     <Compile Include="Validacion.fs" />
+    <Compile Include="Laboratorio.fs" />
     <Compile Include="Producto.fs" />
     <Compile Include="Lote.fs" />
+    <Compile Include="Etiqueta.fs" />
     <Compile Include="Operacion.fs" />
     <Compile Include="Movimiento.fs" />
     <Compile Include="Stock.fs" />

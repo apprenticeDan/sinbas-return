@@ -10,6 +10,7 @@
     <Compile Include="CantidadTests.fs" />
     <Compile Include="ProductoTests.fs" />
     <Compile Include="LoteTests.fs" />
+    <Compile Include="LaboratorioTests.fs" />
     <Compile Include="ValidacionTests.fs" />
     <Compile Include="EmpleadoTests.fs" />
     <Compile Include="InventoryTests.fs" />

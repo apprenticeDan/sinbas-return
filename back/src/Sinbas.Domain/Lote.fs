@@ -100,3 +100,13 @@ module Lote =
             Observaciones = observaciones }
 
     let archivar lote = { lote with Estado = Archivado }
+
+    /// RN12: Aplica el resultado del análisis de laboratorio al lote.
+    /// Si el dictamen es Rechazado, el lote pasa a estado Rechazado y queda excluido automáticamente
+    /// del stock disponible para venta y proformas.
+    let aplicarDictamenLaboratorio (dictamen: DictamenCalidad) (lote: Lote) : Lote =
+        match dictamen with
+        | DictamenCalidad.Rechazado -> { lote with Estado = Rechazado }
+        | DictamenCalidad.Aprobado ->
+            if lote.Estado = Rechazado then { lote with Estado = Activo }
+            else lote
