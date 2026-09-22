@@ -6,6 +6,7 @@ import { DataTable, Column } from '../components/DataTable';
 import { LoteFormModal } from '../components/LoteFormModal';
 import { LoteBlockModal } from '../components/LoteBlockModal';
 import { formatDisplayId } from '../utils/formatters';
+import { ApiLabGateway } from '../../infrastructure/api/ApiLabGateway';
 
 export function LotesView() {
   onMount(() => {
@@ -123,6 +124,14 @@ export function LotesView() {
       align: 'right',
       cell: (l) => (
         <div style={{ display: 'flex', 'justify-content': 'flex-end', gap: '6px' }}>
+          <button
+            onClick={() => ApiLabGateway.descargarEtiquetaPdf(l.id, l.codigo).catch((e: any) => alert(e.message || 'Error al descargar etiqueta'))}
+            class="btn btn-ghost"
+            style={{ padding: '4px 8px', 'font-size': '11.5px', color: 'var(--green-deep)' }}
+            title="Descargar etiqueta oficial en PDF (RF07 / RN01)"
+          >
+            🏷️ Etiqueta
+          </button>
           <Show when={canBlockLotes() && l.estado === 'Activo'}>
             <button
               onClick={() => {

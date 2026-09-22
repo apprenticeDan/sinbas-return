@@ -10,6 +10,8 @@ import { PlaceholderView } from './ui/views/PlaceholderView';
 import { IngresosView } from './ui/views/IngresosView';
 import { EgresosView } from './ui/views/EgresosView';
 import { StockView } from './ui/views/StockView';
+import { LabView } from './ui/views/LabView';
+import { ClientesView } from './ui/views/ClientesView';
 
 export const App: Component = () => {
   const [currentView, setCurrentView] = createSignal(authStore.getDefaultView());
@@ -37,11 +39,7 @@ export const App: Component = () => {
             <LotesView />
           </Show>
           <Show when={currentView() === 'laboratorio' && authStore.canAccessView('laboratorio')}>
-            <PlaceholderView
-              title="Análisis de Calidad y Germinación"
-              featureCode="MF-03-01"
-              description="Certificación de semillas y resultados de laboratorio."
-            />
+            <LabView />
           </Show>
           <Show when={currentView() === 'ingresos' && authStore.canAccessView('ingresos')}>
             <IngresosView />
@@ -51,6 +49,9 @@ export const App: Component = () => {
           </Show>
           <Show when={currentView() === 'stock' && authStore.canAccessView('stock')}>
             <StockView />
+          </Show>
+          <Show when={currentView() === 'clientes' && authStore.canAccessView('clientes')}>
+            <ClientesView />
           </Show>
         </main>
       </div>
