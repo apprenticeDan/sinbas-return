@@ -65,23 +65,26 @@ module Lote =
             Estado = nuevoEstado }
 
     let descontarStock (cantidadADescontar: Cantidad) (lote: Lote) : Result<Lote, DomainError> =
-        match Cantidad.esSuficiente lote.CantidadActual cantidadADescontar with
-        | Error err -> Error err
-        | Ok false ->
-            Error(
-                StockInsuficiente(
-                    sprintf
-                        "Stock insuficiente en lote '%s'. Disponible: %s, Solicitado: %s"
-                        (CodigoLote.valor lote.Codigo)
-                        (Cantidad.formatear lote.CantidadActual)
-                        (Cantidad.formatear cantidadADescontar)
+        if cantidadADescontar.Valor <= 0m then
+            Error (CantidadInvalida (sprintf "La cantidad a descontar debe ser mayor a cero, recibido: %M" cantidadADescontar.Valor))
+        else
+            match Cantidad.esSuficiente lote.CantidadActual cantidadADescontar with
+            | Error err -> Error err
+            | Ok false ->
+                Error(
+                    StockInsuficiente(
+                        sprintf
+                            "Stock insuficiente en lote '%s'. Disponible: %s, Solicitado: %s"
+                            (CodigoLote.valor lote.Codigo)
+                            (Cantidad.formatear lote.CantidadActual)
+                            (Cantidad.formatear cantidadADescontar)
+                    )
                 )
-            )
-        | Ok true ->
-            let disponibleGramos = Cantidad.enGramos lote.CantidadActual
-            let aDescontarGramos = Cantidad.enGramos cantidadADescontar
-            let restanteGramos = disponibleGramos - aDescontarGramos
-            Ok (actualizarSaldo restanteGramos lote)
+            | Ok true ->
+                let disponibleGramos = Cantidad.enGramos lote.CantidadActual
+                let aDescontarGramos = Cantidad.enGramos cantidadADescontar
+                let restanteGramos = disponibleGramos - aDescontarGramos
+                Ok (actualizarSaldo restanteGramos lote)
 
     let marcarAgotado lote =
         actualizarSaldo 0m lote

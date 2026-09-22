@@ -244,9 +244,14 @@ module Cantidad =
     let sonCompatibles (a: Cantidad) (b: Cantidad) : bool =
         UnidadMedida.sonCompatibles a.Unidad b.Unidad
 
+    let reconstruir (valor: decimal) (unidad: UnidadMedida) : Cantidad =
+        { Valor = valor; Unidad = unidad }
+
     /// Suma dos cantidades asegurando que pertenezcan a la misma dimensión física
     let sumar (a: Cantidad) (b: Cantidad) : Result<Cantidad, DomainError> =
-        if not (UnidadMedida.sonCompatibles a.Unidad b.Unidad) then
+        if a.Valor <= 0m || b.Valor <= 0m then
+            Error (CantidadInvalida "Las cantidades a sumar deben ser mayores a cero")
+        elif not (UnidadMedida.sonCompatibles a.Unidad b.Unidad) then
             Error(
                 UnidadIncompatible(
                     sprintf "No se puede sumar %s con %s"

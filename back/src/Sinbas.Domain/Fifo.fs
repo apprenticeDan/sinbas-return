@@ -10,15 +10,17 @@ module Fifo =
         (cantidadRequerida: Cantidad)
         (lotes: Lote list)
         : Result<LineaMovimiento list, DomainError> =
-
-        let disponibles = Stock.lotesDisponibles productoId lotes
-        let totalDisponibleGramos = disponibles |> List.sumBy snd
-        let reqGramos = Cantidad.enGramos cantidadRequerida
-
-        if totalDisponibleGramos < reqGramos then
-            let msg = sprintf "Stock insuficiente para el producto %A. Requerido: %M g, Disponible: %M g" productoId reqGramos totalDisponibleGramos
-            Error (StockInsuficiente msg)
+        if cantidadRequerida.Valor <= 0m then
+            Error (CantidadInvalida (sprintf "La cantidad requerida debe ser mayor a cero, recibido: %M" cantidadRequerida.Valor))
         else
+            let disponibles = Stock.lotesDisponibles productoId lotes
+            let totalDisponibleGramos = disponibles |> List.sumBy snd
+            let reqGramos = Cantidad.enGramos cantidadRequerida
+
+            if totalDisponibleGramos < reqGramos then
+                let msg = sprintf "Stock insuficiente para el producto %A. Requerido: %M g, Disponible: %M g" productoId reqGramos totalDisponibleGramos
+                Error (StockInsuficiente msg)
+            else
             let rec consumir (restante: decimal) (lotesRestantes: (Lote * decimal) list) (acc: LineaMovimiento list) =
                 if restante <= 0m then
                     Ok (List.rev acc)
