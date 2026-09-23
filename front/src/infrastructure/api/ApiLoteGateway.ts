@@ -1,6 +1,37 @@
 import { httpClient } from './HttpClient';
 import { LoteItem, CreateLotePayload, BloquearLotePayload } from '../../domain/models/Lote';
 
+export interface AnalisisResumenDto {
+  id: string;
+  fechaAnalisis: string;
+  germinacion: number;
+  pureza: number;
+  humedad: number;
+  viabilidad: number;
+  dictamen: string;
+  observaciones?: string;
+}
+
+export interface FichaTecnicaLoteDto {
+  id: string;
+  codigo: string;
+  productoId: string;
+  nombreProducto: string;
+  categoria: string;
+  genero?: string;
+  epiteto?: string;
+  procedencia?: string;
+  cantidadInicial: number;
+  cantidadActual: number;
+  unidad: string;
+  fechaIngreso: string;
+  ubicacion?: string;
+  observaciones?: string;
+  estado: string;
+  historialAnalisis: AnalisisResumenDto[];
+  ultimoDictamen?: string;
+}
+
 export const ApiLoteGateway = {
   async listarLotes(productoId?: string, estado?: string): Promise<LoteItem[]> {
     const params = new URLSearchParams();
@@ -23,4 +54,9 @@ export const ApiLoteGateway = {
       body: JSON.stringify(payload),
     });
   },
+
+  async obtenerFichaTecnica(id: string): Promise<FichaTecnicaLoteDto> {
+    return httpClient<FichaTecnicaLoteDto>(`/lotes/${id}`);
+  },
 };
+

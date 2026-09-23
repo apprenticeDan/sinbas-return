@@ -192,6 +192,88 @@ module Cliente =
                  Direccion = dirLimpia
                  Estado = EstadoCliente.Activo }
 
+    /// Actualizar los datos de un cliente Persona Natural (RF08)
+    let actualizarNatural
+        (personaActualizada: Persona)
+        (telefonoRaw: string option)
+        (emailRaw: string option)
+        (direccionRaw: string option)
+        (estado: EstadoCliente)
+        (c: Cliente)
+        : Result<Cliente, DomainError> =
+
+        let telValidado =
+            match telefonoRaw with
+            | Some t when not (String.IsNullOrWhiteSpace t) ->
+                Validacion.validarTelefono "Teléfono del cliente" t |> Result.map Some
+            | _ -> Ok None
+
+        match telValidado with
+        | Error err -> Error err
+        | Ok tLimpio ->
+            let emailLimpio =
+                emailRaw
+                |> Option.bind (fun e ->
+                    let trimmed = e.Trim().ToLowerInvariant()
+                    if String.IsNullOrWhiteSpace trimmed then None else Some trimmed)
+
+            let dirLimpia =
+                direccionRaw
+                |> Option.bind (fun d ->
+                    let trimmed = d.Trim()
+                    if String.IsNullOrWhiteSpace trimmed then None else Some trimmed)
+
+            Ok { c with
+                    Tipo = TipoCliente.Natural personaActualizada
+                    Telefono = tLimpio
+                    Email = emailLimpio
+                    Direccion = dirLimpia
+                    Estado = estado }
+
+    /// Actualizar los datos de un cliente Persona Jurídica (RF08)
+    let actualizarJuridica
+        (razonSocial: RazonSocial)
+        (nit: NIT)
+        (representante: Persona option)
+        (telefonoRaw: string option)
+        (emailRaw: string option)
+        (direccionRaw: string option)
+        (estado: EstadoCliente)
+        (c: Cliente)
+        : Result<Cliente, DomainError> =
+
+        let telValidado =
+            match telefonoRaw with
+            | Some t when not (String.IsNullOrWhiteSpace t) ->
+                Validacion.validarTelefono "Teléfono de la empresa" t |> Result.map Some
+            | _ -> Ok None
+
+        match telValidado with
+        | Error err -> Error err
+        | Ok tLimpio ->
+            let emailLimpio =
+                emailRaw
+                |> Option.bind (fun e ->
+                    let trimmed = e.Trim().ToLowerInvariant()
+                    if String.IsNullOrWhiteSpace trimmed then None else Some trimmed)
+
+            let dirLimpia =
+                direccionRaw
+                |> Option.bind (fun d ->
+                    let trimmed = d.Trim()
+                    if String.IsNullOrWhiteSpace trimmed then None else Some trimmed)
+
+            Ok { c with
+                    Tipo = TipoCliente.Juridica (razonSocial, nit, representante)
+                    Telefono = tLimpio
+                    Email = emailLimpio
+                    Direccion = dirLimpia
+                    Estado = estado }
+
+    /// Cambiar el estado del cliente (Activo / Inactivo)
+    let cambiarEstado (nuevoEstado: EstadoCliente) (c: Cliente) : Cliente =
+        { c with Estado = nuevoEstado }
+
     /// Reconstruir desde BD (sin re-validar)
     let reconstruir
         (id: Guid)
@@ -207,3 +289,4 @@ module Cliente =
           Email = email
           Direccion = direccion
           Estado = estado }
+

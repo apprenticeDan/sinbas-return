@@ -10,9 +10,21 @@ export function ClientesView() {
   const [searchTerm, setSearchTerm] = createSignal<string>('');
   const [tipoFilter, setTipoFilter] = createSignal<string>('');
   const [createModalOpen, setCreateModalOpen] = createSignal<boolean>(false);
+  const [selectedClienteParaEditar, setSelectedClienteParaEditar] = createSignal<ClienteDto | null>(null);
   const [notification, setNotification] = createSignal<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const canManageClientes = createMemo(() => authStore.hasAnyRole(['Administrador', 'Comercial', 'Gerencia']));
+
+  const handleOpenCreate = () => {
+    setSelectedClienteParaEditar(null);
+    setCreateModalOpen(true);
+  };
+
+  const handleOpenEdit = (cliente: ClienteDto) => {
+    setSelectedClienteParaEditar(cliente);
+    setCreateModalOpen(true);
+  };
+
 
   const loadClientes = async (term?: string) => {
     setLoading(true);
@@ -121,7 +133,24 @@ export function ClientesView() {
         </span>
       ),
     },
+    {
+      header: 'Acciones',
+      width: '100px',
+      cell: (c) => (
+        <Show when={canManageClientes()}>
+          <button
+            onClick={() => handleOpenEdit(c)}
+            class="btn btn-ghost"
+            style={{ padding: '4px 10px', 'font-size': '12px' }}
+            title="Modificar datos del cliente (RF08)"
+          >
+            ✏️ Editar
+          </button>
+        </Show>
+      ),
+    },
   ];
+
 
   return (
     <section class="panel">
@@ -179,7 +208,7 @@ export function ClientesView() {
 
           <Show when={canManageClientes()}>
             <button
-              onClick={() => setCreateModalOpen(true)}
+              onClick={handleOpenCreate}
               class="btn btn-primary"
               style={{ height: '38px' }}
             >
@@ -197,15 +226,25 @@ export function ClientesView() {
         emptyMessage="No se encontraron clientes registrados con el criterio de búsqueda."
       />
 
-      {/* Create Modal */}
+      {/* Create / Edit Modal */}
       <ClienteFormModal
         open={createModalOpen()}
-        onClose={() => setCreateModalOpen(false)}
+        cliente={selectedClienteParaEditar()}
+        onClose={() => {
+          setCreateModalOpen(false);
+          setSelectedClienteParaEditar(null);
+        }}
         onSuccess={() => {
-          setNotification({ type: 'success', message: 'Cliente registrado exitosamente.' });
+          setNotification({
+            type: 'success',
+            message: selectedClienteParaEditar()
+              ? 'Cliente modificado exitosamente.'
+              : 'Cliente registrado exitosamente.',
+          });
           loadClientes(searchTerm());
         }}
       />
+
     </section>
   );
 }

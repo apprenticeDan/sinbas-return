@@ -139,3 +139,28 @@ module ClientEndpoints =
             .WithName("CrearCliente")
             .WithTags("Clientes")
         |> ignore
+
+        // 6. PUT /api/clientes/{id} — Modificar datos de cliente existente (RF08 / CU-17 / RN18)
+        app.MapPut("/api/clientes/{id}", Func<string, ActualizarClienteRequest, Threading.Tasks.Task<IResult>>(fun id req ->
+            async {
+                let! res =
+                    ClientService.actualizarCliente
+                        ClientRepository.obtenerPorId
+                        ClientRepository.actualizar
+                        id
+                        req
+
+                match res with
+                | Ok dto -> return Results.Ok(dto)
+                | Error msg ->
+                    if msg.Contains("no se encontró", StringComparison.OrdinalIgnoreCase) then
+                        return Results.NotFound({| error = msg |})
+                    else
+                        return Results.BadRequest({| error = msg |})
+            } |> Async.StartAsTask
+        ))
+            .RequireAuthorization()
+            .WithName("ActualizarCliente")
+            .WithTags("Clientes")
+        |> ignore
+

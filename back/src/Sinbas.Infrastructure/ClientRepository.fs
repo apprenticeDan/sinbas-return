@@ -177,6 +177,26 @@ module ClientRepository =
             return rows |> Seq.tryHead |> Option.map clienteFromRow
         }
 
+    let actualizar (cliente: Cliente) : Async<Result<unit, string>> =
+        async {
+            use conn = DbConnection.crear ()
+            let (ClienteId cid) = cliente.Id
+            let row = rowFromCliente cliente
+            try
+                do! update {
+                        for c in ClientTables.clienteTable do
+                        set row
+                        where (c.id = cid)
+                    }
+                    |> conn.UpdateAsync
+                    |> Async.AwaitTask
+                    |> Async.Ignore
+                return Ok ()
+            with ex ->
+                return Error ex.Message
+        }
+
+
     let listarTodos () : Async<Cliente list> =
         async {
             use conn = DbConnection.crear ()

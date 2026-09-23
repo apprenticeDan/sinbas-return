@@ -221,3 +221,133 @@ let ``// RF08 | CU-17 | RN18 - ClientService buscarClientes filtra delegando al 
         let! vacios = ClientService.buscarClientes fakeBuscar "inexistente"
         Assert.Empty(vacios)
     } |> Async.RunSynchronously
+
+// ─────────────────────────────────────────────────────────────
+// Tests de Actualización y Agregación de Persona (RF08)
+// ─────────────────────────────────────────────────────────────
+
+[<Fact>]
+let ``// T1 & T2: Actualizar Cliente Persona Natural preserva identidades y actualiza contacto y nombres`` () =
+    let ci = match CI.crear "4892011" None (Some CB) with Ok c -> c | Error e -> failwithf "%A" e
+    let p = match Persona.crear "Carlos" (Some "Pardo") None ci (Some "71234567") None with Ok pers -> pers | Error e -> failwithf "%A" e
+    let clienteOriginal = match Cliente.crearNatural p (Some "71234567") None (Some "Av. Heroínas 456") with Ok c -> c | Error e -> failwithf "%A" e
+
+    // Nueva información de persona
+    let nuevaPersona = match Persona.crear "Carlos Alberto" (Some "Pardo") (Some "Montaño") ci (Some "79876543") (Some "carlos@gmail.com") with Ok pers -> pers | Error e -> failwithf "%A" e
+    let personaConMismoId = { nuevaPersona with Id = p.Id }
+
+    let resActualizado =
+        Cliente.actualizarNatural
+            personaConMismoId
+            (Some "79876543")
+            (Some "carlos@gmail.com")
+            (Some "Av. América 123")
+            EstadoCliente.Activo
+            clienteOriginal
+
+    match resActualizado with
+    | Ok cAct ->
+        Assert.Equal(clienteOriginal.Id, cAct.Id)
+        match cAct.Tipo with
+        | TipoCliente.Natural pAct ->
+            Assert.Equal(p.Id, pAct.Id)
+            Assert.Equal("Carlos Alberto", pAct.Nombres)
+            Assert.Equal(Some "Montaño", pAct.ApellidoMaterno)
+            Assert.Equal(Some "79876543", cAct.Telefono)
+            Assert.Equal(Some "carlos@gmail.com", cAct.Email)
+            Assert.Equal(Some "Av. América 123", cAct.Direccion)
+        | _ -> failwith "Se esperaba cliente Natural"
+    | Error err -> failwithf "Fallo actualización: %A" err
+
+[<Fact>]
+let ``// T3: Actualizar Cliente Persona Natural rechaza telefono invalido`` () =
+    let ci = match CI.crear "4892011" None (Some CB) with Ok c -> c | Error e -> failwithf "%A" e
+    let p = match Persona.crear "Carlos" (Some "Pardo") None ci None None with Ok pers -> pers | Error e -> failwithf "%A" e
+    let clienteOriginal = match Cliente.crearNatural p None None None with Ok c -> c | Error e -> failwithf "%A" e
+
+    let res =
+        Cliente.actualizarNatural
+            p
+            (Some "123") // teléfono muy corto
+            None
+            None
+            EstadoCliente.Activo
+            clienteOriginal
+
+    match res with
+    | Error (SimbolosNoPermitidos _) | Error (NombreInvalido _) -> ()
+    | res -> failwithf "Se esperaba error de validación de teléfono, se obtuvo: %A" res
+
+[<Fact>]
+let ``// T4: Actualizar Cliente Persona Juridica actualiza razon social, NIT y representante legal`` () =
+    let rs = match RazonSocial.crear "Agroforestal SRL" with Ok r -> r | Error e -> failwithf "%A" e
+    let nit = match NIT.crear "1028495029" with Ok n -> n | Error e -> failwithf "%A" e
+    let clienteOriginal = match Cliente.crearJuridica rs nit None None None None with Ok c -> c | Error e -> failwithf "%A" e
+
+    let nuevaRs = match RazonSocial.crear "Agroforestal & Viveros del Valle S.R.L." with Ok r -> r | Error e -> failwithf "%A" e
+    let nuevoNit = match NIT.crear "2039485761" with Ok n -> n | Error e -> failwithf "%A" e
+    let ciRep = match CI.crear "6543210" None (Some SC) with Ok c -> c | Error e -> failwithf "%A" e
+    let rep = match Persona.crear "Elena" (Some "Suárez") None ciRep (Some "76543210") None with Ok p -> p | Error e -> failwithf "%A" e
+
+    let res =
+        Cliente.actualizarJuridica
+            nuevaRs
+            nuevoNit
+            (Some rep)
+            (Some "33344455")
+            (Some "contacto@agrovalle.bo")
+            (Some "Km 9 Carretera al Norte")
+            EstadoCliente.Activo
+            clienteOriginal
+
+    match res with
+    | Ok cAct ->
+        Assert.Equal(clienteOriginal.Id, cAct.Id)
+        match cAct.Tipo with
+        | TipoCliente.Juridica (r, n, repOpt) ->
+            Assert.Equal("Agroforestal & Viveros del Valle S.R.L.", RazonSocial.valor r)
+            Assert.Equal("2039485761", NIT.valor n)
+            Assert.True(repOpt.IsSome)
+            Assert.Equal("Elena", repOpt.Value.Nombres)
+        | _ -> failwith "Se esperaba cliente Jurídica"
+    | Error err -> failwithf "Fallo actualización jurídica: %A" err
+
+[<Fact>]
+let ``// T6: cambiarEstado cambia entre Activo e Inactivo`` () =
+    let ci = match CI.crear "4892011" None (Some CB) with Ok c -> c | Error e -> failwithf "%A" e
+    let p = match Persona.crear "Carlos" (Some "Pardo") None ci None None with Ok pers -> pers | Error e -> failwithf "%A" e
+    let cliente = match Cliente.crearNatural p None None None with Ok c -> c | Error e -> failwithf "%A" e
+
+    Assert.Equal(EstadoCliente.Activo, cliente.Estado)
+    let inactivo = Cliente.cambiarEstado EstadoCliente.Inactivo cliente
+    Assert.Equal(EstadoCliente.Inactivo, inactivo.Estado)
+    let reactivado = Cliente.cambiarEstado EstadoCliente.Activo inactivo
+    Assert.Equal(EstadoCliente.Activo, reactivado.Estado)
+
+[<Fact>]
+let ``// T7: ClientService.actualizarCliente retorna error si ID no existe en repositorio`` () =
+    async {
+        let fakeObtenerPorId (_: ClienteId) = async { return None }
+        let fakeActualizar (_: Cliente) = async { return Ok () }
+        let req: ActualizarClienteRequest =
+            { Tipo = None
+              Nombres = Some "Carlos"
+              ApellidoPaterno = None
+              ApellidoMaterno = None
+              CiNumero = None
+              CiComplemento = None
+              CiExtension = None
+              RazonSocial = None
+              Nit = None
+              Representante = None
+              Telefono = None
+              Email = None
+              Direccion = None
+              Estado = None }
+
+        let! res = ClientService.actualizarCliente fakeObtenerPorId fakeActualizar (Guid.NewGuid().ToString()) req
+        match res with
+        | Error msg -> Assert.Contains("no se encontró", msg, StringComparison.OrdinalIgnoreCase)
+        | Ok _ -> failwith "Debería retornar error para ID inexistente"
+    } |> Async.RunSynchronously
+

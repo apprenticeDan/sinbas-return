@@ -59,6 +59,23 @@ export interface CrearClienteJuridicaPayload {
   direccion?: string;
 }
 
+export interface ActualizarClientePayload {
+  tipo?: 'Natural' | 'Juridica';
+  nombres?: string;
+  apellidoPaterno?: string;
+  apellidoMaterno?: string;
+  ciNumero?: string;
+  ciComplemento?: string;
+  ciExtension?: string;
+  razonSocial?: string;
+  nit?: string;
+  representante?: RepresentantePayload;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+  estado?: string;
+}
+
 export const ApiClientGateway = {
   async listarClientes(termino?: string): Promise<ClienteDto[]> {
     const q = termino && termino.trim() ? `?q=${encodeURIComponent(termino.trim())}` : '';
@@ -82,4 +99,12 @@ export const ApiClientGateway = {
       body: JSON.stringify(payload),
     });
   },
+
+  async actualizarCliente(id: string, payload: ActualizarClientePayload): Promise<ClienteDto> {
+    return httpClient<ClienteDto>(`/clientes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
 };
+

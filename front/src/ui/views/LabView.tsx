@@ -3,6 +3,7 @@ import { LoteItem } from '../../domain/models/Lote';
 import { ApiLoteGateway } from '../../infrastructure/api/ApiLoteGateway';
 import { ApiLabGateway } from '../../infrastructure/api/ApiLabGateway';
 import { LabAnalysisModal } from '../components/LabAnalysisModal';
+import { LoteFichaTecnicaModal } from '../components/LoteFichaTecnicaModal';
 import { DataTable, Column } from '../components/DataTable';
 import { authStore } from '../store/authStore';
 
@@ -12,8 +13,11 @@ export function LabView() {
   const [searchTerm, setSearchTerm] = createSignal<string>('');
   const [selectedLote, setSelectedLote] = createSignal<LoteItem | null>(null);
   const [analysisModalOpen, setAnalysisModalOpen] = createSignal<boolean>(false);
+  const [fichaModalOpen, setFichaModalOpen] = createSignal<boolean>(false);
+  const [selectedFichaLoteId, setSelectedFichaLoteId] = createSignal<string | null>(null);
   const [downloadingId, setDownloadingId] = createSignal<string | null>(null);
   const [notification, setNotification] = createSignal<{ type: 'success' | 'error'; message: string } | null>(null);
+
 
   const canEditLab = createMemo(() => authStore.hasAnyRole(['Administrador', 'Laboratorio']));
 
@@ -127,6 +131,17 @@ export function LabView() {
             </button>
           </Show>
           <button
+            onClick={() => {
+              setSelectedFichaLoteId(l.id);
+              setFichaModalOpen(true);
+            }}
+            class="btn btn-ghost"
+            style={{ padding: '5px 10px', 'font-size': '12px' }}
+            title="Consultar ficha técnica consolidada e historial de análisis (RF14 / CU-14)"
+          >
+            📄 Ficha
+          </button>
+          <button
             onClick={() => handleDownloadPdf(l)}
             class="btn btn-ghost"
             style={{ padding: '5px 10px', 'font-size': '12px', color: 'var(--green-deep)' }}
@@ -139,6 +154,7 @@ export function LabView() {
       ),
     },
   ];
+
 
   return (
     <section class="panel">
@@ -211,6 +227,17 @@ export function LabView() {
           loadData();
         }}
       />
+
+      {/* Ficha Técnica Modal (RF14 / CU-14) */}
+      <LoteFichaTecnicaModal
+        open={fichaModalOpen()}
+        loteId={selectedFichaLoteId()}
+        onClose={() => {
+          setFichaModalOpen(false);
+          setSelectedFichaLoteId(null);
+        }}
+      />
     </section>
   );
 }
+

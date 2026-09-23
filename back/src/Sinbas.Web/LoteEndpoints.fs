@@ -80,3 +80,28 @@ module LoteEndpoints =
             .WithName("BloquearLote")
             .WithTags("Lotes")
         |> ignore
+
+        // 4. GET /api/lotes/{id} - Consultar ficha técnica completa del lote (RF14 / CU-14 / F-LAB-06)
+        app.MapGet("/api/lotes/{id}", Func<string, Threading.Tasks.Task<IResult>>(fun id ->
+            async {
+                let! res =
+                    LoteService.consultarFichaTecnicaLote
+                        LoteRepository.obtenerPorId
+                        CatalogRepository.buscarPorId
+                        LabRepository.listarPorLoteId
+                        id
+
+                match res with
+                | Ok dto -> return Results.Ok(dto)
+                | Error msg ->
+                    if msg.Contains("no se encontró", StringComparison.OrdinalIgnoreCase) then
+                        return Results.NotFound({| error = msg |})
+                    else
+                        return Results.BadRequest({| error = msg |})
+            } |> Async.StartAsTask
+        ))
+            .RequireAuthorization()
+            .WithName("ConsultarFichaTecnicaLote")
+            .WithTags("Lotes")
+        |> ignore
+

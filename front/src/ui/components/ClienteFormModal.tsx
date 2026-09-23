@@ -1,13 +1,21 @@
-import { createSignal, Show } from 'solid-js';
-import { ApiClientGateway, CrearClienteNaturalPayload, CrearClienteJuridicaPayload } from '../../infrastructure/api/ApiClientGateway';
+import { createSignal, createEffect, Show } from 'solid-js';
+import {
+  ApiClientGateway,
+  ClienteDto,
+  CrearClienteNaturalPayload,
+  CrearClienteJuridicaPayload,
+  ActualizarClientePayload,
+} from '../../infrastructure/api/ApiClientGateway';
 
 interface ClienteFormModalProps {
   open: boolean;
+  cliente?: ClienteDto | null;
   onClose: () => void;
   onSuccess: () => void;
 }
 
 export function ClienteFormModal(props: ClienteFormModalProps) {
+  const isEditing = () => !!props.cliente;
   const [tipo, setTipo] = createSignal<'Natural' | 'Juridica'>('Natural');
 
   // Campos Natural
@@ -28,13 +36,55 @@ export function ClienteFormModal(props: ClienteFormModalProps) {
   const [repCi, setRepCi] = createSignal('');
   const [repExt, setRepExt] = createSignal('CB');
 
-  // Campos Comunes
+  // Campos Comunes y Estado
   const [telefono, setTelefono] = createSignal('');
   const [email, setEmail] = createSignal('');
   const [direccion, setDireccion] = createSignal('');
+  const [estado, setEstado] = createSignal('Activo');
 
   const [error, setError] = createSignal<string | null>(null);
   const [submitting, setSubmitting] = createSignal(false);
+
+  createEffect(() => {
+    if (props.open && props.cliente) {
+      const c = props.cliente;
+      setTipo(c.tipo);
+      setTelefono(c.telefono || '');
+      setEmail(c.email || '');
+      setDireccion(c.direccion || '');
+      setEstado(c.estado || 'Activo');
+
+      if (c.tipo === 'Natural' && c.persona) {
+        setNombres(c.persona.nombres || '');
+        setApellidoPaterno(c.persona.apellidoPaterno || '');
+        setApellidoMaterno(c.persona.apellidoMaterno || '');
+        setCiNumero(c.persona.ciNumero || '');
+        setCiComplemento(c.persona.ciComplemento || '');
+        setCiExtension(c.persona.ciExtension || 'CB');
+      } else if (c.tipo === 'Juridica') {
+        setRazonSocial(c.razonSocial || '');
+        setNit(c.nit || '');
+        if (c.representante) {
+          setHasRep(true);
+          setRepNombres(c.representante.nombres || '');
+          setRepPaterno(c.representante.apellidoPaterno || '');
+          setRepMaterno(c.representante.apellidoMaterno || '');
+          setRepCi(c.representante.ciNumero || '');
+          setRepExt(c.representante.ciExtension || 'CB');
+        } else {
+          setHasRep(false);
+          setRepNombres('');
+          setRepPaterno('');
+          setRepMaterno('');
+          setRepCi('');
+          setRepExt('CB');
+        }
+      }
+      setError(null);
+    } else if (props.open && !props.cliente) {
+      resetForm();
+    }
+  });
 
   const resetForm = () => {
     setNombres('');
@@ -54,6 +104,7 @@ export function ClienteFormModal(props: ClienteFormModalProps) {
     setTelefono('');
     setEmail('');
     setDireccion('');
+    setEstado('Activo');
     setError(null);
   };
 
@@ -63,31 +114,27 @@ export function ClienteFormModal(props: ClienteFormModalProps) {
     setError(null);
 
     try {
-      if (tipo() === 'Natural') {
-        if (!apellidoPaterno().trim() && !apellidoMaterno().trim()) {
-          setError('Debe ingresar al menos un apellido (paterno o materno)');
-          setSubmitting(false);
-          return;
-        }
-
-        const payload: CrearClienteNaturalPayload = {
-          nombres: nombres().trim(),
-          apellidoPaterno: apellidoPaterno().trim() || undefined,
-          apellidoMaterno: apellidoMaterno().trim() || undefined,
-          ciNumero: ciNumero().trim(),
-          ciComplemento: ciComplemento().trim() || undefined,
-          ciExtension: ciExtension() || undefined,
+      if (isEditing() && props.cliente) {
+        // Modo Edición / Actualización (RF08)
+        const payload: ActualizarClientePayload = {
+          tipo: tipo(),
           telefono: telefono().trim() || undefined,
           email: email().trim() || undefined,
           direccion: direccion().trim() || undefined,
+          estado: estado(),
         };
 
-        await ApiClientGateway.crearClienteNatural(payload);
-      } else {
-        const payload: CrearClienteJuridicaPayload = {
-          razonSocial: razonSocial().trim(),
-          nit: nit().trim(),
-          representante: hasRep()
+        if (tipo() === 'Natural') {
+          payload.nombres = nombres().trim();
+          payload.apellidoPaterno = apellidoPaterno().trim() || undefined;
+          payload.apellidoMaterno = apellidoMaterno().trim() || undefined;
+          payload.ciNumero = ciNumero().trim();
+          payload.ciComplemento = ciComplemento().trim() || undefined;
+          payload.ciExtension = ciExtension() || undefined;
+        } else {
+          payload.razonSocial = razonSocial().trim();
+          payload.nit = nit().trim();
+          payload.representante = hasRep()
             ? {
                 nombres: repNombres().trim(),
                 apellidoPaterno: repPaterno().trim() || undefined,
@@ -95,24 +142,64 @@ export function ClienteFormModal(props: ClienteFormModalProps) {
                 ciNumero: repCi().trim(),
                 ciExtension: repExt() || undefined,
               }
-            : undefined,
-          telefono: telefono().trim() || undefined,
-          email: email().trim() || undefined,
-          direccion: direccion().trim() || undefined,
-        };
+            : undefined;
+        }
 
-        await ApiClientGateway.crearClienteJuridica(payload);
+        await ApiClientGateway.actualizarCliente(props.cliente.id, payload);
+      } else {
+        // Modo Creación
+        if (tipo() === 'Natural') {
+          if (!apellidoPaterno().trim() && !apellidoMaterno().trim()) {
+            setError('Debe ingresar al menos un apellido (paterno o materno)');
+            setSubmitting(false);
+            return;
+          }
+
+          const payload: CrearClienteNaturalPayload = {
+            nombres: nombres().trim(),
+            apellidoPaterno: apellidoPaterno().trim() || undefined,
+            apellidoMaterno: apellidoMaterno().trim() || undefined,
+            ciNumero: ciNumero().trim(),
+            ciComplemento: ciComplemento().trim() || undefined,
+            ciExtension: ciExtension() || undefined,
+            telefono: telefono().trim() || undefined,
+            email: email().trim() || undefined,
+            direccion: direccion().trim() || undefined,
+          };
+
+          await ApiClientGateway.crearClienteNatural(payload);
+        } else {
+          const payload: CrearClienteJuridicaPayload = {
+            razonSocial: razonSocial().trim(),
+            nit: nit().trim(),
+            representante: hasRep()
+              ? {
+                  nombres: repNombres().trim(),
+                  apellidoPaterno: repPaterno().trim() || undefined,
+                  apellidoMaterno: repMaterno().trim() || undefined,
+                  ciNumero: repCi().trim(),
+                  ciExtension: repExt() || undefined,
+                }
+              : undefined,
+            telefono: telefono().trim() || undefined,
+            email: email().trim() || undefined,
+            direccion: direccion().trim() || undefined,
+          };
+
+          await ApiClientGateway.crearClienteJuridica(payload);
+        }
       }
 
       resetForm();
       props.onSuccess();
       props.onClose();
     } catch (err: any) {
-      setError(err.message || 'Error al registrar el cliente');
+      setError(err.message || 'Error al guardar el cliente');
     } finally {
       setSubmitting(false);
     }
   };
+
 
   return (
     <Show when={props.open}>
@@ -148,12 +235,15 @@ export function ClienteFormModal(props: ClienteFormModalProps) {
           <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '16px' }}>
             <div>
               <h2 style={{ 'font-family': 'var(--font-display)', 'font-size': '20px', margin: 0, color: 'var(--ink)' }}>
-                Registrar Nuevo Cliente (F6)
+                {isEditing() ? 'Modificar Cliente (RF08)' : 'Registrar Nuevo Cliente (F6)'}
               </h2>
               <p style={{ 'font-size': '12.5px', color: 'var(--ink-soft)', margin: '4px 0 0' }}>
-                Gestión de clientes según RN18 (Persona Natural o Jurídica).
+                {isEditing()
+                  ? 'Actualización de datos generales, contacto y estado del cliente.'
+                  : 'Gestión de clientes según RN18 (Persona Natural o Jurídica).'}
               </p>
             </div>
+
             <button
               onClick={() => {
                 resetForm();
@@ -368,6 +458,16 @@ export function ClienteFormModal(props: ClienteFormModalProps) {
               />
             </div>
 
+            <Show when={isEditing()}>
+              <div class="field">
+                <label>Estado del Cliente</label>
+                <select value={estado()} onChange={(e) => setEstado(e.currentTarget.value)}>
+                  <option value="Activo">● Activo</option>
+                  <option value="Inactivo">○ Inactivo</option>
+                </select>
+              </div>
+            </Show>
+
             <div style={{ display: 'flex', 'justify-content': 'flex-end', gap: '10px', 'margin-top': '8px' }}>
               <button
                 type="button"
@@ -385,9 +485,10 @@ export function ClienteFormModal(props: ClienteFormModalProps) {
                 class="btn btn-primary"
                 disabled={submitting()}
               >
-                {submitting() ? 'Guardando...' : 'Registrar Cliente'}
+                {submitting() ? 'Guardando...' : isEditing() ? 'Guardar Cambios' : 'Registrar Cliente'}
               </button>
             </div>
+
           </form>
         </div>
       </div>

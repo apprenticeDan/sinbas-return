@@ -69,6 +69,24 @@ type CrearClienteJuridicaRequest =
       Email: string option
       Direccion: string option }
 
+[<CLIMutable>]
+type ActualizarClienteRequest =
+    { Tipo: string option
+      Nombres: string option
+      ApellidoPaterno: string option
+      ApellidoMaterno: string option
+      CiNumero: string option
+      CiComplemento: string option
+      CiExtension: string option
+      RazonSocial: string option
+      Nit: string option
+      Representante: RepresentanteRequest option
+      Telefono: string option
+      Email: string option
+      Direccion: string option
+      Estado: string option }
+
+
 module ClientService =
 
     let private errorToString (err: DomainError) : string =
@@ -235,3 +253,97 @@ module ClientService =
             let! clientes = buscarEnRepo (if isNull termino then "" else termino.Trim())
             return clientes |> List.map toDto
         }
+
+    /// Actualizar los datos de un cliente existente (RF08)
+    let actualizarCliente
+        (obtenerPorId: ClienteId -> Async<Cliente option>)
+        (actualizarRepo: Cliente -> Async<Result<unit, string>>)
+        (idRaw: string)
+        (req: ActualizarClienteRequest)
+        : Async<Result<ClienteDto, string>> =
+        async {
+            match Guid.TryParse idRaw with
+            | false, _ -> return Error (sprintf "El ID de cliente '%s' no tiene un formato válido" idRaw)
+            | true, guid ->
+                let clienteId = ClienteId guid
+                let! cOpt = obtenerPorId clienteId
+                match cOpt with
+                | None -> return Error (sprintf "No se encontró el cliente con ID '%s'" idRaw)
+                | Some cActual ->
+                    let nuevoEstado =
+                        match req.Estado with
+                        | Some s when not (String.IsNullOrWhiteSpace s) ->
+                            match EstadoCliente.desdeTexto s with
+                            | Ok est -> est
+                            | Error _ -> cActual.Estado
+                        | _ -> cActual.Estado
+
+                    match cActual.Tipo with
+                    | TipoCliente.Natural personaExistente ->
+                        let nombres = req.Nombres |> Option.defaultValue personaExistente.Nombres
+                        let pat = req.ApellidoPaterno |> Option.orElse personaExistente.ApellidoPaterno
+                        let mat = req.ApellidoMaterno |> Option.orElse personaExistente.ApellidoMaterno
+                        let ciNum = req.CiNumero |> Option.defaultValue personaExistente.CI.Numero
+                        let ciComp = req.CiComplemento |> Option.orElse personaExistente.CI.Complemento
+                        let ciExt =
+                            match req.CiExtension with
+                            | Some extStr -> Some extStr
+                            | None -> personaExistente.CI.Extension |> Option.map DepartamentoExpedicion.aTexto
+                        let telPers = req.Telefono |> Option.orElse personaExistente.Telefono
+                        let emailPers = req.Email |> Option.orElse personaExistente.Email
+
+                        match crearPersonaDesdeDatos nombres pat mat ciNum ciComp ciExt telPers emailPers with
+                        | Error msg -> return Error msg
+                        | Ok pNueva ->
+                            // Mantener el PersonaId original (agregación funcional pura, sin herencia)
+                            let personaActualizada = { pNueva with Id = personaExistente.Id }
+                            let tel = req.Telefono |> Option.orElse cActual.Telefono
+                            let email = req.Email |> Option.orElse cActual.Email
+                            let dir = req.Direccion |> Option.orElse cActual.Direccion
+                            match Cliente.actualizarNatural personaActualizada tel email dir nuevoEstado cActual with
+                            | Error err -> return Error (errorToString err)
+                            | Ok cActualizado ->
+                                let! updateRes = actualizarRepo cActualizado
+                                match updateRes with
+                                | Ok () -> return Ok (toDto cActualizado)
+                                | Error msg -> return Error msg
+
+                    | TipoCliente.Juridica (rsExistente, nitExistente, repExistente) ->
+                        let rsRes =
+                            match req.RazonSocial with
+                            | Some rsStr when not (String.IsNullOrWhiteSpace rsStr) -> RazonSocial.crear rsStr
+                            | _ -> Ok rsExistente
+                        let nitRes =
+                            match req.Nit with
+                            | Some nitStr when not (String.IsNullOrWhiteSpace nitStr) -> NIT.crear nitStr
+                            | _ -> Ok nitExistente
+
+                        match rsRes, nitRes with
+                        | Error err, _ -> return Error (errorToString err)
+                        | _, Error err -> return Error (errorToString err)
+                        | Ok rs, Ok nit ->
+                            let repRes =
+                                match req.Representante with
+                                | Some r ->
+                                    match crearPersonaDesdeDatos r.Nombres r.ApellidoPaterno r.ApellidoMaterno r.CiNumero r.CiComplemento r.CiExtension r.Telefono r.Email with
+                                    | Ok pNueva ->
+                                        let repId = repExistente |> Option.map (fun rOld -> rOld.Id) |> Option.defaultValue (PersonaId (Identidad.nuevo ()))
+                                        Ok (Some { pNueva with Id = repId })
+                                    | Error msg -> Error msg
+                                | None -> Ok repExistente
+
+                            match repRes with
+                            | Error msg -> return Error msg
+                            | Ok repOpt ->
+                                let tel = req.Telefono |> Option.orElse cActual.Telefono
+                                let email = req.Email |> Option.orElse cActual.Email
+                                let dir = req.Direccion |> Option.orElse cActual.Direccion
+                                match Cliente.actualizarJuridica rs nit repOpt tel email dir nuevoEstado cActual with
+                                | Error err -> return Error (errorToString err)
+                                | Ok cActualizado ->
+                                    let! updateRes = actualizarRepo cActualizado
+                                    match updateRes with
+                                    | Ok () -> return Ok (toDto cActualizado)
+                                    | Error msg -> return Error msg
+        }
+

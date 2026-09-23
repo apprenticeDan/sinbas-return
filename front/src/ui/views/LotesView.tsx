@@ -1,17 +1,22 @@
-import { onMount, Show, For, createMemo } from 'solid-js';
+import { onMount, Show, For, createMemo, createSignal } from 'solid-js';
 import { loteStore } from '../store/loteStore';
 import { authStore } from '../store/authStore';
 import { LoteItem } from '../../domain/models/Lote';
 import { DataTable, Column } from '../components/DataTable';
 import { LoteFormModal } from '../components/LoteFormModal';
 import { LoteBlockModal } from '../components/LoteBlockModal';
+import { LoteFichaTecnicaModal } from '../components/LoteFichaTecnicaModal';
 import { formatDisplayId } from '../utils/formatters';
 import { ApiLabGateway } from '../../infrastructure/api/ApiLabGateway';
 
 export function LotesView() {
+  const [fichaModalOpen, setFichaModalOpen] = createSignal<boolean>(false);
+  const [selectedFichaLoteId, setSelectedFichaLoteId] = createSignal<string | null>(null);
+
   onMount(() => {
     loteStore.loadLotes();
   });
+
 
   const canManageLotes = createMemo(() => authStore.hasAnyRole(['Administrador', 'Almacen', 'Gerencia']));
   const canBlockLotes = createMemo(() => authStore.hasAnyRole(['Administrador', 'Gerencia', 'Laboratorio', 'Almacen']));
@@ -125,6 +130,17 @@ export function LotesView() {
       cell: (l) => (
         <div style={{ display: 'flex', 'justify-content': 'flex-end', gap: '6px' }}>
           <button
+            onClick={() => {
+              setSelectedFichaLoteId(l.id);
+              setFichaModalOpen(true);
+            }}
+            class="btn btn-ghost"
+            style={{ padding: '4px 8px', 'font-size': '11.5px' }}
+            title="Consultar ficha técnica consolidada e historial (RF14 / CU-14)"
+          >
+            📄 Ficha
+          </button>
+          <button
             onClick={() => ApiLabGateway.descargarEtiquetaPdf(l.id, l.codigo).catch((e: any) => alert(e.message || 'Error al descargar etiqueta'))}
             class="btn btn-ghost"
             style={{ padding: '4px 8px', 'font-size': '11.5px', color: 'var(--green-deep)' }}
@@ -132,6 +148,7 @@ export function LotesView() {
           >
             🏷️ Etiqueta
           </button>
+
           <Show when={canBlockLotes() && l.estado === 'Activo'}>
             <button
               onClick={() => {
@@ -223,6 +240,15 @@ export function LotesView() {
       {/* Modals */}
       <LoteFormModal />
       <LoteBlockModal />
+      <LoteFichaTecnicaModal
+        open={fichaModalOpen()}
+        loteId={selectedFichaLoteId()}
+        onClose={() => {
+          setFichaModalOpen(false);
+          setSelectedFichaLoteId(null);
+        }}
+      />
     </section>
   );
 }
+

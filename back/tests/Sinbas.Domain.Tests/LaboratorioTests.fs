@@ -3,6 +3,8 @@ module LaboratorioTests
 open System
 open Xunit
 open Sinbas.Domain
+open Sinbas.Application
+
 
 // ─────────────────────────────────────────────────────────────
 // Trazabilidad: RF06 | RF07 | RN01 | RN12 | CU-05 | CU-06 | F-LAB-02 | F-LAB-03 | F-LAB-05
@@ -175,3 +177,79 @@ let ``Construir datos etiqueta con analisis aprobado retorna estructura completa
         Assert.Equal(Some "Excelente calidad", etiqueta.Observaciones)
     | Error err ->
         failwithf "Fallo inesperado al construir etiqueta con analisis: %A" err
+
+// ─────────────────────────────────────────────────────────────
+// Tests de Ficha Técnica de Lote (RF14 / CU-14 / F-LAB-06)
+// ─────────────────────────────────────────────────────────────
+
+[<Fact>]
+let ``// T8 & T9: consultarFichaTecnicaLote consolida lote, producto y ultimo dictamen de analisis`` () =
+    async {
+        let lote = crearLoteBase ()
+        let (LoteId lId) = lote.Id
+
+        let nc = match NombreCientifico.crear "Swietenia" "macrophylla" None with Ok n -> n | Error e -> failwithf "%A" e
+        let prod = Producto.crearBorradorConUnidad lote.ProductoId Kilogramo PorLote (Semilla(nc, [])) None
+
+        let labId = LaboratorioId (Guid.NewGuid())
+        let germ = match PorcentajeCalidad.crear 91.0m with Ok p -> p | Error _ -> failwith ""
+        let pureza = match PorcentajeCalidad.crear 97.0m with Ok p -> p | Error _ -> failwith ""
+        let hum = match PorcentajeCalidad.crear 7.5m with Ok p -> p | Error _ -> failwith ""
+        let viab = match PorcentajeCalidad.crear 92.0m with Ok p -> p | Error _ -> failwith ""
+        let analisis =
+            match AnalisisLaboratorio.crear labId lote.Id (DateOnly(2026, 8, 22)) germ pureza hum viab 19000 300 DictamenCalidad.Aprobado (Some "Excelente lote") with
+            | Ok a -> a
+            | Error e -> failwithf "%A" e
+
+        let fakeObtenerLote (id: LoteId) = async { if id = lote.Id then return Some lote else return None }
+        let fakeObtenerProducto (id: ProductoId) = async { if id = prod.Base.Id then return Some prod else return None }
+        let fakeListarAnalisis (id: LoteId) = async { return [ analisis ] }
+
+        let! res = LoteService.consultarFichaTecnicaLote fakeObtenerLote fakeObtenerProducto fakeListarAnalisis (lId.ToString())
+        match res with
+        | Ok dto ->
+            Assert.Equal(lId.ToString(), dto.Id)
+            Assert.Equal("SWIETMAC-02608-01", dto.Codigo)
+            Assert.Equal("Swietenia macrophylla", dto.NombreProducto)
+            Assert.Equal("Semilla", dto.Categoria)
+            Assert.Equal(Some "Swietenia", dto.Genero)
+            Assert.Equal(Some "macrophylla", dto.Epiteto)
+            Assert.Equal(Some "Aprobado", dto.UltimoDictamen)
+            Assert.Single(dto.HistorialAnalisis) |> ignore
+            Assert.Equal(91.0m, dto.HistorialAnalisis.Head.Germinacion)
+        | Error err -> failwithf "Fallo consultarFichaTecnicaLote: %s" err
+    } |> Async.RunSynchronously
+
+[<Fact>]
+let ``// T10: consultarFichaTecnicaLote para lote recien ingresado sin analisis retorna historial vacio y ultimoDictamen None`` () =
+    async {
+        let lote = crearLoteBase ()
+        let (LoteId lId) = lote.Id
+        let nc = match NombreCientifico.crear "Cedrela" "odorata" None with Ok n -> n | Error e -> failwithf "%A" e
+        let prod = Producto.crearBorradorConUnidad lote.ProductoId Kilogramo PorLote (Semilla(nc, [])) None
+
+        let fakeObtenerLote (id: LoteId) = async { return Some lote }
+        let fakeObtenerProducto (id: ProductoId) = async { return Some prod }
+        let fakeListarAnalisis (id: LoteId) = async { return [] }
+
+        let! res = LoteService.consultarFichaTecnicaLote fakeObtenerLote fakeObtenerProducto fakeListarAnalisis (lId.ToString())
+        match res with
+        | Ok dto ->
+            Assert.Empty(dto.HistorialAnalisis)
+            Assert.True(dto.UltimoDictamen.IsNone)
+        | Error err -> failwithf "Fallo inesperado: %s" err
+    } |> Async.RunSynchronously
+
+[<Fact>]
+let ``// T11: consultarFichaTecnicaLote con ID inexistente retorna error 404/NotFound`` () =
+    async {
+        let fakeObtenerLote (_: LoteId) = async { return None }
+        let fakeObtenerProducto (_: ProductoId) = async { return None }
+        let fakeListarAnalisis (_: LoteId) = async { return [] }
+
+        let! res = LoteService.consultarFichaTecnicaLote fakeObtenerLote fakeObtenerProducto fakeListarAnalisis (Guid.NewGuid().ToString())
+        match res with
+        | Error msg -> Assert.Contains("no se encontró", msg, StringComparison.OrdinalIgnoreCase)
+        | Ok _ -> failwith "Debería retornar error para lote no encontrado"
+    } |> Async.RunSynchronously
+

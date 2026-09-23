@@ -33,6 +33,38 @@ type LoteDto =
 type BloquearLoteRequest =
     { Motivo: string }
 
+[<CLIMutable>]
+type AnalisisResumenDto =
+    { Id: string
+      FechaAnalisis: string
+      Germinacion: decimal
+      Pureza: decimal
+      Humedad: decimal
+      Viabilidad: decimal
+      Dictamen: string
+      Observaciones: string option }
+
+[<CLIMutable>]
+type FichaTecnicaLoteDto =
+    { Id: string
+      Codigo: string
+      ProductoId: string
+      NombreProducto: string
+      Categoria: string
+      Genero: string option
+      Epiteto: string option
+      Procedencia: string option
+      CantidadInicial: decimal
+      CantidadActual: decimal
+      Unidad: string
+      FechaIngreso: string
+      Ubicacion: string option
+      Observaciones: string option
+      Estado: string
+      HistorialAnalisis: AnalisisResumenDto list
+      UltimoDictamen: string option }
+
+
 module LoteService =
 
     let private desmapearUnidad (uStr: string) : UnidadMedida =
@@ -190,3 +222,86 @@ module LoteService =
                     let nomProd = optProd |> Option.map Producto.nombreVisible |> Option.defaultValue "Producto Desconocido"
                     return Ok(aLoteDto nomProd loteBloqueado)
         }
+
+    /// Consultar ficha técnica completa de un lote (RF14 / CU-14 / F-LAB-06)
+    let consultarFichaTecnicaLote
+        (obtenerLote: LoteId -> Async<Lote option>)
+        (obtenerProducto: ProductoId -> Async<Producto option>)
+        (listarAnalisis: LoteId -> Async<AnalisisLaboratorio list>)
+        (loteIdStr: string)
+        : Async<Result<FichaTecnicaLoteDto, string>> =
+        async {
+            match Guid.TryParse(loteIdStr) with
+            | false, _ -> return Error "ID de lote inválido"
+            | true, gId ->
+                let loteId = LoteId gId
+                let! optLote = obtenerLote loteId
+
+                match optLote with
+                | None -> return Error (sprintf "No se encontró el lote con ID '%s'" loteIdStr)
+                | Some lote ->
+                    let! optProd = obtenerProducto lote.ProductoId
+                    let! analisisList = listarAnalisis loteId
+
+                    let (nombreProd, catStr, generoOpt, epitetoOpt) =
+                        match optProd with
+                        | None -> ("Producto Desconocido", "Desconocida", None, None)
+                        | Some prod ->
+                            let nom = Producto.nombreVisible prod
+                            match prod.Categoria with
+                            | Semilla(nc, _) -> (nom, "Semilla", Some nc.Genero, Some nc.Epiteto)
+                            | Plantin(nc, _, _) -> (nom, "Plantin", Some nc.Genero, Some nc.Epiteto)
+                            | Insumo(nombre, _, _) -> (nom, "Insumo", Some nombre, None)
+
+                    let estadoStr =
+                        match lote.Estado with
+                        | Activo -> "Activo"
+                        | Agotado -> "Agotado"
+                        | Bloqueado -> "Bloqueado"
+                        | Rechazado -> "Rechazado"
+                        | Archivado -> "Archivado"
+
+                    let analisisDtos =
+                        analisisList
+                        |> List.sortByDescending (fun a -> a.FechaAnalisis)
+                        |> List.map (fun a ->
+                            let (LaboratorioId aId) = a.Id
+                            { Id = aId.ToString()
+                              FechaAnalisis = a.FechaAnalisis.ToString("yyyy-MM-dd")
+                              Germinacion = PorcentajeCalidad.valor a.Germinacion
+                              Pureza = PorcentajeCalidad.valor a.Pureza
+                              Humedad = PorcentajeCalidad.valor a.Humedad
+                              Viabilidad = PorcentajeCalidad.valor a.Viabilidad
+                              Dictamen = DictamenCalidad.aTexto a.Dictamen
+                              Observaciones = a.Observaciones })
+
+                    let ultimoDictamen =
+                        analisisDtos
+                        |> List.tryHead
+                        |> Option.map (fun a -> a.Dictamen)
+
+                    let (LoteId lId) = lote.Id
+                    let (ProductoId pId) = lote.ProductoId
+
+                    let dto : FichaTecnicaLoteDto =
+                        { Id = lId.ToString()
+                          Codigo = CodigoLote.valor lote.Codigo
+                          ProductoId = pId.ToString()
+                          NombreProducto = nombreProd
+                          Categoria = catStr
+                          Genero = generoOpt
+                          Epiteto = epitetoOpt
+                          Procedencia = lote.Procedencia
+                          CantidadInicial = lote.CantidadInicial.Valor
+                          CantidadActual = lote.CantidadActual.Valor
+                          Unidad = Unidad.etiqueta lote.CantidadInicial.Unidad
+                          FechaIngreso = lote.FechaIngreso.ToString("yyyy-MM-dd")
+                          Ubicacion = lote.Ubicacion
+                          Observaciones = lote.Observaciones
+                          Estado = estadoStr
+                          HistorialAnalisis = analisisDtos
+                          UltimoDictamen = ultimoDictamen }
+
+                    return Ok dto
+        }
+
