@@ -17,6 +17,7 @@
     <Compile Include="InventoryTests.fs" />
     <Compile Include="StockTests.fs" />
     <Compile Include="UserTests.fs" />
+    <Compile Include="RefreshTokenTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

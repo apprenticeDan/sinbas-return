@@ -18,6 +18,7 @@ module UserEndpoints =
         let guardarUsuarioYEmpleado = AuthRepository.guardarUsuarioYEmpleado
         let hashPassword = PasswordHasher.hash
         let listarUsuarios = AuthRepository.listarUsuariosConEmpleado
+        let revocarTokens = AuthRepository.revocarTodosLosTokensDeUsuario
 
         // GET /api/usuarios
         app.MapGet("/api/usuarios", Func<Threading.Tasks.Task<IResult>>(fun () ->
@@ -132,7 +133,7 @@ module UserEndpoints =
         app.MapPut("/api/usuarios/{id}/desactivar", Func<Guid, Threading.Tasks.Task<IResult>>(fun id ->
             async {
                 let command : DisableUserCommand = { UsuarioId = id }
-                let! result = UserUseCase.desactivarUsuario buscarPorId guardarUsuario command
+                let! result = UserUseCase.desactivarUsuario buscarPorId guardarUsuario revocarTokens command
                 match result with
                 | Ok () -> return Results.Ok()
                 | Error err -> return Results.BadRequest({| error = sprintf "%A" err |})

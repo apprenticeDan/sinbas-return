@@ -17,4 +17,14 @@ export const ApiAuthGateway = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  refresh: () =>
+    httpClient<LoginResponse>('/auth/refresh', {
+      method: 'POST',
+    }),
+
+  logout: () =>
+    httpClient<void>('/auth/logout', {
+      method: 'POST',
+    }),
 };
