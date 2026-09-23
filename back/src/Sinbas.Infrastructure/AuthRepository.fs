@@ -37,6 +37,16 @@ type EmpleadoRow =
       nombre_completo : string
       estado          : string }
 
+[<CLIMutable>]
+type RefreshTokenRow =
+    { id             : Guid
+      usuario_id     : Guid
+      token_hash     : string
+      expira_en      : DateTime
+      revocado       : bool
+      reemplazado_por: Nullable<Guid>
+      creado_en      : DateTime }
+
 // ─────────────────────────────────────────────────────────────
 // Def de Tablas para Dapper.FSharp
 // ─────────────────────────────────────────────────────────────
@@ -497,6 +507,107 @@ module AuthRepository =
                 do! persistirRoles conn id roles
                 return Ok ()
 
+            with ex ->
+                return Error (ErrorInterno ex.Message)
+        }
+
+    // ─────────────────────────────────────────────────────────────
+    // Refresh Tokens (MF-00-05)
+    // ─────────────────────────────────────────────────────────────
+
+    let private reconstruirRefreshToken (row: RefreshTokenRow) : RefreshToken =
+        { Id = RefreshTokenId row.id
+          UsuarioId = UsuarioId row.usuario_id
+          TokenHash = TokenHash row.token_hash
+          ExpiraEn = row.expira_en
+          Revocado = row.revocado
+          ReemplazadoPor = if row.reemplazado_por.HasValue then Some (RefreshTokenId row.reemplazado_por.Value) else None
+          CreadoEn = row.creado_en }
+
+    let guardarRefreshToken (token: RefreshToken) : Async<Result<unit, AuthError>> =
+        async {
+            try
+                use conn = DbConnection.crear ()
+                let (RefreshTokenId tid) = token.Id
+                let (UsuarioId uid) = token.UsuarioId
+                let (TokenHash thash) = token.TokenHash
+                let reemplazadoGuid =
+                    match token.ReemplazadoPor with
+                    | Some (RefreshTokenId rid) -> Nullable rid
+                    | None -> Nullable ()
+
+                let sql = """
+                    insert into refresh_token (id, usuario_id, token_hash, expira_en, revocado, reemplazado_por, creado_en)
+                    values (@id, @usuario_id, @token_hash, @expira_en, @revocado, @reemplazado_por, @creado_en)
+                    on conflict (id) do update set
+                        revocado = excluded.revocado,
+                        reemplazado_por = excluded.reemplazado_por
+                """
+                let! _ =
+                    conn.ExecuteAsync(sql, {|
+                        id = tid
+                        usuario_id = uid
+                        token_hash = thash
+                        expira_en = token.ExpiraEn
+                        revocado = token.Revocado
+                        reemplazado_por = reemplazadoGuid
+                        creado_en = token.CreadoEn
+                    |}) |> Async.AwaitTask
+                return Ok ()
+            with ex ->
+                return Error (ErrorInterno ex.Message)
+        }
+
+    let buscarRefreshTokenPorHash (TokenHash thash) : Async<Result<RefreshToken option, AuthError>> =
+        async {
+            try
+                use conn = DbConnection.crear ()
+                let sql = """
+                    select id, usuario_id, token_hash, expira_en, revocado, reemplazado_por, creado_en
+                    from refresh_token
+                    where token_hash = @token_hash
+                    limit 1
+                """
+                let! row =
+                    conn.QueryFirstOrDefaultAsync<RefreshTokenRow>(sql, {| token_hash = thash |})
+                    |> Async.AwaitTask
+                if isNull (box row) || row.id = Guid.Empty then
+                    return Ok None
+                else
+                    return Ok (Some (reconstruirRefreshToken row))
+            with ex ->
+                return Error (ErrorInterno ex.Message)
+        }
+
+    let marcarRefreshTokenReemplazado (RefreshTokenId tokenViejoId) (RefreshTokenId nuevoTokenId) : Async<Result<unit, AuthError>> =
+        async {
+            try
+                use conn = DbConnection.crear ()
+                let sql = "update refresh_token set reemplazado_por = @nuevoId where id = @viejoId"
+                let! _ = conn.ExecuteAsync(sql, {| nuevoId = nuevoTokenId; viejoId = tokenViejoId |}) |> Async.AwaitTask
+                return Ok ()
+            with ex ->
+                return Error (ErrorInterno ex.Message)
+        }
+
+    let revocarRefreshToken (RefreshTokenId tid) : Async<Result<unit, AuthError>> =
+        async {
+            try
+                use conn = DbConnection.crear ()
+                let sql = "update refresh_token set revocado = true where id = @id"
+                let! _ = conn.ExecuteAsync(sql, {| id = tid |}) |> Async.AwaitTask
+                return Ok ()
+            with ex ->
+                return Error (ErrorInterno ex.Message)
+        }
+
+    let revocarTodosLosTokensDeUsuario (UsuarioId uid) : Async<Result<unit, AuthError>> =
+        async {
+            try
+                use conn = DbConnection.crear ()
+                let sql = "update refresh_token set revocado = true where usuario_id = @usuario_id and revocado = false"
+                let! _ = conn.ExecuteAsync(sql, {| usuario_id = uid |}) |> Async.AwaitTask
+                return Ok ()
             with ex ->
                 return Error (ErrorInterno ex.Message)
         }

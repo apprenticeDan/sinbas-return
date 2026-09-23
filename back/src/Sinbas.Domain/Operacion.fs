@@ -22,6 +22,7 @@ type EstadoOperacion =
     | Anulada of Anulacion
 
 type EstadoProforma =
+    | Borrador
     | Vigente
     | Vencida
     | Convertida of OrdenId
@@ -166,6 +167,11 @@ module EstadoProforma =
         match p.EstadoProforma with
         | Vigente -> p.FechaVencimiento >= hoy
         | _ -> false
+
+    let emitir (p: Proforma) =
+        match p.EstadoProforma with
+        | Borrador -> Ok { p with EstadoProforma = Vigente }
+        | _ -> Error(ValorRequerido "Solo una proforma en estado Borrador puede pasar a Vigente")
 
     let vencer (p: Proforma) =
         match p.EstadoProforma with

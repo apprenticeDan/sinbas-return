@@ -257,13 +257,21 @@ module UserUseCase =
                 return! guardarUsuario usuarioActualizado
         }
 
-    let desactivarUsuario buscarPorId guardarUsuario (cmd: DisableUserCommand) =
+    /// Desactiva un usuario y revoca en cascada todos sus refresh tokens activos (RN15)
+    let desactivarUsuario buscarPorId guardarUsuario (revocarFamiliaTokens: UsuarioId -> Async<Result<unit, AuthError>>) (cmd: DisableUserCommand) =
         async {
             let! usuarioResult = buscarPorId (UsuarioId cmd.UsuarioId)
             match usuarioResult with
             | Error e -> return Error e
             | Ok usuario ->
                 let usuarioActualizado = Usuario.desactivar usuario
-                return! guardarUsuario usuarioActualizado
+                let! gRes = guardarUsuario usuarioActualizado
+                match gRes with
+                | Error e -> return Error e
+                | Ok () ->
+                    // Regla de Negocio RN15: La desactivación de una cuenta invalida de inmediato
+                    // todas las sesiones y tokens de refresco activos asociados al usuario.
+                    let! _ = revocarFamiliaTokens (UsuarioId cmd.UsuarioId)
+                    return Ok ()
         }
 

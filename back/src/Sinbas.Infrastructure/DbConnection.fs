@@ -365,6 +365,34 @@ create index if not exists ix_cliente_tipo on cliente(tipo);
 create index if not exists ix_cliente_nit on cliente(nit);
 create index if not exists ix_cliente_ci on cliente(ci_numero);
 create index if not exists ix_cliente_razon_social on cliente(razon_social);
+
+-- ─────────────────────────────────────────────────────────────
+-- F0.1: Refresh Tokens e Idempotencia (MF-00-05 y MF-00-07)
+-- ─────────────────────────────────────────────────────────────
+
+create table if not exists refresh_token (
+    id              uuid primary key,
+    usuario_id      uuid not null references usuario(id) on delete cascade,
+    token_hash      text not null unique,
+    expira_en       timestamp with time zone not null,
+    revocado        boolean not null default false,
+    reemplazado_por uuid references refresh_token(id) on delete set null,
+    creado_en       timestamp with time zone not null default current_timestamp
+);
+
+create index if not exists ix_refresh_token_hash on refresh_token(token_hash);
+create index if not exists ix_refresh_token_usuario on refresh_token(usuario_id);
+
+create table if not exists registro_idempotencia (
+    clave           text primary key,
+    endpoint        text not null,
+    usuario_id      uuid not null references usuario(id) on delete cascade,
+    status_code     integer not null,
+    cuerpo_respuesta text not null,
+    creado_en       timestamp with time zone not null default current_timestamp
+);
+
+create index if not exists ix_idempotencia_creado on registro_idempotencia(creado_en);
 """
             use cmd = new NpgsqlCommand(sqlAuth, conn)
             cmd.ExecuteNonQuery() |> ignore
