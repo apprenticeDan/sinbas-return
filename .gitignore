@@ -209,6 +209,7 @@ pnpm-debug.log*
 npm-debug.log*
 
 docs/borradores/
+docs/bundles_analisis/
 
 *.txt  
 **/ejemplo_infra_contenedor/
