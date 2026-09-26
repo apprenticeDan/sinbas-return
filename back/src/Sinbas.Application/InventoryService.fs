@@ -236,7 +236,7 @@ module InventoryService =
                                     match lOpt with
                                     | Some l ->
                                         // Aumentar stock del lote existente
-                                        let nuevaCant = { Valor = l.CantidadActual.Valor + req.Cantidad; Unidad = l.CantidadActual.Unidad }
+                                        let nuevaCant = Cantidad.reconstruir (l.CantidadActual.Valor + req.Cantidad) l.CantidadActual.Unidad
                                         let loteActualizado = { l with CantidadActual = nuevaCant; Estado = Activo }
                                         do! actualizarLoteStock loteActualizado
                                         return Ok loteActualizado
@@ -247,7 +247,7 @@ module InventoryService =
                                     let! lotesActivos = listarLotes (Some prodId) (Some Activo)
                                     match lotesActivos |> List.tryHead with
                                     | Some loteExistente ->
-                                        let nuevaCant = { Valor = loteExistente.CantidadActual.Valor + req.Cantidad; Unidad = loteExistente.CantidadActual.Unidad }
+                                        let nuevaCant = Cantidad.reconstruir (loteExistente.CantidadActual.Valor + req.Cantidad) loteExistente.CantidadActual.Unidad
                                         let loteActualizado = { loteExistente with CantidadActual = nuevaCant }
                                         do! actualizarLoteStock loteActualizado
                                         return Ok loteActualizado
@@ -765,8 +765,8 @@ module InventoryService =
                                         |> Option.defaultValue (lGuid.ToString().Substring(0, 8))
                                     { LoteId = lGuid.ToString()
                                       CodigoLote = codigo
-                                      Cantidad = linea.Cantidad.Valor
-                                      Unidad = desmapearUnidad linea.Cantidad.Unidad } : LineaMovimientoDto)
+                                      Cantidad = Cantidad.valor linea.Cantidad
+                                      Unidad = desmapearUnidad (Cantidad.unidad linea.Cantidad) } : LineaMovimientoDto)
 
                             let dto : MovimientoDto =
                                 { Id = mGuid.ToString()

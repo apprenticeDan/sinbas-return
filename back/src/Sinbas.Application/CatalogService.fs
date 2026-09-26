@@ -125,16 +125,16 @@ module CatalogService =
                         let t = s.Trim()
                         if String.IsNullOrWhiteSpace t then None else Some t)
                     |> Option.defaultValue "Unidad"
-                let pres =
-                    { Empaque = empLimpio
-                      ContenidoNominal = defaultArg req.GramosNominales 1m
-                      Unidad = unidad }
-                let producto = Producto.crearBorrador prodId pres trazabilidad categoria req.Observaciones
-                
-                let! resGuardar = guardar producto
-                match resGuardar with
-                | Ok () -> return Ok (aDto producto)
-                | Error err -> return Error err
+                match Presentacion.crear empLimpio (defaultArg req.GramosNominales 1m) unidad with
+                | Error (CantidadInvalida msg) -> return Error msg
+                | Error _ -> return Error "Presentación inválida"
+                | Ok pres ->
+                    let producto = Producto.crearBorrador prodId pres trazabilidad categoria req.Observaciones
+                    
+                    let! resGuardar = guardar producto
+                    match resGuardar with
+                    | Ok () -> return Ok (aDto producto)
+                    | Error err -> return Error err
         }
 
     let asignarPrecio (buscarPorId: BuscarProductoPorId) (guardar: GuardarProducto) (req: AsignarPrecioRequest) (usuarioId: Guid) : Async<Result<ProductoDto, string>> =

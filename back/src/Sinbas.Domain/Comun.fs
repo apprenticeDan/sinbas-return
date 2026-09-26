@@ -100,11 +100,20 @@ module DepartamentoExpedicion =
             | _ -> None
 
 type CI =
-    { Numero: string
-      Complemento: string option
-      Extension: DepartamentoExpedicion option }
+    private
+        { _Numero: string
+          _Complemento: string option
+          _Extension: DepartamentoExpedicion option }
+    member this.Numero = this._Numero
+    member this.Complemento = this._Complemento
+    member this.Extension = this._Extension
 
 module CI =
+    // ── Accessors ────────────────────────────────────────────────────────────
+    let numero (ci: CI) : string = ci.Numero
+    let complemento (ci: CI) : string option = ci.Complemento
+    let extension (ci: CI) : DepartamentoExpedicion option = ci.Extension
+
     let formatear (ci: CI) =
         let baseNum =
             match ci.Complemento with
@@ -129,9 +138,20 @@ module CI =
                 |> Option.bind (fun s -> if String.IsNullOrWhiteSpace(s) then None else Some s)
 
             Ok
-                { Numero = n
-                  Complemento = compLimpio
-                  Extension = extension }
+                { _Numero = n
+                  _Complemento = compLimpio
+                  _Extension = extension }
+
+    /// Reconstruye una instancia de CI para la capa de persistencia/infraestructura
+    let reconstruir (numero: string) (complemento: string option) (extension: DepartamentoExpedicion option) : CI =
+        let n = if isNull numero || String.IsNullOrWhiteSpace(numero) then "0" else numero.Trim()
+        let compLimpio =
+            complemento
+            |> Option.map (fun s -> s.Trim().ToUpperInvariant())
+            |> Option.bind (fun s -> if String.IsNullOrWhiteSpace(s) then None else Some s)
+        { _Numero = n
+          _Complemento = compLimpio
+          _Extension = extension }
 
 // ─────────────────────────────────────────────────────────────
 // Unidades de medida estrictas por dimensión física
@@ -205,19 +225,38 @@ module Unidad =
 /// Define el empaque y el contenido nominal de un producto
 /// Ej: Empaque = "Bolsa", ContenidoNominal = 500m, Unidad = Gramo -> "Bolsa 500 g"
 type Presentacion =
-    { Empaque: string
-      ContenidoNominal: decimal
-      Unidad: UnidadMedida }
+    private
+        { _Empaque: string
+          _ContenidoNominal: decimal
+          _Unidad: UnidadMedida }
+    member this.Empaque = this._Empaque
+    member this.ContenidoNominal = this._ContenidoNominal
+    member this.Unidad = this._Unidad
 
 module Presentacion =
+    // ── Accessors ────────────────────────────────────────────────────────────
+    let empaque (p: Presentacion) : string = p.Empaque
+    let contenidoNominal (p: Presentacion) : decimal = p.ContenidoNominal
+    let unidad (p: Presentacion) : UnidadMedida = p.Unidad
+
+    // ── Constructores ────────────────────────────────────────────────────────
     let crear (empaque: string) (contenido: decimal) (unidad: UnidadMedida) : Result<Presentacion, DomainError> =
         let empLimpio = if String.IsNullOrWhiteSpace(empaque) then "Unidad" else empaque.Trim()
         if contenido <= 0m then
             Error(CantidadInvalida "El contenido nominal de la presentación debe ser mayor a cero")
         else
-            Ok { Empaque = empLimpio
-                 ContenidoNominal = contenido
-                 Unidad = unidad }
+            Ok { _Empaque = empLimpio
+                 _ContenidoNominal = contenido
+                 _Unidad = unidad }
+
+    /// Reconstruye una Presentación desde persistencia garantizando invariantes mínimos
+    let reconstruir (empaque: string) (contenido: decimal) (unidad: UnidadMedida) : Presentacion =
+        let empLimpio = if String.IsNullOrWhiteSpace(empaque) then "Unidad" else empaque.Trim()
+        if contenido <= 0m then
+            failwithf "Dato corrupto en BD: Contenido nominal de presentación no positivo %M" contenido
+        { _Empaque = empLimpio
+          _ContenidoNominal = contenido
+          _Unidad = unidad }
 
     let aTexto (p: Presentacion) : string =
         sprintf "%s %g %s" p.Empaque (float p.ContenidoNominal) (UnidadMedida.etiqueta p.Unidad)
@@ -227,15 +266,35 @@ module Presentacion =
 // ─────────────────────────────────────────────────────────────
 
 type Cantidad =
-    { Valor: decimal
-      Unidad: UnidadMedida }
+    private
+        { _Valor: decimal
+          _Unidad: UnidadMedida }
+    member this.Valor = this._Valor
+    member this.Unidad = this._Unidad
 
 module Cantidad =
+    // ── Accessors (necesarios porque el record es privado) ───────────────────
+    let valor (c: Cantidad) : decimal      = c.Valor
+    let unidad (c: Cantidad) : UnidadMedida = c.Unidad
+
+    // ── Constructores ────────────────────────────────────────────────────────
+
+    /// Para lógica de negocio: acepta >= 0.
+    /// La restricción > 0 vive en quien la necesite (Lote.crear, Fifo, etc.).
     let crear (valor: decimal) (unidad: UnidadMedida) : Result<Cantidad, DomainError> =
-        if valor <= 0m then
-            Error(CantidadInvalida(sprintf "La cantidad debe ser mayor a cero, recibido: %M" valor))
+        if valor < 0m then
+            Error(CantidadInvalida(sprintf "La cantidad no puede ser negativa, recibido: %M" valor))
         else
-            Ok { Valor = valor; Unidad = unidad }
+            Ok { _Valor = valor; _Unidad = unidad }
+
+    /// Para Infrastructure al leer de BD: omite re-validación de negocio,
+    /// pero falla rápido si el dato en BD está corrupto (negativo).
+    let reconstruir (valor: decimal) (unidad: UnidadMedida) : Cantidad =
+        if valor < 0m then
+            failwithf "Dato corrupto en BD: Cantidad negativa %M" valor
+        { _Valor = valor; _Unidad = unidad }
+
+    // ── Operaciones ──────────────────────────────────────────────────────────
 
     let enGramos (c: Cantidad) : decimal =
         match c.Unidad with
@@ -248,10 +307,8 @@ module Cantidad =
     let sonCompatibles (a: Cantidad) (b: Cantidad) : bool =
         UnidadMedida.sonCompatibles a.Unidad b.Unidad
 
-    let reconstruir (valor: decimal) (unidad: UnidadMedida) : Cantidad =
-        { Valor = valor; Unidad = unidad }
-
-    /// Suma dos cantidades asegurando que pertenezcan a la misma dimensión física
+    /// Suma dos cantidades asegurando que pertenezcan a la misma dimensión física.
+    /// Ambos sumandos deben ser > 0 (no tiene sentido sumar un saldo vacío).
     let sumar (a: Cantidad) (b: Cantidad) : Result<Cantidad, DomainError> =
         if a.Valor <= 0m || b.Valor <= 0m then
             Error (CantidadInvalida "Las cantidades a sumar deben ser mayores a cero")
@@ -266,12 +323,10 @@ module Cantidad =
         else
             let baseA = aUnidadBase a
             let baseB = aUnidadBase b
-
-            // Retorna el resultado en la unidad del primer término
             match a.Unidad with
-            | Kilogramo -> Ok { Valor = (baseA + baseB) / 1000m; Unidad = Kilogramo }
-            | Litro -> Ok { Valor = (baseA + baseB) / 1000m; Unidad = Litro }
-            | otraUnidad -> Ok { Valor = baseA + baseB; Unidad = otraUnidad }
+            | Kilogramo -> Ok { _Valor = (baseA + baseB) / 1000m; _Unidad = Kilogramo }
+            | Litro     -> Ok { _Valor = (baseA + baseB) / 1000m; _Unidad = Litro }
+            | otraUnidad -> Ok { _Valor = baseA + baseB; _Unidad = otraUnidad }
 
     /// ¿Hay suficiente stock para cubrir el pedido?
     let esSuficiente (disponible: Cantidad) (pedido: Cantidad) : Result<bool, DomainError> =

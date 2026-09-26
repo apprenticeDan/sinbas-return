@@ -22,7 +22,7 @@ let crearLoteBase () =
         | Ok c -> c
         | Error e -> failwithf "Codigo invalido: %A" e
 
-    let cantInicial = { Valor = 50m; Unidad = Kilogramo }
+    let cantInicial = Cantidad.reconstruir 50m Kilogramo
     match Lote.crear loteId codigo prodId (Some "Bosque Chiquitano") cantInicial (DateOnly(2026, 8, 15)) (Some "Almacén Central") None with
     | Ok l -> l
     | Error e -> failwithf "Error creando lote: %A" e
@@ -130,7 +130,7 @@ let ``Lote con analisis rechazado queda marcado como Rechazado y excluido de sto
     Assert.Equal(0m, stock)
 
     // Fifo.resolverFIFO no lo asigna
-    let req = { Valor = 1000m; Unidad = Gramo }
+    let req = Cantidad.reconstruir 1000m Gramo
     match Fifo.resolverFIFO prodId req [loteRechazado] with
     | Error (StockInsuficiente _) -> ()
     | res -> failwithf "FIFO no debio asignar lote rechazado, obtuvo: %A" res

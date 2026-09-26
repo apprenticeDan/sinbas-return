@@ -16,7 +16,7 @@ let crearLoteValido () =
         | Ok c -> c
         | Error e -> failwithf "Error generando código de lote: %A" e
 
-    let cantInicial = { Valor = 50m; Unidad = Kilogramo }
+    let cantInicial = Cantidad.reconstruir 50m Kilogramo
 
     match Lote.crear loteId codigo prodId (Some "Bosque Chiquitano") cantInicial (DateOnly(2026, 8, 15)) (Some "Almacén Central") (Some "Observación inicial") with
     | Ok l -> l
@@ -27,39 +27,39 @@ let ``Creacion de Lote valido inicia en estado Activo con CantidadInicial y Cant
     let lote = crearLoteValido ()
     Assert.Equal(Activo, lote.Estado)
     Assert.True(Lote.estaActivo lote)
-    Assert.Equal(50m, lote.CantidadInicial.Valor)
-    Assert.Equal(50m, lote.CantidadActual.Valor)
-    Assert.Equal(Kilogramo, lote.CantidadInicial.Unidad)
+    Assert.Equal(50m, Cantidad.valor lote.CantidadInicial)
+    Assert.Equal(50m, Cantidad.valor lote.CantidadActual)
+    Assert.Equal(Kilogramo, Cantidad.unidad lote.CantidadInicial)
     Assert.Equal(Some "Bosque Chiquitano", lote.Procedencia)
 
 [<Fact>]
 let ``Descuento parcial de stock preserva estado Activo`` () =
     let lote = crearLoteValido ()
-    let aDescontar = { Valor = 10m; Unidad = Kilogramo }
+    let aDescontar = Cantidad.reconstruir 10m Kilogramo
 
     match Lote.descontarStock aDescontar lote with
     | Error e -> failwithf "Falló descuento: %A" e
     | Ok loteActualizado ->
         Assert.Equal(Activo, loteActualizado.Estado)
-        Assert.Equal(40000m, loteActualizado.CantidadActual.Valor) // 40 kg en gramos
-        Assert.Equal(Gramo, loteActualizado.CantidadActual.Unidad)
+        Assert.Equal(40000m, Cantidad.valor loteActualizado.CantidadActual) // 40 kg en gramos
+        Assert.Equal(Gramo, Cantidad.unidad loteActualizado.CantidadActual)
 
 [<Fact>]
 let ``Descuento total de stock cambia automaticamente estado a Agotado`` () =
     let lote = crearLoteValido ()
-    let aDescontar = { Valor = 50m; Unidad = Kilogramo }
+    let aDescontar = Cantidad.reconstruir 50m Kilogramo
 
     match Lote.descontarStock aDescontar lote with
     | Error e -> failwithf "Falló descuento: %A" e
     | Ok loteAgotado ->
         Assert.Equal(Agotado, loteAgotado.Estado)
-        Assert.Equal(0m, loteAgotado.CantidadActual.Valor)
+        Assert.Equal(0m, Cantidad.valor loteAgotado.CantidadActual)
         Assert.False(Lote.estaActivo loteAgotado)
 
 [<Fact>]
 let ``Intento de descontar mas stock del disponible retorna error StockInsuficiente`` () =
     let lote = crearLoteValido ()
-    let aDescontar = { Valor = 60m; Unidad = Kilogramo }
+    let aDescontar = Cantidad.reconstruir 60m Kilogramo
 
     match Lote.descontarStock aDescontar lote with
     | Error (StockInsuficiente msg) -> Assert.Contains("insuficiente", msg)
@@ -70,11 +70,11 @@ let ``Lote.actualizarSaldo actualiza saldo y transiciona bidireccionalmente entr
     let lote = crearLoteValido ()
     let agotado = Lote.actualizarSaldo 0m lote
     Assert.Equal(Agotado, agotado.Estado)
-    Assert.Equal(0m, agotado.CantidadActual.Valor)
+    Assert.Equal(0m, Cantidad.valor agotado.CantidadActual)
 
     let reactivado = Lote.actualizarSaldo 1500m agotado
     Assert.Equal(Activo, reactivado.Estado)
-    Assert.Equal(1500m, reactivado.CantidadActual.Valor)
+    Assert.Equal(1500m, Cantidad.valor reactivado.CantidadActual)
 
 [<Fact>]
 let ``Bloqueo de lote acumula observaciones de justificacion inmutablemente`` () =

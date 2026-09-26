@@ -49,10 +49,7 @@ module CatalogRepository =
         let prodId = ProductoId row.id
         let unidad = mapUnidad row.unidad_manejo
         let empaque = defaultArg row.empaque "Unidad"
-        let presentacion =
-            { Empaque = empaque
-              ContenidoNominal = defaultArg row.gramos_nominales 1m
-              Unidad = unidad }
+        let presentacion = Presentacion.reconstruir empaque (defaultArg row.gramos_nominales 1m) unidad
         let trazabilidad = if row.trazabilidad = "PorLote" then PorLote else Simple
         
         let nombresComunesList =
@@ -72,13 +69,14 @@ module CatalogRepository =
                 | Error _ -> None
             | _ -> None
 
+        let ncFallback = NombreCientifico.reconstruir "Indefinido" "sp." None
         let categoria =
             match row.categoria with
             | "Semilla" ->
-                let nc = defaultArg ncOpt { Genero = "Indefinido"; Epiteto = "sp."; Observaciones = None }
+                let nc = defaultArg ncOpt ncFallback
                 Semilla(nc, nombresComunesList)
             | "Plantin" ->
-                let nc = defaultArg ncOpt { Genero = "Indefinido"; Epiteto = "sp."; Observaciones = None }
+                let nc = defaultArg ncOpt ncFallback
                 Plantin(nc, nombresComunesList, row.etapa_desarrollo)
             | "Insumo" ->
                 Insumo(defaultArg row.nombre_insumo "Insumo", row.marca_insumo, row.descripcion_insumo)

@@ -158,7 +158,7 @@ module InventoryRepository =
             lineasRows
             |> List.map (fun l ->
                 let loteId = LoteId l.lote_id
-                let cantidad = { Valor = l.cantidad; Unidad = mapearUnidad l.unidad }
+                let cantidad = Cantidad.reconstruir l.cantidad (mapearUnidad l.unidad)
                 { Referencia = loteId; Cantidad = cantidad } : LineaMovimiento)
 
         let tipoDominio =
@@ -228,8 +228,8 @@ module InventoryRepository =
                     { id = Identidad.nuevo ()
                       movimiento_id = mId
                       lote_id = lId
-                      cantidad = linea.Cantidad.Valor
-                      unidad = desmapearUnidad linea.Cantidad.Unidad
+                      cantidad = Cantidad.valor linea.Cantidad
+                      unidad = desmapearUnidad (Cantidad.unidad linea.Cantidad)
                       observaciones = null }
 
                 do! insert {

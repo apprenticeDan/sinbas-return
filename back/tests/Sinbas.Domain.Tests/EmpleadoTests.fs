@@ -127,3 +127,18 @@ let ``Actualizar empleado modifica sus datos preservando identidad y estado`` ()
         Assert.Equal(Some "CB", actualizado.CI.Complemento)
         Assert.Equal(Some CB, actualizado.CI.Extension)
     | Error e -> failwithf "Falló actualización de empleado: %A" e
+
+[<Fact>]
+let ``CI.reconstruir reconstruye correctamente y sus accessors funcionan`` () =
+    let ci = CI.reconstruir "1234567" (Some "1A") (Some LP)
+    Assert.Equal("1234567", CI.numero ci)
+    Assert.Equal(Some "1A", CI.complemento ci)
+    Assert.Equal(Some LP, CI.extension ci)
+    Assert.Equal("1234567-1A LP", CI.formatear ci)
+
+[<Fact>]
+let ``CI.reconstruir normaliza valores vacios o nulos de BD a 0`` () =
+    let ci1 = CI.reconstruir "" None None
+    Assert.Equal("0", CI.numero ci1)
+    let ci2 = CI.reconstruir null None None
+    Assert.Equal("0", CI.numero ci2)
