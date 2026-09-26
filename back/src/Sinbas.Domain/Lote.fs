@@ -53,7 +53,7 @@ module Lote =
     /// Actualiza el saldo proyectado del lote y reevalúa su estado si llega a cero
     let actualizarSaldo (nuevoSaldoGramos: decimal) (lote: Lote) : Lote =
         let saldoNormalizado = max 0m nuevoSaldoGramos
-        let nuevaCantidad = { Valor = saldoNormalizado; Unidad = Gramo }
+        let nuevaCantidad = Cantidad.reconstruir saldoNormalizado Gramo
 
         let nuevoEstado =
             if saldoNormalizado = 0m then Agotado

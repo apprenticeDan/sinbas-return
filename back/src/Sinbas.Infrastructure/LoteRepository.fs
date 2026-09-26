@@ -55,8 +55,8 @@ module LoteRepository =
           Codigo = codigo
           ProductoId = ProductoId row.producto_id
           Procedencia = Option.ofObj row.procedencia
-          CantidadInicial = { Valor = row.cantidad_inicial; Unidad = unidad }
-          CantidadActual = { Valor = row.cantidad_actual; Unidad = unidad }
+          CantidadInicial = Cantidad.reconstruir row.cantidad_inicial unidad
+          CantidadActual  = Cantidad.reconstruir row.cantidad_actual  unidad
           FechaIngreso = row.fecha_ingreso
           Ubicacion = Option.ofObj row.ubicacion
           Estado = estado

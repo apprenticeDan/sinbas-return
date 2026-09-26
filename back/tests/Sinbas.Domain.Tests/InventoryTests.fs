@@ -16,7 +16,7 @@ let ``Stock de un lote acumula entradas y salidas correctamente`` () =
           Responsable = empleadoId
           Tipo = Entrada (Recoleccion "Campaña 2026")
           OrdenOrigen = None
-          Lineas = [ { Referencia = loteId; Cantidad = { Valor = 1000m; Unidad = Gramo } } ]
+          Lineas = [ { Referencia = loteId; Cantidad = Cantidad.reconstruir 1000m Gramo } ]
           Observaciones = None }
 
     let mov2 : MovimientoInventario =
@@ -25,7 +25,7 @@ let ``Stock de un lote acumula entradas y salidas correctamente`` () =
           Responsable = empleadoId
           Tipo = Entrada (Compra (ProveedorId (Identidad.nuevo ())))
           OrdenOrigen = None
-          Lineas = [ { Referencia = loteId; Cantidad = { Valor = 500m; Unidad = Gramo } } ]
+          Lineas = [ { Referencia = loteId; Cantidad = Cantidad.reconstruir 500m Gramo } ]
           Observaciones = None }
 
     let mov3 : MovimientoInventario =
@@ -34,7 +34,7 @@ let ``Stock de un lote acumula entradas y salidas correctamente`` () =
           Responsable = empleadoId
           Tipo = Salida (UsoInterno "Pruebas de viabilidad")
           OrdenOrigen = None
-          Lineas = [ { Referencia = loteId; Cantidad = { Valor = 300m; Unidad = Gramo } } ]
+          Lineas = [ { Referencia = loteId; Cantidad = Cantidad.reconstruir 300m Gramo } ]
           Observaciones = None }
 
     let movimientos = [ mov1; mov2; mov3 ]
@@ -55,8 +55,8 @@ let ``Stock disponible para venta excluye lotes bloqueados`` () =
           Codigo = codigo1
           ProductoId = productoId
           Procedencia = None
-          CantidadInicial = { Valor = 5000m; Unidad = Gramo }
-          CantidadActual = { Valor = 5000m; Unidad = Gramo }
+          CantidadInicial = Cantidad.reconstruir 5000m Gramo
+          CantidadActual  = Cantidad.reconstruir 5000m Gramo
           FechaIngreso = DateOnly(2026, 8, 1)
           Ubicacion = None
           Estado = Activo
@@ -67,8 +67,8 @@ let ``Stock disponible para venta excluye lotes bloqueados`` () =
           Codigo = codigo2
           ProductoId = productoId
           Procedencia = None
-          CantidadInicial = { Valor = 3000m; Unidad = Gramo }
-          CantidadActual = { Valor = 3000m; Unidad = Gramo }
+          CantidadInicial = Cantidad.reconstruir 3000m Gramo
+          CantidadActual  = Cantidad.reconstruir 3000m Gramo
           FechaIngreso = DateOnly(2026, 8, 5)
           Ubicacion = None
           Estado = Bloqueado
@@ -80,7 +80,7 @@ let ``Stock disponible para venta excluye lotes bloqueados`` () =
           Responsable = empleadoId
           Tipo = Entrada (Recoleccion "Campaña Don Mario")
           OrdenOrigen = None
-          Lineas = [ { Referencia = loteActivo.Id; Cantidad = { Valor = 5000m; Unidad = Gramo } } ]
+          Lineas = [ { Referencia = loteActivo.Id; Cantidad = Cantidad.reconstruir 5000m Gramo } ]
           Observaciones = None }
 
     let mov2 : MovimientoInventario =
@@ -89,7 +89,7 @@ let ``Stock disponible para venta excluye lotes bloqueados`` () =
           Responsable = empleadoId
           Tipo = Entrada (Recoleccion "Campaña Don Mario")
           OrdenOrigen = None
-          Lineas = [ { Referencia = loteBloqueado.Id; Cantidad = { Valor = 3000m; Unidad = Gramo } } ]
+          Lineas = [ { Referencia = loteBloqueado.Id; Cantidad = Cantidad.reconstruir 3000m Gramo } ]
           Observaciones = None }
 
     let lotes = [ loteActivo; loteBloqueado ]
@@ -116,8 +116,8 @@ let ``Fifo resuelve asignación de lotes en orden cronológico`` () =
           Codigo = parseCodigo "SWIETMAC-02607-01"
           ProductoId = productoId
           Procedencia = None
-          CantidadInicial = { Valor = 2000m; Unidad = Gramo }
-          CantidadActual = { Valor = 2000m; Unidad = Gramo }
+          CantidadInicial = Cantidad.reconstruir 2000m Gramo
+          CantidadActual  = Cantidad.reconstruir 2000m Gramo
           FechaIngreso = DateOnly(2026, 7, 10)
           Ubicacion = None
           Estado = Activo
@@ -128,8 +128,8 @@ let ``Fifo resuelve asignación de lotes en orden cronológico`` () =
           Codigo = parseCodigo "SWIETMAC-02608-01"
           ProductoId = productoId
           Procedencia = None
-          CantidadInicial = { Valor = 5000m; Unidad = Gramo }
-          CantidadActual = { Valor = 5000m; Unidad = Gramo }
+          CantidadInicial = Cantidad.reconstruir 5000m Gramo
+          CantidadActual  = Cantidad.reconstruir 5000m Gramo
           FechaIngreso = DateOnly(2026, 8, 15)
           Ubicacion = None
           Estado = Activo
@@ -141,7 +141,7 @@ let ``Fifo resuelve asignación de lotes en orden cronológico`` () =
           Responsable = empleadoId
           Tipo = Entrada (Recoleccion "Campaña 1")
           OrdenOrigen = None
-          Lineas = [ { Referencia = loteViejoId; Cantidad = { Valor = 2000m; Unidad = Gramo } } ]
+          Lineas = [ { Referencia = loteViejoId; Cantidad = Cantidad.reconstruir 2000m Gramo } ]
           Observaciones = None }
 
     let mov2 : MovimientoInventario =
@@ -150,14 +150,14 @@ let ``Fifo resuelve asignación de lotes en orden cronológico`` () =
           Responsable = empleadoId
           Tipo = Entrada (Recoleccion "Campaña 2")
           OrdenOrigen = None
-          Lineas = [ { Referencia = loteNuevoId; Cantidad = { Valor = 5000m; Unidad = Gramo } } ]
+          Lineas = [ { Referencia = loteNuevoId; Cantidad = Cantidad.reconstruir 5000m Gramo } ]
           Observaciones = None }
 
     let lotes = [ loteNuevo; loteViejo ] // Enviados en cualquier orden
     let movimientos = [ mov1; mov2 ]
 
     // Pedir 3000 gramos: debe tomar 2000g del lote viejo y 1000g del lote nuevo
-    let requerida = { Valor = 3000m; Unidad = Gramo }
+    let requerida = Cantidad.reconstruir 3000m Gramo
     let resFifo = Fifo.resolverFIFO productoId requerida lotes
 
     match resFifo with
@@ -165,9 +165,9 @@ let ``Fifo resuelve asignación de lotes en orden cronológico`` () =
     | Ok lineasAsignadas ->
         Assert.Equal(2, lineasAsignadas.Length)
         Assert.Equal(loteViejoId, lineasAsignadas.[0].Referencia)
-        Assert.Equal(2000m, lineasAsignadas.[0].Cantidad.Valor)
+        Assert.Equal(2000m, Cantidad.valor lineasAsignadas.[0].Cantidad)
         Assert.Equal(loteNuevoId, lineasAsignadas.[1].Referencia)
-        Assert.Equal(1000m, lineasAsignadas.[1].Cantidad.Valor)
+        Assert.Equal(1000m, Cantidad.valor lineasAsignadas.[1].Cantidad)
 
 [<Fact>]
 let ``Fifo retorna error cuando la cantidad requerida supera el stock disponible`` () =
@@ -181,14 +181,14 @@ let ``Fifo retorna error cuando la cantidad requerida supera el stock disponible
           Codigo = parseCodigo "SWIETMAC-02607-01"
           ProductoId = productoId
           Procedencia = None
-          CantidadInicial = { Valor = 1000m; Unidad = Gramo }
-          CantidadActual = { Valor = 1000m; Unidad = Gramo }
+          CantidadInicial = Cantidad.reconstruir 1000m Gramo
+          CantidadActual  = Cantidad.reconstruir 1000m Gramo
           FechaIngreso = DateOnly(2026, 7, 10)
           Ubicacion = None
           Estado = Activo
           Observaciones = None }
 
-    let requerida = { Valor = 2000m; Unidad = Gramo }
+    let requerida = Cantidad.reconstruir 2000m Gramo
     let resFifo = Fifo.resolverFIFO productoId requerida [ lote ]
 
     match resFifo with
