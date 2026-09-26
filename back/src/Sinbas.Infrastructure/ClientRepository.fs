@@ -125,20 +125,14 @@ module ClientRepository =
                     match row.rep_nombres with
                     | Some n when not (String.IsNullOrWhiteSpace n) ->
                         let ext = row.rep_ci_extension |> Option.bind DepartamentoExpedicion.desdeTexto
-                        let ci =
-                            { Numero = defaultArg row.rep_ci_numero "0"
-                              Complemento = row.rep_ci_complemento
-                              Extension = ext }
+                        let ci = CI.reconstruir (defaultArg row.rep_ci_numero "0") row.rep_ci_complemento ext
                         Some (Persona.reconstruir (Identidad.nuevo ()) n row.rep_apellido_paterno row.rep_apellido_materno ci row.rep_telefono row.rep_email)
                     | _ -> None
 
                 TipoCliente.Juridica (rs, nit, repOpt)
             | _ -> // Natural
                 let ext = row.ci_extension |> Option.bind DepartamentoExpedicion.desdeTexto
-                let ci =
-                    { Numero = defaultArg row.ci_numero "0"
-                      Complemento = row.ci_complemento
-                      Extension = ext }
+                let ci = CI.reconstruir (defaultArg row.ci_numero "0") row.ci_complemento ext
                 let nombres = defaultArg row.nombres "Cliente"
                 let persona = Persona.reconstruir (Identidad.nuevo ()) nombres row.apellido_paterno row.apellido_materno ci row.telefono row.email
                 TipoCliente.Natural persona

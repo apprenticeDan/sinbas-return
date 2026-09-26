@@ -68,10 +68,8 @@ module private AuthRepositoryHelpers =
         let ci =
             match row.ci_numero with
             | Some n when not (String.IsNullOrWhiteSpace n) ->
-                match CI.crear n row.ci_complemento ext with
-                | Ok c -> c
-                | Error _ -> { Numero = n; Complemento = row.ci_complemento; Extension = ext }
-            | _ -> { Numero = "-"; Complemento = None; Extension = None }
+                CI.reconstruir n row.ci_complemento ext
+            | _ -> CI.reconstruir "-" None None
 
         let estado =
             match row.estado with
@@ -264,7 +262,7 @@ module AuthRepository =
                                 "Usuario"
                                 None
                                 None
-                                { Numero = "-"; Complemento = None; Extension = None }
+                                (CI.reconstruir "-" None None)
                                 None
                                 None
                         Empleado.reconstruir eid persona EstadoEmpleado.Activo)
@@ -327,7 +325,7 @@ module AuthRepository =
                                     "Usuario"
                                     None
                                     None
-                                    { Numero = "-"; Complemento = None; Extension = None }
+                                    (CI.reconstruir "-" None None)
                                     None
                                     None
                             Empleado.reconstruir row.empleado_id persona EstadoEmpleado.Activo)

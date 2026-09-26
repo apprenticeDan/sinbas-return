@@ -100,11 +100,20 @@ module DepartamentoExpedicion =
             | _ -> None
 
 type CI =
-    { Numero: string
-      Complemento: string option
-      Extension: DepartamentoExpedicion option }
+    private
+        { _Numero: string
+          _Complemento: string option
+          _Extension: DepartamentoExpedicion option }
+    member this.Numero = this._Numero
+    member this.Complemento = this._Complemento
+    member this.Extension = this._Extension
 
 module CI =
+    // ── Accessors ────────────────────────────────────────────────────────────
+    let numero (ci: CI) : string = ci.Numero
+    let complemento (ci: CI) : string option = ci.Complemento
+    let extension (ci: CI) : DepartamentoExpedicion option = ci.Extension
+
     let formatear (ci: CI) =
         let baseNum =
             match ci.Complemento with
@@ -129,9 +138,20 @@ module CI =
                 |> Option.bind (fun s -> if String.IsNullOrWhiteSpace(s) then None else Some s)
 
             Ok
-                { Numero = n
-                  Complemento = compLimpio
-                  Extension = extension }
+                { _Numero = n
+                  _Complemento = compLimpio
+                  _Extension = extension }
+
+    /// Reconstruye una instancia de CI para la capa de persistencia/infraestructura
+    let reconstruir (numero: string) (complemento: string option) (extension: DepartamentoExpedicion option) : CI =
+        let n = if isNull numero || String.IsNullOrWhiteSpace(numero) then "0" else numero.Trim()
+        let compLimpio =
+            complemento
+            |> Option.map (fun s -> s.Trim().ToUpperInvariant())
+            |> Option.bind (fun s -> if String.IsNullOrWhiteSpace(s) then None else Some s)
+        { _Numero = n
+          _Complemento = compLimpio
+          _Extension = extension }
 
 // ─────────────────────────────────────────────────────────────
 // Unidades de medida estrictas por dimensión física
