@@ -145,3 +145,18 @@ let ``Presentacion.reconstruir lanza excepcion ante contenido no positivo en BD`
     Assert.Throws<Exception>(fun () ->
         Presentacion.reconstruir "Caja" -10m Gramo |> ignore
     ) |> ignore
+
+[<Fact>]
+let ``NombreCientifico.reconstruir reconstruye correctamente y sus accessors funcionan`` () =
+    let nc = NombreCientifico.reconstruir "Swietenia" "macrophylla" (Some "Obs")
+    Assert.Equal("Swietenia", NombreCientifico.genero nc)
+    Assert.Equal("macrophylla", NombreCientifico.epiteto nc)
+    Assert.Equal(Some "Obs", NombreCientifico.observaciones nc)
+    Assert.Equal("Swietenia macrophylla Obs", NombreCientifico.formatear nc)
+
+[<Fact>]
+let ``NombreCientifico.reconstruir aplica fallbacks para valores vacios en persistencia`` () =
+    let nc = NombreCientifico.reconstruir "" "" None
+    Assert.Equal("Indefinido", NombreCientifico.genero nc)
+    Assert.Equal("sp.", NombreCientifico.epiteto nc)
+    Assert.Equal(None, NombreCientifico.observaciones nc)

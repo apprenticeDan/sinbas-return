@@ -7,12 +7,21 @@ open System
 // ─────────────────────────────────────────────────────────────
 
 type NombreCientifico =
-    { Genero: string
-      Epiteto: string
-      Observaciones: string option }
+    private
+        { _Genero: string
+          _Epiteto: string
+          _Observaciones: string option }
+    member this.Genero = this._Genero
+    member this.Epiteto = this._Epiteto
+    member this.Observaciones = this._Observaciones
 
 module NombreCientifico =
+    // ── Accessors ────────────────────────────────────────────────────────────
+    let genero (n: NombreCientifico) : string = n.Genero
+    let epiteto (n: NombreCientifico) : string = n.Epiteto
+    let observaciones (n: NombreCientifico) : string option = n.Observaciones
 
+    // ── Constructores ────────────────────────────────────────────────────────
     let crear (genero: string) (epiteto: string) (obs: string option) : Result<NombreCientifico, DomainError> =
         if String.IsNullOrWhiteSpace genero then
             Error(NombreInvalido "El género no puede estar vacío")
@@ -26,9 +35,22 @@ module NombreCientifico =
                     if String.IsNullOrWhiteSpace t then None else Some t)
 
             Ok
-                { Genero = genero.Trim()
-                  Epiteto = epiteto.Trim()
-                  Observaciones = obsLimpia }
+                { _Genero = genero.Trim()
+                  _Epiteto = epiteto.Trim()
+                  _Observaciones = obsLimpia }
+
+    /// Reconstruye una instancia de NombreCientifico para persistencia/infraestructura
+    let reconstruir (genero: string) (epiteto: string) (obs: string option) : NombreCientifico =
+        let g = if String.IsNullOrWhiteSpace genero then "Indefinido" else genero.Trim()
+        let e = if String.IsNullOrWhiteSpace epiteto then "sp." else epiteto.Trim()
+        let obsLimpia =
+            obs
+            |> Option.bind (fun s ->
+                let t = s.Trim()
+                if String.IsNullOrWhiteSpace t then None else Some t)
+        { _Genero = g
+          _Epiteto = e
+          _Observaciones = obsLimpia }
 
     let formatear (n: NombreCientifico) : string =
         match n.Observaciones with

@@ -69,13 +69,14 @@ module CatalogRepository =
                 | Error _ -> None
             | _ -> None
 
+        let ncFallback = NombreCientifico.reconstruir "Indefinido" "sp." None
         let categoria =
             match row.categoria with
             | "Semilla" ->
-                let nc = defaultArg ncOpt { Genero = "Indefinido"; Epiteto = "sp."; Observaciones = None }
+                let nc = defaultArg ncOpt ncFallback
                 Semilla(nc, nombresComunesList)
             | "Plantin" ->
-                let nc = defaultArg ncOpt { Genero = "Indefinido"; Epiteto = "sp."; Observaciones = None }
+                let nc = defaultArg ncOpt ncFallback
                 Plantin(nc, nombresComunesList, row.etapa_desarrollo)
             | "Insumo" ->
                 Insumo(defaultArg row.nombre_insumo "Insumo", row.marca_insumo, row.descripcion_insumo)
