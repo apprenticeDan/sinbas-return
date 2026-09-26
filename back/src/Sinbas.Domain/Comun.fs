@@ -205,19 +205,38 @@ module Unidad =
 /// Define el empaque y el contenido nominal de un producto
 /// Ej: Empaque = "Bolsa", ContenidoNominal = 500m, Unidad = Gramo -> "Bolsa 500 g"
 type Presentacion =
-    { Empaque: string
-      ContenidoNominal: decimal
-      Unidad: UnidadMedida }
+    private
+        { _Empaque: string
+          _ContenidoNominal: decimal
+          _Unidad: UnidadMedida }
+    member this.Empaque = this._Empaque
+    member this.ContenidoNominal = this._ContenidoNominal
+    member this.Unidad = this._Unidad
 
 module Presentacion =
+    // ── Accessors ────────────────────────────────────────────────────────────
+    let empaque (p: Presentacion) : string = p.Empaque
+    let contenidoNominal (p: Presentacion) : decimal = p.ContenidoNominal
+    let unidad (p: Presentacion) : UnidadMedida = p.Unidad
+
+    // ── Constructores ────────────────────────────────────────────────────────
     let crear (empaque: string) (contenido: decimal) (unidad: UnidadMedida) : Result<Presentacion, DomainError> =
         let empLimpio = if String.IsNullOrWhiteSpace(empaque) then "Unidad" else empaque.Trim()
         if contenido <= 0m then
             Error(CantidadInvalida "El contenido nominal de la presentación debe ser mayor a cero")
         else
-            Ok { Empaque = empLimpio
-                 ContenidoNominal = contenido
-                 Unidad = unidad }
+            Ok { _Empaque = empLimpio
+                 _ContenidoNominal = contenido
+                 _Unidad = unidad }
+
+    /// Reconstruye una Presentación desde persistencia garantizando invariantes mínimos
+    let reconstruir (empaque: string) (contenido: decimal) (unidad: UnidadMedida) : Presentacion =
+        let empLimpio = if String.IsNullOrWhiteSpace(empaque) then "Unidad" else empaque.Trim()
+        if contenido <= 0m then
+            failwithf "Dato corrupto en BD: Contenido nominal de presentación no positivo %M" contenido
+        { _Empaque = empLimpio
+          _ContenidoNominal = contenido
+          _Unidad = unidad }
 
     let aTexto (p: Presentacion) : string =
         sprintf "%s %g %s" p.Empaque (float p.ContenidoNominal) (UnidadMedida.etiqueta p.Unidad)

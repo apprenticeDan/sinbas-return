@@ -128,3 +128,20 @@ let ``Producto creado con Presentacion personalizada preserva empaque y contenid
     Assert.Equal(1000m, prod.Base.Presentacion.ContenidoNominal)
     Assert.Equal(Mililitro, prod.Base.Presentacion.Unidad)
     Assert.Equal("Frasco 1000 ml", Presentacion.aTexto prod.Base.Presentacion)
+
+[<Fact>]
+let ``Presentacion.reconstruir reconstruye correctamente y sus accessors funcionan`` () =
+    let p = Presentacion.reconstruir "Caja" 250m Gramo
+    Assert.Equal("Caja", Presentacion.empaque p)
+    Assert.Equal(250m, Presentacion.contenidoNominal p)
+    Assert.Equal(Gramo, Presentacion.unidad p)
+    Assert.Equal("Caja 250 g", Presentacion.aTexto p)
+
+[<Fact>]
+let ``Presentacion.reconstruir lanza excepcion ante contenido no positivo en BD`` () =
+    Assert.Throws<Exception>(fun () ->
+        Presentacion.reconstruir "Caja" 0m Gramo |> ignore
+    ) |> ignore
+    Assert.Throws<Exception>(fun () ->
+        Presentacion.reconstruir "Caja" -10m Gramo |> ignore
+    ) |> ignore

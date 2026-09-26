@@ -142,10 +142,7 @@ module Producto =
 
     /// Helper de conveniencia para crear borrador especificando únicamente la UnidadMedida
     let crearBorradorConUnidad id (unidad: UnidadMedida) trazabilidad categoria observaciones =
-        let pres =
-            { Empaque = "Unidad"
-              ContenidoNominal = 1m
-              Unidad = unidad }
+        let pres = Presentacion.reconstruir "Unidad" 1m unidad
         crearBorrador id pres trazabilidad categoria observaciones
 
     let asignarPrecio (monto: decimal) (moneda: string option) (usuarioId: UsuarioId option) (p: Producto) : Result<Producto, DomainError> =

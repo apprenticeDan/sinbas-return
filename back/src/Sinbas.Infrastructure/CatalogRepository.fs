@@ -49,10 +49,7 @@ module CatalogRepository =
         let prodId = ProductoId row.id
         let unidad = mapUnidad row.unidad_manejo
         let empaque = defaultArg row.empaque "Unidad"
-        let presentacion =
-            { Empaque = empaque
-              ContenidoNominal = defaultArg row.gramos_nominales 1m
-              Unidad = unidad }
+        let presentacion = Presentacion.reconstruir empaque (defaultArg row.gramos_nominales 1m) unidad
         let trazabilidad = if row.trazabilidad = "PorLote" then PorLote else Simple
         
         let nombresComunesList =
