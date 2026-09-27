@@ -4,6 +4,7 @@ open System
 
 type EstadoLote =
     | Activo
+    | EnCuarentena
     | Agotado
     | Bloqueado
     | Rechazado
@@ -101,12 +102,72 @@ module Lote =
 
     let archivar lote = { lote with Estado = Archivado }
 
-    /// RN12: Aplica el resultado del análisis de laboratorio al lote.
-    /// Si el dictamen es Rechazado, el lote pasa a estado Rechazado y queda excluido automáticamente
-    /// del stock disponible para venta y proformas.
+    /// RN12: Aplica el resultado del análisis técnico de laboratorio al lote.
+    /// - DictamenCalidad.Aprobado: Si el lote no estaba en cuarentena ni rechazado, se confirma como Activo.
+    ///   Si el lote ya estaba EnCuarentena o Rechazado, el dictamen NO altera el estado comercial
+    ///   automáticamente; se preserva en su estado para requerir la decisión explícita de Gerencia.
+    /// - DictamenCalidad.Observado: El lote pasa a EnCuarentena (salvo que ya esté Rechazado por Gerencia).
     let aplicarDictamenLaboratorio (dictamen: DictamenCalidad) (lote: Lote) : Lote =
         match dictamen with
-        | DictamenCalidad.Rechazado -> { lote with Estado = Rechazado }
         | DictamenCalidad.Aprobado ->
-            if lote.Estado = Rechazado then { lote with Estado = Activo }
-            else lote
+            match lote.Estado with
+            | EnCuarentena
+            | Rechazado -> lote
+            | _ -> { lote with Estado = Activo }
+        | DictamenCalidad.Observado _ ->
+            match lote.Estado with
+            | Rechazado -> lote
+            | _ -> { lote with Estado = EnCuarentena }
+
+    /// Acción de Gerencia: Levanta la cuarentena de un lote tras evaluar los análisis y contraensayos.
+    let liberarCuarentena (justificacion: string) (gerente: EmpleadoId) (lote: Lote) : Result<Lote, DomainError> =
+        if String.IsNullOrWhiteSpace justificacion then
+            Error (ValorRequerido "Se requiere una justificación formal para levantar la cuarentena del lote")
+        else
+            match lote.Estado with
+            | EnCuarentena ->
+                let (EmpleadoId gId) = gerente
+                let nota = sprintf "[CUARENTENA LEVANTADA por %s]: %s" (gId.ToString()) (justificacion.Trim())
+                let obsActualizada =
+                    match lote.Observaciones with
+                    | None -> Some nota
+                    | Some prev -> Some (sprintf "%s | %s" prev nota)
+                Ok { lote with Estado = Activo; Observaciones = obsActualizada }
+            | otro ->
+                Error (OperacionInvalida (sprintf "Solo un lote en estado 'EnCuarentena' puede ser liberado, estado actual: %A" otro))
+
+    /// Acción de Gerencia: Rechaza definitivamente un lote en cuarentena o bloqueado.
+    let rechazarDefinitivamente (motivo: string) (gerente: EmpleadoId) (lote: Lote) : Result<Lote, DomainError> =
+        if String.IsNullOrWhiteSpace motivo then
+            Error (ValorRequerido "Se requiere un motivo para rechazar definitivamente el lote")
+        else
+            match lote.Estado with
+            | EnCuarentena | Bloqueado ->
+                let (EmpleadoId gId) = gerente
+                let nota = sprintf "[RECHAZADO DEFINITIVAMENTE por %s]: %s" (gId.ToString()) (motivo.Trim())
+                let obsActualizada =
+                    match lote.Observaciones with
+                    | None -> Some nota
+                    | Some prev -> Some (sprintf "%s | %s" prev nota)
+                Ok { lote with Estado = Rechazado; Observaciones = obsActualizada }
+            | Rechazado ->
+                Error (OperacionInvalida "El lote ya se encuentra en estado Rechazado")
+            | otro ->
+                Error (OperacionInvalida (sprintf "Solo un lote en cuarentena o bloqueado puede ser rechazado definitivamente, estado actual: %A" otro))
+
+    /// Acción de Gerencia: Solicita formalmente un nuevo análisis técnico (contraensayo) para un lote en cuarentena.
+    let solicitarNuevoAnalisis (instruccion: string) (gerente: EmpleadoId) (lote: Lote) : Result<Lote, DomainError> =
+        if String.IsNullOrWhiteSpace instruccion then
+            Error (ValorRequerido "Se requiere una instrucción o motivo para solicitar un nuevo análisis")
+        else
+            match lote.Estado with
+            | EnCuarentena ->
+                let (EmpleadoId gId) = gerente
+                let nota = sprintf "[REANÁLISIS SOLICITADO por %s]: %s" (gId.ToString()) (instruccion.Trim())
+                let obsActualizada =
+                    match lote.Observaciones with
+                    | None -> Some nota
+                    | Some prev -> Some (sprintf "%s | %s" prev nota)
+                Ok { lote with Observaciones = obsActualizada }
+            | otro ->
+                Error (OperacionInvalida (sprintf "Solo se puede solicitar reanálisis para un lote en cuarentena, estado actual: %A" otro))

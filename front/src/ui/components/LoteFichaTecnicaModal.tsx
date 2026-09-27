@@ -1,6 +1,8 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
 import { ApiLoteGateway, FichaTecnicaLoteDto } from '../../infrastructure/api/ApiLoteGateway';
 import { ApiLabGateway } from '../../infrastructure/api/ApiLabGateway';
+import { authStore } from '../store/authStore';
+import { loteStore } from '../store/loteStore';
 
 interface LoteFichaTecnicaModalProps {
   open: boolean;
@@ -14,12 +16,23 @@ export function LoteFichaTecnicaModal(props: LoteFichaTecnicaModalProps) {
   const [downloadingPdf, setDownloadingPdf] = createSignal<boolean>(false);
   const [error, setError] = createSignal<string | null>(null);
 
+  // Estados para acciones gerenciales de cuarentena
+  const [actionType, setActionType] = createSignal<'none' | 'liberar' | 'rechazar' | 'solicitar'>('none');
+  const [actionInput, setActionInput] = createSignal<string>('');
+  const [actionLoading, setActionLoading] = createSignal<boolean>(false);
+  const [actionError, setActionError] = createSignal<string | null>(null);
+
+  const canManageCuarentena = () => authStore.hasAnyRole(['Gerencia', 'Administrador']);
+
   createEffect(() => {
     if (props.open && props.loteId) {
       cargarFicha(props.loteId);
     } else {
       setFicha(null);
       setError(null);
+      setActionType('none');
+      setActionInput('');
+      setActionError(null);
     }
   });
 
@@ -49,6 +62,37 @@ export function LoteFichaTecnicaModal(props: LoteFichaTecnicaModalProps) {
     }
   };
 
+  const handleEjecutarAccion = async (e: Event) => {
+    e.preventDefault();
+    const f = ficha();
+    if (!f) return;
+    const txt = actionInput().trim();
+    if (!txt) {
+      setActionError('Debes ingresar una justificación o motivo para registrar la acción');
+      return;
+    }
+
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      if (actionType() === 'liberar') {
+        await ApiLoteGateway.liberarCuarentena(f.id, { justificacion: txt });
+      } else if (actionType() === 'rechazar') {
+        await ApiLoteGateway.rechazarLote(f.id, { motivo: txt });
+      } else if (actionType() === 'solicitar') {
+        await ApiLoteGateway.solicitarNuevoAnalisis(f.id, { instruccion: txt });
+      }
+      setActionType('none');
+      setActionInput('');
+      await cargarFicha(f.id);
+      loteStore.loadLotes();
+    } catch (err: any) {
+      setActionError(err.message || 'Error al ejecutar la acción de gobernanza');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
     <Show when={props.open}>
       <div
@@ -71,7 +115,7 @@ export function LoteFichaTecnicaModal(props: LoteFichaTecnicaModalProps) {
           class="card animate-fade-in"
           style={{
             width: '100%',
-            'max-width': '740px',
+            'max-width': '780px',
             'max-height': '90vh',
             'overflow-y': 'auto',
             background: 'var(--surface)',
@@ -120,6 +164,126 @@ export function LoteFichaTecnicaModal(props: LoteFichaTecnicaModalProps) {
           </Show>
 
           <Show when={!loading() && ficha()}>
+            {/* Banner de Cuarentena y Gobernanza de Gerencia */}
+            <Show when={ficha()?.estado === 'EnCuarentena'}>
+              <div
+                style={{
+                  padding: '16px',
+                  'border-radius': 'var(--radius-m)',
+                  'margin-bottom': '18px',
+                  border: ficha()?.requiereLiberacionGerencial ? '1px solid #16a34a' : '1px solid #d97706',
+                  background: ficha()?.requiereLiberacionGerencial ? 'rgba(22, 163, 74, 0.08)' : 'rgba(217, 119, 6, 0.08)',
+                }}
+              >
+                <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'flex-start', gap: '12px' }}>
+                  <div>
+                    <strong style={{ 'font-size': '14px', color: ficha()?.requiereLiberacionGerencial ? 'var(--green-deep)' : '#b45309' }}>
+                      {ficha()?.requiereLiberacionGerencial
+                        ? '🎉 Reanálisis Aprobado — Listo para Liberación Gerencial'
+                        : '⚠️ Lote en Cuarentena Técnica'}
+                    </strong>
+                    <p style={{ 'font-size': '12.5px', margin: '4px 0 0', color: 'var(--ink-soft)' }}>
+                      {ficha()?.requiereLiberacionGerencial
+                        ? 'El último ensayo de calidad fue Aprobado. Por regla de gobernanza, el lote no se activa automáticamente; requiere confirmación explícita de Gerencia para volver a estar disponible.'
+                        : 'El lote se encuentra retenido y no está disponible para venta ni proformas debido a observaciones técnicas. Laboratorio puede realizar reanálisis sobre este lote.'}
+                    </p>
+                  </div>
+
+                  <Show when={canManageCuarentena() && actionType() === 'none'}>
+                    <div style={{ display: 'flex', gap: '8px', 'flex-shrink': 0 }}>
+                      <Show when={ficha()?.requiereLiberacionGerencial}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionType('liberar');
+                            setActionInput('Contraensayo aprobado cumple especificaciones técnicas forestales');
+                          }}
+                          class="btn btn-primary"
+                          style={{ 'font-size': '12px', padding: '6px 12px' }}
+                        >
+                          ✅ Liberar Cuarentena
+                        </button>
+                      </Show>
+                      <Show when={!ficha()?.requiereLiberacionGerencial}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionType('solicitar');
+                            setActionInput('');
+                          }}
+                          class="btn btn-primary"
+                          style={{ 'font-size': '12px', padding: '6px 12px' }}
+                        >
+                          🔄 Solicitar Reanálisis
+                        </button>
+                      </Show>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionType('rechazar');
+                          setActionInput('');
+                        }}
+                        class="btn btn-ghost"
+                        style={{ 'font-size': '12px', padding: '6px 12px', color: 'var(--rust)' }}
+                      >
+                        ⛔ Rechazar Lote
+                      </button>
+                    </div>
+                  </Show>
+                </div>
+
+                {/* Formulario de Acción de Gerencia */}
+                <Show when={actionType() !== 'none'}>
+                  <form onSubmit={handleEjecutarAccion} style={{ 'margin-top': '14px', 'border-top': '1px solid var(--border-soft)', 'padding-top': '12px' }}>
+                    <Show when={actionError()}>
+                      <div class="alert-error" style={{ 'margin-bottom': '10px', 'font-size': '12px' }}>
+                        {actionError()}
+                      </div>
+                    </Show>
+
+                    <div class="field">
+                      <label style={{ 'font-weight': '600', 'font-size': '12.5px' }}>
+                        {actionType() === 'liberar' && 'Justificación formal para liberar cuarentena (Gerencia) *'}
+                        {actionType() === 'rechazar' && 'Motivo del rechazo definitivo del lote (Gerencia) *'}
+                        {actionType() === 'solicitar' && 'Instrucción o parámetros a evaluar en el nuevo análisis *'}
+                      </label>
+                      <input
+                        type="text"
+                        value={actionInput()}
+                        onInput={(e) => setActionInput(e.currentTarget.value)}
+                        placeholder="Detalle los motivos técnicos o administrativos..."
+                        required
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', 'justify-content': 'flex-end', gap: '8px', 'margin-top': '10px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionType('none');
+                          setActionError(null);
+                        }}
+                        class="btn btn-ghost"
+                        style={{ 'font-size': '12px' }}
+                        disabled={actionLoading()}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        class="btn btn-primary"
+                        style={{ 'font-size': '12px' }}
+                        disabled={actionLoading()}
+                      >
+                        {actionLoading() ? 'Registrando...' : 'Confirmar Decisión'}
+                      </button>
+                    </div>
+                  </form>
+                </Show>
+              </div>
+            </Show>
+
             {/* Datos Generales y Botánicos */}
             <div
               style={{
@@ -174,11 +338,21 @@ export function LoteFichaTecnicaModal(props: LoteFichaTecnicaModalProps) {
                   Estado y Dictamen
                 </span>
                 <div style={{ 'margin-top': '4px', display: 'flex', gap: '6px', 'align-items': 'center' }}>
-                  <span class={ficha()?.estado === 'Activo' ? 'pill pill-green' : 'pill pill-rust'}>
+                  <span
+                    class={
+                      ficha()?.estado === 'Activo'
+                        ? 'pill pill-green'
+                        : ficha()?.estado === 'EnCuarentena'
+                        ? 'pill pill-amber'
+                        : 'pill pill-rust'
+                    }
+                  >
                     ● {ficha()?.estado}
                   </span>
                   <Show when={ficha()?.ultimoDictamen}>
-                    <span class={ficha()?.ultimoDictamen === 'Aprobado' ? 'pill pill-green' : 'pill pill-rust'}>
+                    <span
+                      class={ficha()?.ultimoDictamen?.startsWith('Aprobado') ? 'pill pill-green' : 'pill pill-amber'}
+                    >
                       Dictamen: {ficha()?.ultimoDictamen}
                     </span>
                   </Show>
@@ -192,7 +366,7 @@ export function LoteFichaTecnicaModal(props: LoteFichaTecnicaModalProps) {
                 <h3 style={{ 'font-size': '15px', 'font-weight': '600', color: 'var(--ink)', margin: 0 }}>
                   🔬 Historial de Análisis Físicos de Laboratorio (RN12)
                 </h3>
-                <Show when={ficha()?.ultimoDictamen === 'Aprobado'}>
+                <Show when={ficha()?.ultimoDictamen?.startsWith('Aprobado')}>
                   <button
                     type="button"
                     onClick={handleDescargarEtiqueta}
@@ -240,7 +414,7 @@ export function LoteFichaTecnicaModal(props: LoteFichaTecnicaModalProps) {
                             <td style={{ padding: '8px 12px' }}>{analisis.humedad}%</td>
                             <td style={{ padding: '8px 12px' }}>{analisis.viabilidad}%</td>
                             <td style={{ padding: '8px 12px' }}>
-                              <span class={analisis.dictamen === 'Aprobado' ? 'pill pill-green' : 'pill pill-rust'}>
+                              <span class={analisis.dictamen.startsWith('Aprobado') ? 'pill pill-green' : 'pill pill-amber'}>
                                 {analisis.dictamen}
                               </span>
                             </td>
@@ -255,6 +429,16 @@ export function LoteFichaTecnicaModal(props: LoteFichaTecnicaModalProps) {
                 </div>
               </Show>
             </div>
+
+            {/* Observaciones acumuladas del lote */}
+            <Show when={ficha()?.observaciones}>
+              <div style={{ 'margin-bottom': '20px', padding: '12px 16px', background: 'var(--surface-sunken)', 'border-radius': 'var(--radius-m)', 'font-size': '12.5px' }}>
+                <span style={{ 'font-weight': '600', color: 'var(--ink)' }}>Historial de Observaciones y Auditoría:</span>
+                <p style={{ margin: '4px 0 0', color: 'var(--ink-soft)', 'white-space': 'pre-line' }}>
+                  {ficha()?.observaciones}
+                </p>
+              </div>
+            </Show>
 
             {/* Modal Actions */}
             <div style={{ display: 'flex', 'justify-content': 'flex-end', gap: '10px' }}>

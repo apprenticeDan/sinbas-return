@@ -45,6 +45,7 @@ module LoteRepository =
         let estado =
             match row.estado with
             | "Activo" -> Activo
+            | "EnCuarentena" -> EnCuarentena
             | "Agotado" -> Agotado
             | "Bloqueado" -> Bloqueado
             | "Rechazado" -> Rechazado
@@ -69,6 +70,7 @@ module LoteRepository =
         let estadoStr =
             match lote.Estado with
             | Activo -> "Activo"
+            | EnCuarentena -> "EnCuarentena"
             | Agotado -> "Agotado"
             | Bloqueado -> "Bloqueado"
             | Rechazado -> "Rechazado"

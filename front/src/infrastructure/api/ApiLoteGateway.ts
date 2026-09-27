@@ -1,5 +1,12 @@
 import { httpClient } from './HttpClient';
-import { LoteItem, CreateLotePayload, BloquearLotePayload } from '../../domain/models/Lote';
+import {
+  LoteItem,
+  CreateLotePayload,
+  BloquearLotePayload,
+  LiberarCuarentenaPayload,
+  RechazarLotePayload,
+  SolicitarNuevoAnalisisPayload,
+} from '../../domain/models/Lote';
 
 export interface AnalisisResumenDto {
   id: string;
@@ -28,6 +35,7 @@ export interface FichaTecnicaLoteDto {
   ubicacion?: string;
   observaciones?: string;
   estado: string;
+  requiereLiberacionGerencial?: boolean;
   historialAnalisis: AnalisisResumenDto[];
   ultimoDictamen?: string;
 }
@@ -50,6 +58,27 @@ export const ApiLoteGateway = {
 
   async bloquearLote(id: string, payload: BloquearLotePayload): Promise<LoteItem> {
     return httpClient<LoteItem>(`/lotes/${id}/bloquear`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async liberarCuarentena(id: string, payload: LiberarCuarentenaPayload): Promise<LoteItem> {
+    return httpClient<LoteItem>(`/lotes/${id}/liberar-cuarentena`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async rechazarLote(id: string, payload: RechazarLotePayload): Promise<LoteItem> {
+    return httpClient<LoteItem>(`/lotes/${id}/rechazar`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async solicitarNuevoAnalisis(id: string, payload: SolicitarNuevoAnalisisPayload): Promise<LoteItem> {
+    return httpClient<LoteItem>(`/lotes/${id}/solicitar-analisis`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });

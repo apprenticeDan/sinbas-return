@@ -24,6 +24,7 @@ type DomainError =
     | LoteRechazado of string
     | PorcentajeInvalido of string
     | FechaInvalida of string
+    | OperacionInvalida of string
 
 
 // ─────────────────────────────────────────────────────────────

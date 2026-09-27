@@ -30,20 +30,37 @@ module PorcentajeCalidad =
 [<RequireQualifiedAccess>]
 type DictamenCalidad =
     | Aprobado
-    | Rechazado
+    | Observado of motivo: string
 
 module DictamenCalidad =
 
     let aTexto =
         function
         | DictamenCalidad.Aprobado -> "Aprobado"
-        | DictamenCalidad.Rechazado -> "Rechazado"
+        | DictamenCalidad.Observado motivo ->
+            if String.IsNullOrWhiteSpace motivo then "Observado"
+            else sprintf "Observado: %s" (motivo.Trim())
 
     let desdeTexto (s: string) : Result<DictamenCalidad, DomainError> =
-        match (if isNull s then "" else s.Trim()) with
-        | "Aprobado" | "aprobado" -> Ok DictamenCalidad.Aprobado
-        | "Rechazado" | "rechazado" -> Ok DictamenCalidad.Rechazado
-        | otro -> Error (ValorRequerido (sprintf "Dictamen de calidad inválido: '%s'" otro))
+        let trimmed = if isNull s then "" else s.Trim()
+        if String.Equals(trimmed, "Aprobado", StringComparison.OrdinalIgnoreCase) then
+            Ok DictamenCalidad.Aprobado
+        elif trimmed.StartsWith("Observado", StringComparison.OrdinalIgnoreCase) then
+            let motivo =
+                if trimmed.Length > 9 && trimmed.[9] = ':' then
+                    trimmed.Substring(10).Trim()
+                elif trimmed.Length > 9 && trimmed.[9] = ' ' then
+                    trimmed.Substring(9).Trim()
+                else
+                    ""
+            Ok (DictamenCalidad.Observado motivo)
+        elif String.Equals(trimmed, "Rechazado", StringComparison.OrdinalIgnoreCase) then
+            // Retrocompatibilidad con registros legacy en BD
+            Ok (DictamenCalidad.Observado "Rechazado (registro histórico)")
+        elif String.IsNullOrWhiteSpace trimmed then
+            Error (ValorRequerido "El dictamen de calidad no puede estar vacío")
+        else
+            Error (ValorRequerido (sprintf "Dictamen de calidad inválido: '%s'" trimmed))
 
 // ─────────────────────────────────────────────────────────────
 // Entidad: AnalisisLaboratorio
@@ -78,10 +95,16 @@ module AnalisisLaboratorio =
         let h = PorcentajeCalidad.valor humedad
         let v = PorcentajeCalidad.valor viabilidad
 
-        if g >= 60.0m && p >= 70.0m && h <= 15.0m && v >= 60.0m then
+        let fallas =
+            [ if g < 60.0m then yield sprintf "Germinación deficiente (%M%% < 60%%)" g
+              if p < 70.0m then yield sprintf "Pureza insuficiente (%M%% < 70%%)" p
+              if h > 15.0m then yield sprintf "Humedad excesiva (%M%% > 15%%)" h
+              if v < 60.0m then yield sprintf "Viabilidad baja (%M%% < 60%%)" v ]
+
+        if List.isEmpty fallas then
             DictamenCalidad.Aprobado
         else
-            DictamenCalidad.Rechazado
+            DictamenCalidad.Observado (String.concat ", " fallas)
 
     let crear
         (id: LaboratorioId)

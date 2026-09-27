@@ -9,7 +9,7 @@ export interface LoteItem {
   unidad: string;
   fechaIngreso: string;
   ubicacion?: string;
-  estado: 'Activo' | 'Agotado' | 'Bloqueado' | 'Archivado';
+  estado: 'Activo' | 'EnCuarentena' | 'Rechazado' | 'Agotado' | 'Bloqueado' | 'Archivado';
   observaciones?: string;
 }
 
@@ -26,4 +26,16 @@ export interface CreateLotePayload {
 
 export interface BloquearLotePayload {
   motivo: string;
+}
+
+export interface LiberarCuarentenaPayload {
+  justificacion: string;
+}
+
+export interface RechazarLotePayload {
+  motivo: string;
+}
+
+export interface SolicitarNuevoAnalisisPayload {
+  instruccion: string;
 }

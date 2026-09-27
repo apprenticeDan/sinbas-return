@@ -84,3 +84,48 @@ let ``Bloqueo de lote acumula observaciones de justificacion inmutablemente`` ()
     Assert.Equal(Bloqueado, bloqueado.Estado)
     Assert.False(Lote.estaActivo bloqueado)
     Assert.Contains("[BLOQUEADO]: Alerta de plaga", bloqueado.Observaciones.Value)
+
+[<Fact>]
+let ``Lote.solicitarNuevoAnalisis registra instruccion gerencial y preserva EnCuarentena`` () =
+    let lote = crearLoteValido ()
+    let loteCuarentena = Lote.aplicarDictamenLaboratorio (DictamenCalidad.Observado "Humedad alta") lote
+    let gerente = EmpleadoId (Guid.NewGuid())
+
+    match Lote.solicitarNuevoAnalisis "Repetir prueba tras 5 días de secado en cámara" gerente loteCuarentena with
+    | Error err -> failwithf "Fallo solicitarNuevoAnalisis: %A" err
+    | Ok loteActualizado ->
+        Assert.Equal(EnCuarentena, loteActualizado.Estado)
+        Assert.Contains("REANÁLISIS SOLICITADO", loteActualizado.Observaciones.Value)
+        Assert.Contains("secado en cámara", loteActualizado.Observaciones.Value)
+
+[<Fact>]
+let ``Lote.liberarCuarentena rechaza operacion si el lote no esta EnCuarentena o justificacion esta vacia`` () =
+    let lote = crearLoteValido ()
+    let gerente = EmpleadoId (Guid.NewGuid())
+
+    // Caso 1: Lote en estado Activo no puede ser liberado
+    match Lote.liberarCuarentena "Justificación válida" gerente lote with
+    | Error (OperacionInvalida msg) -> Assert.Contains("Solo un lote en estado 'EnCuarentena'", msg)
+    | res -> failwithf "Debió rechazar liberación de lote Activo: %A" res
+
+    // Caso 2: Justificación vacía en lote EnCuarentena
+    let loteCuarentena = Lote.aplicarDictamenLaboratorio (DictamenCalidad.Observado "Falla") lote
+    match Lote.liberarCuarentena "  " gerente loteCuarentena with
+    | Error (ValorRequerido msg) -> Assert.Contains("justificación formal", msg)
+    | res -> failwithf "Debió exigir justificación no vacía: %A" res
+
+[<Fact>]
+let ``Lote.rechazarDefinitivamente pasa a Rechazado y no permite doble rechazo`` () =
+    let lote = crearLoteValido ()
+    let loteCuarentena = Lote.aplicarDictamenLaboratorio (DictamenCalidad.Observado "Falla") lote
+    let gerente = EmpleadoId (Guid.NewGuid())
+
+    match Lote.rechazarDefinitivamente "Semillas con viabilidad nula" gerente loteCuarentena with
+    | Error err -> failwithf "Fallo rechazo: %A" err
+    | Ok loteRechazado ->
+        Assert.Equal(Rechazado, loteRechazado.Estado)
+
+        // Intento de volver a rechazar
+        match Lote.rechazarDefinitivamente "Otro motivo" gerente loteRechazado with
+        | Error (OperacionInvalida msg) -> Assert.Contains("ya se encuentra en estado Rechazado", msg)
+        | res -> failwithf "Debió impedir doble rechazo: %A" res
