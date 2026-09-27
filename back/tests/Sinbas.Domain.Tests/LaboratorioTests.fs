@@ -69,24 +69,51 @@ let ``evaluarDictamenCalidad retorna Aprobado cuando todos los parametros cumple
     Assert.Equal(DictamenCalidad.Aprobado, dictamen)
 
 [<Fact>]
-let ``evaluarDictamenCalidad retorna Rechazado cuando la germinacion esta por debajo del umbral`` () =
+let ``evaluarDictamenCalidad retorna Observado cuando la germinacion esta por debajo del umbral`` () =
     let germBaja = match PorcentajeCalidad.crear 45.0m with Ok p -> p | Error _ -> failwith ""
     let pureza = match PorcentajeCalidad.crear 95.0m with Ok p -> p | Error _ -> failwith ""
     let hum = match PorcentajeCalidad.crear 9.0m with Ok p -> p | Error _ -> failwith ""
     let viab = match PorcentajeCalidad.crear 50.0m with Ok p -> p | Error _ -> failwith ""
 
-    let dictamen = AnalisisLaboratorio.evaluarDictamenCalidad germBaja pureza hum viab
-    Assert.Equal(DictamenCalidad.Rechazado, dictamen)
+    match AnalisisLaboratorio.evaluarDictamenCalidad germBaja pureza hum viab with
+    | DictamenCalidad.Observado motivo ->
+        Assert.Contains("Germinación deficiente", motivo)
+        Assert.Contains("Viabilidad baja", motivo)
+    | DictamenCalidad.Aprobado -> failwith "Debió ser Observado"
 
 [<Fact>]
-let ``evaluarDictamenCalidad retorna Rechazado cuando la humedad supera el limite maximo permitido`` () =
+let ``evaluarDictamenCalidad retorna Observado cuando la humedad supera el limite maximo permitido`` () =
     let germ = match PorcentajeCalidad.crear 85.0m with Ok p -> p | Error _ -> failwith ""
     let pureza = match PorcentajeCalidad.crear 95.0m with Ok p -> p | Error _ -> failwith ""
     let humAlta = match PorcentajeCalidad.crear 18.0m with Ok p -> p | Error _ -> failwith ""
     let viab = match PorcentajeCalidad.crear 90.0m with Ok p -> p | Error _ -> failwith ""
 
-    let dictamen = AnalisisLaboratorio.evaluarDictamenCalidad germ pureza humAlta viab
-    Assert.Equal(DictamenCalidad.Rechazado, dictamen)
+    match AnalisisLaboratorio.evaluarDictamenCalidad germ pureza humAlta viab with
+    | DictamenCalidad.Observado motivo ->
+        Assert.Contains("Humedad excesiva", motivo)
+    | DictamenCalidad.Aprobado -> failwith "Debió ser Observado"
+
+// ─────────────────────────────────────────────────────────────
+// Tests de parsing y retrocompatibilidad de DictamenCalidad
+// ─────────────────────────────────────────────────────────────
+
+[<Theory>]
+[<InlineData("Aprobado")>]
+[<InlineData("aprobado")>]
+[<InlineData("APROBADO")>]
+let ``DictamenCalidad.desdeTexto reconoce Aprobado`` (s: string) =
+    match DictamenCalidad.desdeTexto s with
+    | Ok DictamenCalidad.Aprobado -> ()
+    | res -> failwithf "Debió parsear Aprobado pero obtuvo %A" res
+
+[<Theory>]
+[<InlineData("Observado")>]
+[<InlineData("Observado: Germinación baja")>]
+[<InlineData("Rechazado")>] // retrocompatibilidad con datos legacy
+let ``DictamenCalidad.desdeTexto reconoce Observado y Rechazado legacy`` (s: string) =
+    match DictamenCalidad.desdeTexto s with
+    | Ok (DictamenCalidad.Observado _) -> ()
+    | res -> failwithf "Debió parsear Observado pero obtuvo %A" res
 
 // ─────────────────────────────────────────────────────────────
 // Tests de Invariantes de AnalisisLaboratorio (rechazo de negativos)
@@ -112,28 +139,62 @@ let ``AnalisisLaboratorio.crear rechaza semillasPurasKg o semillasImpurezasKg ne
     | res -> failwithf "Debio rechazar impurezas negativas, obtuvo: %A" res
 
 // ─────────────────────────────────────────────────────────────
-// Tests de RN12: Exclusión de stock para lotes rechazados por laboratorio
+// Tests de RN12: Exclusión de stock para lotes observados / cuarentena
 // ─────────────────────────────────────────────────────────────
 
 [<Fact>]
-let ``Lote con analisis rechazado queda marcado como Rechazado y excluido de stock disponible (RN12)`` () =
+let ``Lote con analisis observado pasa a EnCuarentena y queda excluido de stock disponible (RN12)`` () =
     let lote = crearLoteBase ()
     Assert.Equal(Activo, lote.Estado)
 
-    // Al aplicar dictamen Rechazado
-    let loteRechazado = Lote.aplicarDictamenLaboratorio DictamenCalidad.Rechazado lote
-    Assert.Equal(Rechazado, loteRechazado.Estado)
-    Assert.False(Lote.estaActivo loteRechazado)
+    // Al aplicar dictamen Observado, pasa a EnCuarentena
+    let loteCuarentena = Lote.aplicarDictamenLaboratorio (DictamenCalidad.Observado "Germinación deficiente (45% < 60%)") lote
+    Assert.Equal(EnCuarentena, loteCuarentena.Estado)
+    Assert.False(Lote.estaActivo loteCuarentena)
 
     // Stock.stockProducto no lo suma
-    let stock = Stock.stockProducto prodId [loteRechazado]
+    let stock = Stock.stockProducto prodId [loteCuarentena]
     Assert.Equal(0m, stock)
 
     // Fifo.resolverFIFO no lo asigna
     let req = Cantidad.reconstruir 1000m Gramo
-    match Fifo.resolverFIFO prodId req [loteRechazado] with
+    match Fifo.resolverFIFO prodId req [loteCuarentena] with
     | Error (StockInsuficiente _) -> ()
-    | res -> failwithf "FIFO no debio asignar lote rechazado, obtuvo: %A" res
+    | res -> failwithf "FIFO no debio asignar lote en cuarentena, obtuvo: %A" res
+
+[<Fact>]
+let ``Lote en cuarentena con nuevo analisis Aprobado PERMANECE en cuarentena hasta decision explicita de Gerencia`` () =
+    let lote = crearLoteBase ()
+    let loteCuarentena = Lote.aplicarDictamenLaboratorio (DictamenCalidad.Observado "Baja germinacion") lote
+    Assert.Equal(EnCuarentena, loteCuarentena.Estado)
+
+    // Laboratorio realiza contraensayo que sale Aprobado
+    let loteTrasReanalisis = Lote.aplicarDictamenLaboratorio DictamenCalidad.Aprobado loteCuarentena
+    // Invariante de diseño: NO pasa a Activo por efecto colateral del análisis
+    Assert.Equal(EnCuarentena, loteTrasReanalisis.Estado)
+    Assert.False(Lote.estaActivo loteTrasReanalisis)
+
+    // Gerencia evalúa y libera explícitamente la cuarentena
+    let gerente = EmpleadoId (Guid.Parse("01917f3a-0001-7000-8000-000000000001"))
+    match Lote.liberarCuarentena "Contraensayo confirma viabilidad y vigor adecuado" gerente loteTrasReanalisis with
+    | Error err -> failwithf "Fallo liberacion de cuarentena: %A" err
+    | Ok loteLiberado ->
+        Assert.Equal(Activo, loteLiberado.Estado)
+        Assert.True(Lote.estaActivo loteLiberado)
+        Assert.Contains("CUARENTENA LEVANTADA", loteLiberado.Observaciones.Value)
+
+[<Fact>]
+let ``Gerencia puede rechazar definitivamente un lote en cuarentena`` () =
+    let lote = crearLoteBase ()
+    let loteCuarentena = Lote.aplicarDictamenLaboratorio (DictamenCalidad.Observado "Semillas vanas") lote
+    let gerente = EmpleadoId (Guid.Parse("01917f3a-0001-7000-8000-000000000001"))
+
+    match Lote.rechazarDefinitivamente "Semillas con daño por insectos irrecuperable" gerente loteCuarentena with
+    | Error err -> failwithf "Fallo rechazo: %A" err
+    | Ok loteRechazado ->
+        Assert.Equal(Rechazado, loteRechazado.Estado)
+        Assert.False(Lote.estaActivo loteRechazado)
+        Assert.Contains("RECHAZADO DEFINITIVAMENTE", loteRechazado.Observaciones.Value)
 
 // ─────────────────────────────────────────────────────────────
 // Tests de RN01 | RF07 | F-LAB-03: Etiquetado condicionado a análisis

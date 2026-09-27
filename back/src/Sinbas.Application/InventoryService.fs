@@ -422,6 +422,7 @@ module InventoryService =
                             let estadoStr =
                                 match l.Estado with
                                 | Activo -> "Activo"
+                                | EnCuarentena -> "EnCuarentena"
                                 | Agotado -> "Agotado"
                                 | Bloqueado -> "Bloqueado"
                                 | Rechazado -> "Rechazado"
@@ -489,6 +490,7 @@ module InventoryService =
                             let estadoStr =
                                 match l.Estado with
                                 | Activo -> "Activo"
+                                | EnCuarentena -> "EnCuarentena"
                                 | Agotado -> "Agotado"
                                 | Bloqueado -> "Bloqueado"
                                 | Rechazado -> "Rechazado"

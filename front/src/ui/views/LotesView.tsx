@@ -25,9 +25,11 @@ export function LotesView() {
     const list = loteStore.lotes();
     const total = list.length;
     const activos = list.filter((l) => l.estado === 'Activo').length;
+    const cuarentena = list.filter((l) => l.estado === 'EnCuarentena').length;
+    const rechazados = list.filter((l) => l.estado === 'Rechazado').length;
     const bloqueados = list.filter((l) => l.estado === 'Bloqueado').length;
     const agotados = list.filter((l) => l.estado === 'Agotado').length;
-    return { total, activos, bloqueados, agotados };
+    return { total, activos, cuarentena, rechazados, bloqueados, agotados };
   });
 
   const columns: Column<LoteItem>[] = [
@@ -112,6 +114,22 @@ export function LotesView() {
       cell: (l) => {
         if (l.estado === 'Activo') {
           return <span class="pill pill-green">● Activo</span>;
+        } else if (l.estado === 'EnCuarentena') {
+          return (
+            <span
+              class="pill pill-amber"
+              style={{ 'border-color': '#d97706', color: '#b45309', background: 'rgba(245, 158, 11, 0.12)' }}
+              title={l.observaciones || 'Lote en cuarentena técnica'}
+            >
+              ⚠️ En Cuarentena
+            </span>
+          );
+        } else if (l.estado === 'Rechazado') {
+          return (
+            <span class="pill pill-rust" title={l.observaciones || 'Lote rechazado definitivamente'}>
+              ⛔ Rechazado
+            </span>
+          );
         } else if (l.estado === 'Bloqueado') {
           return (
             <span class="pill pill-rust" title={l.observaciones || 'Lote bajo observación'}>
@@ -200,8 +218,10 @@ export function LotesView() {
               >
                 <option value="">Todos los Estados</option>
                 <option value="Activo">Activos</option>
+                <option value="EnCuarentena">En Cuarentena</option>
                 <option value="Agotado">Agotados</option>
                 <option value="Bloqueado">Bloqueados</option>
+                <option value="Rechazado">Rechazados</option>
               </select>
             </div>
           </div>
@@ -221,10 +241,12 @@ export function LotesView() {
         </div>
 
         {/* Stats Sub-bar */}
-        <div style={{ padding: '12px 20px', background: 'var(--surface-alt)', 'border-top': '1px solid var(--border-soft)', display: 'flex', gap: '20px', 'font-size': '12px' }}>
+        <div style={{ padding: '12px 20px', background: 'var(--surface-alt)', 'border-top': '1px solid var(--border-soft)', display: 'flex', 'flex-wrap': 'wrap', gap: '20px', 'font-size': '12px' }}>
           <div>Total Lotes: <strong>{stats().total}</strong></div>
           <div style={{ color: 'var(--green-deep)' }}>Disponibles: <strong>{stats().activos}</strong></div>
-          <div style={{ color: 'var(--rust)' }}>Bloqueados / Alertas: <strong>{stats().bloqueados}</strong></div>
+          <div style={{ color: '#b45309' }}>En Cuarentena: <strong>{stats().cuarentena}</strong></div>
+          <div style={{ color: 'var(--rust)' }}>Rechazados: <strong>{stats().rechazados}</strong></div>
+          <div style={{ color: 'var(--rust)' }}>Bloqueados: <strong>{stats().bloqueados}</strong></div>
           <div style={{ color: 'var(--amber)' }}>Agotados: <strong>{stats().agotados}</strong></div>
         </div>
       </div>

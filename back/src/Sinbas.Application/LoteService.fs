@@ -34,6 +34,18 @@ type BloquearLoteRequest =
     { Motivo: string }
 
 [<CLIMutable>]
+type LiberarCuarentenaRequest =
+    { Justificacion: string }
+
+[<CLIMutable>]
+type RechazarLoteRequest =
+    { Motivo: string }
+
+[<CLIMutable>]
+type SolicitarNuevoAnalisisRequest =
+    { Instruccion: string }
+
+[<CLIMutable>]
 type AnalisisResumenDto =
     { Id: string
       FechaAnalisis: string
@@ -61,6 +73,7 @@ type FichaTecnicaLoteDto =
       Ubicacion: string option
       Observaciones: string option
       Estado: string
+      RequiereLiberacionGerencial: bool
       HistorialAnalisis: AnalisisResumenDto list
       UltimoDictamen: string option }
 
@@ -82,6 +95,7 @@ module LoteService =
         let estadoStr =
             match lote.Estado with
             | Activo -> "Activo"
+            | EnCuarentena -> "EnCuarentena"
             | Agotado -> "Agotado"
             | Bloqueado -> "Bloqueado"
             | Rechazado -> "Rechazado"
@@ -174,8 +188,10 @@ module LoteService =
             let estOpt =
                 match estadoFilter with
                 | Some "Activo" -> Some Activo
+                | Some "EnCuarentena" -> Some EnCuarentena
                 | Some "Agotado" -> Some Agotado
                 | Some "Bloqueado" -> Some Bloqueado
+                | Some "Rechazado" -> Some Rechazado
                 | Some "Archivado" -> Some Archivado
                 | _ -> None
 
@@ -256,6 +272,7 @@ module LoteService =
                     let estadoStr =
                         match lote.Estado with
                         | Activo -> "Activo"
+                        | EnCuarentena -> "EnCuarentena"
                         | Agotado -> "Agotado"
                         | Bloqueado -> "Bloqueado"
                         | Rechazado -> "Rechazado"
@@ -280,6 +297,12 @@ module LoteService =
                         |> List.tryHead
                         |> Option.map (fun a -> a.Dictamen)
 
+                    let requiereLiberacionGerencial =
+                        lote.Estado = EnCuarentena &&
+                        ultimoDictamen
+                        |> Option.map (fun d -> d.StartsWith("Aprobado", StringComparison.OrdinalIgnoreCase))
+                        |> Option.defaultValue false
+
                     let (LoteId lId) = lote.Id
                     let (ProductoId pId) = lote.ProductoId
 
@@ -299,9 +322,94 @@ module LoteService =
                           Ubicacion = lote.Ubicacion
                           Observaciones = lote.Observaciones
                           Estado = estadoStr
+                          RequiereLiberacionGerencial = requiereLiberacionGerencial
                           HistorialAnalisis = analisisDtos
                           UltimoDictamen = ultimoDictamen }
 
                     return Ok dto
+        }
+
+    let liberarCuarentena
+        (obtenerLote: LoteId -> Async<Lote option>)
+        (obtenerProducto: ProductoId -> Async<Producto option>)
+        (actualizarLote: Lote -> Async<unit>)
+        (loteIdStr: string)
+        (gerenteId: EmpleadoId)
+        (justificacion: string)
+        : Async<Result<LoteDto, string>> =
+        async {
+            match Guid.TryParse(loteIdStr) with
+            | false, _ -> return Error "ID de lote inválido"
+            | true, gId ->
+                let loteId = LoteId gId
+                let! optLote = obtenerLote loteId
+                match optLote with
+                | None -> return Error "Lote no encontrado"
+                | Some lote ->
+                    match Lote.liberarCuarentena justificacion gerenteId lote with
+                    | Error (ValorRequerido msg) -> return Error msg
+                    | Error (OperacionInvalida msg) -> return Error msg
+                    | Error err -> return Error (sprintf "Error al liberar cuarentena: %A" err)
+                    | Ok loteLiberado ->
+                        do! actualizarLote loteLiberado
+                        let! optProd = obtenerProducto lote.ProductoId
+                        let nomProd = optProd |> Option.map Producto.nombreVisible |> Option.defaultValue "Producto Desconocido"
+                        return Ok (aLoteDto nomProd loteLiberado)
+        }
+
+    let rechazarLote
+        (obtenerLote: LoteId -> Async<Lote option>)
+        (obtenerProducto: ProductoId -> Async<Producto option>)
+        (actualizarLote: Lote -> Async<unit>)
+        (loteIdStr: string)
+        (gerenteId: EmpleadoId)
+        (motivo: string)
+        : Async<Result<LoteDto, string>> =
+        async {
+            match Guid.TryParse(loteIdStr) with
+            | false, _ -> return Error "ID de lote inválido"
+            | true, gId ->
+                let loteId = LoteId gId
+                let! optLote = obtenerLote loteId
+                match optLote with
+                | None -> return Error "Lote no encontrado"
+                | Some lote ->
+                    match Lote.rechazarDefinitivamente motivo gerenteId lote with
+                    | Error (ValorRequerido msg) -> return Error msg
+                    | Error (OperacionInvalida msg) -> return Error msg
+                    | Error err -> return Error (sprintf "Error al rechazar lote: %A" err)
+                    | Ok loteRechazado ->
+                        do! actualizarLote loteRechazado
+                        let! optProd = obtenerProducto lote.ProductoId
+                        let nomProd = optProd |> Option.map Producto.nombreVisible |> Option.defaultValue "Producto Desconocido"
+                        return Ok (aLoteDto nomProd loteRechazado)
+        }
+
+    let solicitarNuevoAnalisis
+        (obtenerLote: LoteId -> Async<Lote option>)
+        (obtenerProducto: ProductoId -> Async<Producto option>)
+        (actualizarLote: Lote -> Async<unit>)
+        (loteIdStr: string)
+        (gerenteId: EmpleadoId)
+        (instruccion: string)
+        : Async<Result<LoteDto, string>> =
+        async {
+            match Guid.TryParse(loteIdStr) with
+            | false, _ -> return Error "ID de lote inválido"
+            | true, gId ->
+                let loteId = LoteId gId
+                let! optLote = obtenerLote loteId
+                match optLote with
+                | None -> return Error "Lote no encontrado"
+                | Some lote ->
+                    match Lote.solicitarNuevoAnalisis instruccion gerenteId lote with
+                    | Error (ValorRequerido msg) -> return Error msg
+                    | Error (OperacionInvalida msg) -> return Error msg
+                    | Error err -> return Error (sprintf "Error al solicitar nuevo análisis: %A" err)
+                    | Ok loteActualizado ->
+                        do! actualizarLote loteActualizado
+                        let! optProd = obtenerProducto lote.ProductoId
+                        let nomProd = optProd |> Option.map Producto.nombreVisible |> Option.defaultValue "Producto Desconocido"
+                        return Ok (aLoteDto nomProd loteActualizado)
         }
 

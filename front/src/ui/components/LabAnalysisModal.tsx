@@ -24,15 +24,16 @@ export function LabAnalysisModal(props: LabAnalysisModalProps) {
   const [error, setError] = createSignal<string | null>(null);
   const [submitting, setSubmitting] = createSignal<boolean>(false);
 
-  // Sugerencia automática según RN12 / F-LAB-05
+  // Sugerencia automática según RN12 / F-LAB-05: Germinación >= 60%, Pureza >= 70%, Humedad <= 15%, Viabilidad >= 60%
   const dictamenSugerido = createMemo(() => {
     const g = germinacion();
     const p = pureza();
     const h = humedad();
-    if (g >= 70 && p >= 85 && h <= 12) {
+    const v = viabilidad();
+    if (g >= 60 && p >= 70 && h <= 15 && v >= 60) {
       return 'Aprobado';
     }
-    return 'Rechazado';
+    return 'Observado';
   });
 
   const dictamenFinal = createMemo(() => {
@@ -239,8 +240,8 @@ export function LabAnalysisModal(props: LabAnalysisModalProps) {
                   onChange={(e) => setDictamenManual(e.currentTarget.value)}
                 >
                   <option value="Auto">Sugerido Automático ({dictamenSugerido()})</option>
-                  <option value="Aprobado">Aprobado (Apto para Comercialización)</option>
-                  <option value="Rechazado">Rechazado (No Comercializable)</option>
+                  <option value="Aprobado">Aprobado (Cumple Estándares Forestales)</option>
+                  <option value="Observado">Observado (Amerita Revisión / Cuarentena)</option>
                 </select>
               </div>
             </div>
@@ -250,8 +251,8 @@ export function LabAnalysisModal(props: LabAnalysisModalProps) {
               style={{
                 padding: '10px 14px',
                 'border-radius': 'var(--radius-m)',
-                background: dictamenFinal() === 'Aprobado' ? 'rgba(46, 125, 50, 0.1)' : 'rgba(198, 40, 40, 0.1)',
-                border: dictamenFinal() === 'Aprobado' ? '1px solid var(--green-leaf)' : '1px solid var(--rust)',
+                background: dictamenFinal() === 'Aprobado' ? 'rgba(46, 125, 50, 0.1)' : 'rgba(217, 119, 6, 0.1)',
+                border: dictamenFinal() === 'Aprobado' ? '1px solid var(--green-leaf)' : '1px solid #d97706',
                 display: 'flex',
                 'align-items': 'center',
                 'justify-content': 'space-between',
@@ -259,12 +260,12 @@ export function LabAnalysisModal(props: LabAnalysisModalProps) {
             >
               <div>
                 <span style={{ 'font-size': '12px', color: 'var(--ink-soft)' }}>Resultado Dictamen: </span>
-                <strong style={{ color: dictamenFinal() === 'Aprobado' ? 'var(--green-deep)' : 'var(--rust)', 'font-size': '13.5px' }}>
+                <strong style={{ color: dictamenFinal() === 'Aprobado' ? 'var(--green-deep)' : '#d97706', 'font-size': '13.5px' }}>
                   {dictamenFinal()}
                 </strong>
               </div>
               <span style={{ 'font-size': '11.5px', color: 'var(--ink-soft)' }}>
-                RN12: Germinación ≥ 70%, Pureza ≥ 85%
+                RN12: Si es Observado, el lote pasa a EnCuarentena
               </span>
             </div>
 
