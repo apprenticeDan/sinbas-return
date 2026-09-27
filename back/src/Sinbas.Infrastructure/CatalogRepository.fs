@@ -94,7 +94,10 @@ module CatalogRepository =
                   ModificadoPor = row.precio_usuario_id |> Option.map UsuarioId
                   FechaActualizacion = row.precio_fecha })
 
-        let estadoComercial = EstadoComercial.desdeTexto row.estado_comercial
+        let estadoComercial =
+            match EstadoComercial.desdeTexto row.estado_comercial with
+            | Ok ec -> ec
+            | Error err -> failwithf "Dato corrupto en BD: estado_comercial '%s' inválido — %A" row.estado_comercial err
 
         { Base =
             { Id = prodId

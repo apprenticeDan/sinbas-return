@@ -160,3 +160,38 @@ let ``NombreCientifico.reconstruir aplica fallbacks para valores vacios en persi
     Assert.Equal("Indefinido", NombreCientifico.genero nc)
     Assert.Equal("sp.", NombreCientifico.epiteto nc)
     Assert.Equal(None, NombreCientifico.observaciones nc)
+
+[<Fact>]
+let ``EstadoComercial.desdeTexto reconstituye correctamente los tres estados válidos`` () =
+    match EstadoComercial.desdeTexto "PendientePrecioBorrador" with
+    | Ok PendientePrecioBorrador -> ()
+    | res -> failwithf "Esperado PendientePrecioBorrador, obtuvo: %A" res
+
+    match EstadoComercial.desdeTexto "ActivoParaVenta" with
+    | Ok ActivoParaVenta -> ()
+    | res -> failwithf "Esperado ActivoParaVenta, obtuvo: %A" res
+
+    match EstadoComercial.desdeTexto "Inactivo" with
+    | Ok Inactivo -> ()
+    | res -> failwithf "Esperado Inactivo, obtuvo: %A" res
+
+[<Fact>]
+let ``EstadoComercial.desdeTexto rechaza texto desconocido con error explícito en vez de fallar en silencio`` () =
+    match EstadoComercial.desdeTexto "ActivoparaVenta" with
+    | Error (ValorRequerido msg) -> Assert.Contains("desconocido", msg)
+    | res -> failwithf "Typo debería fallar, obtuvo: %A" res
+
+    match EstadoComercial.desdeTexto "ACTIVO_PARA_VENTA" with
+    | Error (ValorRequerido _) -> ()
+    | res -> failwithf "Formato incorrecto debería fallar, obtuvo: %A" res
+
+[<Fact>]
+let ``EstadoComercial.desdeTexto rechaza cadena vacía o null con error ValorRequerido`` () =
+    match EstadoComercial.desdeTexto "" with
+    | Error (ValorRequerido msg) -> Assert.Contains("vacío", msg)
+    | res -> failwithf "Cadena vacía debería fallar, obtuvo: %A" res
+
+    match EstadoComercial.desdeTexto null with
+    | Error (ValorRequerido msg) -> Assert.Contains("vacío", msg)
+    | res -> failwithf "null debería fallar, obtuvo: %A" res
+

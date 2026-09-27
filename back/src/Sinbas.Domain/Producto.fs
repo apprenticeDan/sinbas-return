@@ -96,11 +96,14 @@ module EstadoComercial =
         | ActivoParaVenta -> "ActivoParaVenta"
         | Inactivo -> "Inactivo"
 
-    let desdeTexto (s: string) =
-        match s.Trim() with
-        | "ActivoParaVenta" -> ActivoParaVenta
-        | "Inactivo" -> Inactivo
-        | _ -> PendientePrecioBorrador
+    let desdeTexto (s: string) : Result<EstadoComercial, DomainError> =
+        let trimmed = if isNull s then "" else s.Trim()
+        match trimmed with
+        | "PendientePrecioBorrador" -> Ok PendientePrecioBorrador
+        | "ActivoParaVenta" -> Ok ActivoParaVenta
+        | "Inactivo" -> Ok Inactivo
+        | "" -> Error (ValorRequerido "El estado comercial no puede estar vacío")
+        | otro -> Error (ValorRequerido (sprintf "Estado comercial desconocido: '%s'" otro))
 
 type PrecioOficial =
     { Valor: decimal
