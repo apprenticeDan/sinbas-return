@@ -13,12 +13,13 @@ open Sinbas.Infrastructure
 let main args =
     let builder = WebApplication.CreateBuilder(args)
     
-    // Configurar CORS para el frontend (SolidJS)
+    // Configurar CORS para el frontend (SolidJS con Cookies / Credentials)
     builder.Services.AddCors(fun options ->
         options.AddPolicy("AllowAll", fun policy ->
-            policy.AllowAnyOrigin()
+            policy.SetIsOriginAllowed(Func<string, bool>(fun _ -> true))
                   .AllowAnyMethod()
-                  .AllowAnyHeader() |> ignore
+                  .AllowAnyHeader()
+                  .AllowCredentials() |> ignore
         )
     ) |> ignore
 
@@ -65,6 +66,8 @@ let main args =
     // Inicializar tablas y datos iniciales de la base de datos
     DbConnection.inicializar()
 
+    app.UseCors("AllowAll") |> ignore
+
     // Middleware global de infraestructura: transforma excepciones no controladas en JSON limpio
     app.Use(fun context (next: Microsoft.AspNetCore.Http.RequestDelegate) ->
         async {
@@ -82,7 +85,6 @@ let main args =
         } |> Async.StartAsTask :> Threading.Tasks.Task
     ) |> ignore
 
-    app.UseCors("AllowAll") |> ignore
     app.UseAuthentication() |> ignore
     app.UseAuthorization() |> ignore
 

@@ -1,5 +1,6 @@
 namespace Sinbas.Web
 
+open System
 open System.Security.Claims
 open System.IdentityModel.Tokens.Jwt
 open Microsoft.AspNetCore.Builder
