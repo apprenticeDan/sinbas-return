@@ -195,3 +195,43 @@ let ``Fifo retorna error cuando la cantidad requerida supera el stock disponible
     | Error (StockInsuficiente _) -> Assert.True(true)
     | other -> Assert.True(false, sprintf "Se esperaba StockInsuficiente pero se obtuvo: %A" other)
 
+[<Theory>]
+[<InlineData("Invalido")>]
+[<InlineData("")>]
+[<InlineData("Transferencia")>]
+[<InlineData(null)>]
+let ``TipoMovimiento.resolver rechaza tipos desconocidos y nunca fabrica Entrada`` (tipoInvalido: string) =
+    let res = TipoMovimiento.resolver tipoInvalido "Compra" (Some (Guid.NewGuid())) None None None None
+    match res with
+    | Error (ValorRequerido _) -> () // Correcto: no inventa Entrada
+    | Ok tipo -> failwithf "FALLO DE SEGURIDAD: Se fabricó el movimiento %A para tipo inválido '%s'" tipo tipoInvalido
+    | Error err -> failwithf "Retornó error no esperado: %A" err
+
+[<Fact>]
+let ``TipoMovimiento.resolver rechaza Compra sin ProveedorId y nunca inventa UUID quemado`` () =
+    let res = TipoMovimiento.resolver "Entrada" "Compra" None None None None None
+    match res with
+    | Error (ValorRequerido msg) -> Assert.Contains("contraparte_ref", msg)
+    | Ok tipo -> failwithf "FALLO DE SEGURIDAD: Se fabricó UUID para Compra sin proveedor: %A" tipo
+    | Error err -> failwithf "Retornó error no esperado: %A" err
+
+[<Fact>]
+let ``TipoMovimiento.resolver rechaza Venta sin ClienteId y nunca inventa UUID quemado`` () =
+    let res = TipoMovimiento.resolver "Salida" "Venta" None None None None None
+    match res with
+    | Error (ValorRequerido msg) -> Assert.Contains("contraparte_ref", msg)
+    | Ok tipo -> failwithf "FALLO DE SEGURIDAD: Se fabricó UUID para Venta sin cliente: %A" tipo
+    | Error err -> failwithf "Retornó error no esperado: %A" err
+
+[<Fact>]
+let ``TipoMovimiento.resolver resuelve entradas y salidas validas correctamente`` () =
+    let provId = Guid.NewGuid()
+    let cliId = Guid.NewGuid()
+
+    let entradaRes = TipoMovimiento.resolver "Entrada" "Compra" (Some provId) None None None None
+    Assert.Equal(Ok (Entrada (Compra (ProveedorId provId))), entradaRes)
+
+    let salidaRes = TipoMovimiento.resolver "Salida" "Venta" (Some cliId) None None None None
+    Assert.Equal(Ok (Salida (Venta (ClienteId cliId))), salidaRes)
+
+

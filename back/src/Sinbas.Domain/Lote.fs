@@ -10,6 +10,26 @@ type EstadoLote =
     | Rechazado
     | Archivado
 
+module EstadoLote =
+
+    let aTexto = function
+        | Activo -> "Activo"
+        | EnCuarentena -> "EnCuarentena"
+        | Agotado -> "Agotado"
+        | Bloqueado -> "Bloqueado"
+        | Rechazado -> "Rechazado"
+        | Archivado -> "Archivado"
+
+    let desdeTexto (texto: string) : Result<EstadoLote, DomainError> =
+        match (if isNull texto then "" else texto.Trim()) with
+        | "Activo" -> Ok Activo
+        | "EnCuarentena" -> Ok EnCuarentena
+        | "Agotado" -> Ok Agotado
+        | "Bloqueado" -> Ok Bloqueado
+        | "Rechazado" -> Ok Rechazado
+        | "Archivado" -> Ok Archivado
+        | desconocido -> Error (ValorRequerido (sprintf "Estado de lote desconocido o inválido: '%s'" desconocido))
+
 type Lote =
     { Id: LoteId
       Codigo: CodigoLote

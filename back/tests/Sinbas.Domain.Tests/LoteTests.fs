@@ -129,3 +129,24 @@ let ``Lote.rechazarDefinitivamente pasa a Rechazado y no permite doble rechazo``
         match Lote.rechazarDefinitivamente "Otro motivo" gerente loteRechazado with
         | Error (OperacionInvalida msg) -> Assert.Contains("ya se encuentra en estado Rechazado", msg)
         | res -> failwithf "Debió impedir doble rechazo: %A" res
+
+[<Fact>]
+let ``EstadoLote.desdeTexto reconoce todos los estados validos`` () =
+    Assert.Equal(Ok Activo, EstadoLote.desdeTexto "Activo")
+    Assert.Equal(Ok EnCuarentena, EstadoLote.desdeTexto "EnCuarentena")
+    Assert.Equal(Ok Agotado, EstadoLote.desdeTexto "Agotado")
+    Assert.Equal(Ok Bloqueado, EstadoLote.desdeTexto "Bloqueado")
+    Assert.Equal(Ok Rechazado, EstadoLote.desdeTexto "Rechazado")
+    Assert.Equal(Ok Archivado, EstadoLote.desdeTexto "Archivado")
+
+[<Theory>]
+[<InlineData("Inexistente")>]
+[<InlineData("activo")>] // case sensitivity o sin trim
+[<InlineData("")>]
+[<InlineData("  ")>]
+[<InlineData(null)>]
+let ``EstadoLote.desdeTexto rechaza valores desconocidos o nulos y nunca inventa Activo`` (input: string) =
+    match EstadoLote.desdeTexto input with
+    | Error (ValorRequerido _) -> () // Éxito: el dominio rechaza
+    | Ok estado -> failwithf "FALLO DE SEGURIDAD: EstadoLote.desdeTexto fabricó el estado %A para entrada '%s'" estado input
+    | Error otroError -> failwithf "Retornó error no esperado: %A" otroError

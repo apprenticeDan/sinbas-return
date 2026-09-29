@@ -59,6 +59,44 @@ type MotivoIngreso =
     | Devolucion of ClienteId
     | TruequeEntrada of TruequeId
 
+module MotivoIngreso =
+
+    let aTexto = function
+        | Compra _ -> "Compra"
+        | Recoleccion _ -> "Recoleccion"
+        | DonacionRecibida _ -> "Donacion"
+        | Devolucion _ -> "Devolucion"
+        | TruequeEntrada _ -> "Trueque"
+
+    let desdeTexto (motivo: string) (contraparteRef: Guid option) (contraparteNombre: string option) : Result<MotivoIngreso, DomainError> =
+        match (if isNull motivo then "" else motivo.Trim()) with
+        | "Compra" ->
+            match contraparteRef with
+            | Some pId -> Ok (Compra (ProveedorId pId))
+            | None -> Error (ValorRequerido "El ingreso por Compra requiere un ProveedorId (contraparte_ref)")
+        | "Recoleccion" ->
+            let campana =
+                contraparteNombre
+                |> Option.bind (fun s -> if String.IsNullOrWhiteSpace s then None else Some (s.Trim()))
+                |> Option.defaultValue "Recolección"
+            Ok (Recoleccion campana)
+        | "Donacion" ->
+            let donante =
+                contraparteNombre
+                |> Option.bind (fun s -> if String.IsNullOrWhiteSpace s then None else Some (s.Trim()))
+                |> Option.defaultValue "Donante Anónimo"
+            Ok (DonacionRecibida donante)
+        | "Devolucion" ->
+            match contraparteRef with
+            | Some cId -> Ok (Devolucion (ClienteId cId))
+            | None -> Error (ValorRequerido "El ingreso por Devolución requiere un ClienteId (contraparte_ref)")
+        | "Trueque" ->
+            match contraparteRef with
+            | Some tId -> Ok (TruequeEntrada (TruequeId tId))
+            | None -> Error (ValorRequerido "El ingreso por Trueque requiere un TruequeId (contraparte_ref)")
+        | desconocido ->
+            Error (ValorRequerido (sprintf "Motivo de ingreso desconocido o inválido: '%s'" desconocido))
+
 type MotivoEgreso =
     | Venta of ClienteId
     | MuestraLab of LaboratorioId
@@ -66,6 +104,60 @@ type MotivoEgreso =
     | UsoInterno of descripcion: string
     | DonacionEnviada of destinatario: string
     | TruequeSalida of TruequeId
+
+module MotivoEgreso =
+
+    let aTexto = function
+        | Venta _ -> "Venta"
+        | MuestraLab _ -> "MuestraLab"
+        | Merma _ -> "Merma"
+        | UsoInterno _ -> "UsoInterno"
+        | DonacionEnviada _ -> "Donacion"
+        | TruequeSalida _ -> "Trueque"
+
+    let desdeTexto
+        (motivo: string)
+        (contraparteRef: Guid option)
+        (contraparteNombre: string option)
+        (departamento: string option)
+        (solicitante: string option)
+        (observaciones: string option)
+        : Result<MotivoEgreso, DomainError> =
+        match (if isNull motivo then "" else motivo.Trim()) with
+        | "Venta" ->
+            match contraparteRef with
+            | Some cId -> Ok (Venta (ClienteId cId))
+            | None -> Error (ValorRequerido "El egreso por Venta requiere un ClienteId (contraparte_ref)")
+        | "MuestraLab" ->
+            match contraparteRef with
+            | Some lId -> Ok (MuestraLab (LaboratorioId lId))
+            | None -> Error (ValorRequerido "El egreso por MuestraLab requiere un LaboratorioId (contraparte_ref)")
+        | "Merma" ->
+            let causa =
+                observaciones
+                |> Option.bind (fun s -> if String.IsNullOrWhiteSpace s then None else Some (s.Trim()))
+                |> Option.defaultValue "Merma operativa"
+            Ok (Merma causa)
+        | "UsoInterno" ->
+            let partes = [
+                match departamento with Some d when not (String.IsNullOrWhiteSpace d) -> sprintf "[Depto: %s]" (d.Trim()) | _ -> ()
+                match solicitante with Some s when not (String.IsNullOrWhiteSpace s) -> sprintf "[Solicitante: %s]" (s.Trim()) | _ -> ()
+                match observaciones with Some o when not (String.IsNullOrWhiteSpace o) -> o.Trim() | _ -> ()
+            ]
+            let desc = if List.isEmpty partes then "Uso Interno" else String.concat " " partes
+            Ok (UsoInterno desc)
+        | "Donacion" ->
+            let dest =
+                contraparteNombre
+                |> Option.bind (fun s -> if String.IsNullOrWhiteSpace s then None else Some (s.Trim()))
+                |> Option.defaultValue "Destinatario General"
+            Ok (DonacionEnviada dest)
+        | "Trueque" ->
+            match contraparteRef with
+            | Some tId -> Ok (TruequeSalida (TruequeId tId))
+            | None -> Error (ValorRequerido "El egreso por Trueque requiere un TruequeId (contraparte_ref)")
+        | desconocido ->
+            Error (ValorRequerido (sprintf "Motivo de egreso desconocido o inválido: '%s'" desconocido))
 
 type Linea<'TRef> =
     { Referencia: 'TRef
