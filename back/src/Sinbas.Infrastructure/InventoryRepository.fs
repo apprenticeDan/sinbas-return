@@ -74,7 +74,7 @@ module InventoryRepository =
             | DonacionEnviada dest -> ("Salida", motivoStr, Nullable(), dest)
             | TruequeSalida (TruequeId truId) -> ("Salida", motivoStr, Nullable truId, null)
 
-    let private aMovimientoDominio (row: MovimientoInventarioRow) (lineasRows: LineaMovimientoRow list) : Result<MovimientoInventario, string> =
+    let private aMovimientoDominio (row: MovimientoInventarioRow) (lineasRows: LineaMovimientoRow list) : Result<MovimientoInventario, ErrorIntegridad> =
         let contraparteOpt = if row.contraparte_ref.HasValue then Some row.contraparte_ref.Value else None
         let nombreOpt = Option.ofObj row.contraparte_nombre
         let deptoOpt = Option.ofObj row.departamento
@@ -90,7 +90,11 @@ module InventoryRepository =
                 solOpt
                 obsOpt with
         | Error err ->
-            Error (sprintf "Movimiento %A: %A" row.id err)
+            Error { Entidad = "movimiento_inventario"
+                    RegistroId = string row.id
+                    Campo = "tipo"
+                    ValorCrudo = Some (sprintf "%s/%s" row.tipo row.motivo)
+                    ErrorDominio = err }
         | Ok tipoDominio ->
 
         let (movId: MovimientoId) = MovimientoId row.id
@@ -106,7 +110,12 @@ module InventoryRepository =
                 | l :: tail ->
                     let loteId = LoteId l.lote_id
                     match Cantidad.reconstruir l.cantidad (mapearUnidad l.unidad) with
-                    | Error err -> Error (sprintf "Movimiento %A, Línea %A: cantidad inválida — %A" row.id l.id err)
+                    | Error err ->
+                        Error { Entidad = "linea_movimiento"
+                                RegistroId = string l.id
+                                Campo = "cantidad"
+                                ValorCrudo = Some (sprintf "%M %s" l.cantidad l.unidad)
+                                ErrorDominio = err }
                     | Ok cantidad ->
                         let linea : LineaMovimiento = { Referencia = loteId; Cantidad = cantidad }
                         loop (linea :: acc) tail
@@ -185,9 +194,9 @@ module InventoryRepository =
                     |> Async.Ignore
         }
 
-    let listarMovimientos
+    let listarColeccionMovimientos
         (tipoFilter: string option)
-        : Async<(MovimientoInventario * MetadataMovimiento) list> =
+        : Async<LecturaColeccion<MovimientoInventario * MetadataMovimiento>> =
         async {
             use conn = DbConnection.crear ()
 
@@ -220,27 +229,37 @@ module InventoryRepository =
                     | None -> true
                     | Some t -> String.Equals(m.tipo, t, StringComparison.OrdinalIgnoreCase))
                 |> Seq.sortByDescending (fun m -> m.fecha)
-                |> Seq.choose (fun m ->
-                    let lineas = lineasPorMov |> Map.tryFind m.id |> Option.defaultValue []
-                    match aMovimientoDominio m lineas with
-                    | Error msg ->
-                        eprintfn "[WARN] InventoryRepository.listarMovimientos: %s" msg
-                        None
-                    | Ok dom ->
-                        let meta =
-                            { ContraparteNombre = Option.ofObj m.contraparte_nombre
-                              Departamento = Option.ofObj m.departamento
-                              Solicitante = Option.ofObj m.solicitante }
-                        Some (dom, meta))
-                |> Seq.toList
 
-            return filtrados
+            let mapearConMeta (m: MovimientoInventarioRow) =
+                let lineas = lineasPorMov |> Map.tryFind m.id |> Option.defaultValue []
+                match aMovimientoDominio m lineas with
+                | Ok dom ->
+                    let meta =
+                        { ContraparteNombre = Option.ofObj m.contraparte_nombre
+                          Departamento = Option.ofObj m.departamento
+                          Solicitante = Option.ofObj m.solicitante }
+                    Ok (dom, meta)
+                | Error err -> Error err
+
+            return LecturaColeccion.particionar mapearConMeta filtrados
+        }
+
+    let listarMovimientos (tipoFilter: string option) : Async<(MovimientoInventario * MetadataMovimiento) list> =
+        async {
+            let! col = listarColeccionMovimientos tipoFilter
+            return col.Validos
+        }
+
+    let listarTodosMovimientosDominioColeccion () : Async<LecturaColeccion<MovimientoInventario>> =
+        async {
+            let! col = listarColeccionMovimientos None
+            return { Validos = col.Validos |> List.map fst; Inconsistencias = col.Inconsistencias }
         }
 
     let listarTodosMovimientosDominio () : Async<MovimientoInventario list> =
         async {
-            let! conMeta = listarMovimientos None
-            return conMeta |> List.map fst
+            let! col = listarTodosMovimientosDominioColeccion ()
+            return col.Validos
         }
 
     let listarMovimientosPorLote (loteId: LoteId) : Async<MovimientoInventario list> =

@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="TestHelpers.fs" />
     <Compile Include="Tests.fs" />
+    <Compile Include="IntegridadTests.fs" />
     <Compile Include="CantidadTests.fs" />
     <Compile Include="ProductoTests.fs" />
     <Compile Include="LoteTests.fs" />

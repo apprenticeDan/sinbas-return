@@ -3,6 +3,7 @@ namespace Sinbas.Infrastructure
 open System
 open Dapper.FSharp.PostgreSQL
 open Sinbas.Domain
+open Sinbas.Application
 
 [<CLIMutable>]
 type LoteRow =
@@ -34,21 +35,39 @@ module LoteRepository =
     let private desmapearUnidad (u: UnidadMedida) : string =
         UnidadMedida.aTexto u
 
-    let private loteFromRow (row: LoteRow) : Result<Lote, string> =
+    let private loteFromRow (row: LoteRow) : Result<Lote, ErrorIntegridad> =
         match CodigoLote.desdeString row.codigo with
-        | Error _ ->
-            Error (sprintf "Lote %A: código corrupto '%s'" row.id row.codigo)
+        | Error err ->
+            Error { Entidad = "lote"
+                    RegistroId = string row.id
+                    Campo = "codigo"
+                    ValorCrudo = Some row.codigo
+                    ErrorDominio = err }
         | Ok codigo ->
         match EstadoLote.desdeTexto row.estado with
-        | Error _ ->
-            Error (sprintf "Lote %A: estado desconocido '%s'" row.id row.estado)
+        | Error err ->
+            Error { Entidad = "lote"
+                    RegistroId = string row.id
+                    Campo = "estado"
+                    ValorCrudo = Some row.estado
+                    ErrorDominio = err }
         | Ok estado ->
         let unidad = mapearUnidad row.unidad
         match Cantidad.reconstruir row.cantidad_inicial unidad with
-        | Error err -> Error (sprintf "Lote %A: cantidad_inicial inválida — %A" row.id err)
+        | Error err ->
+            Error { Entidad = "lote"
+                    RegistroId = string row.id
+                    Campo = "cantidad_inicial"
+                    ValorCrudo = Some (string row.cantidad_inicial)
+                    ErrorDominio = err }
         | Ok cantInicial ->
         match Cantidad.reconstruir row.cantidad_actual unidad with
-        | Error err -> Error (sprintf "Lote %A: cantidad_actual inválida — %A" row.id err)
+        | Error err ->
+            Error { Entidad = "lote"
+                    RegistroId = string row.id
+                    Campo = "cantidad_actual"
+                    ValorCrudo = Some (string row.cantidad_actual)
+                    ErrorDominio = err }
         | Ok cantActual ->
         Ok { Id = LoteId row.id
              Codigo = codigo
@@ -112,12 +131,13 @@ module LoteRepository =
                 |> Option.bind (fun row ->
                     match loteFromRow row with
                     | Ok lote -> Some lote
-                    | Error msg ->
-                        eprintfn "[WARN] LoteRepository.obtenerPorId: %s" msg
+                    | Error err ->
+                        eprintfn "[INTEGRIDAD_CRITICA] LoteRepository.obtenerPorId id=%s campo=%s: %A"
+                            err.RegistroId err.Campo err.ErrorDominio
                         None)
         }
 
-    let listar (productoIdFilter: ProductoId option) (estadoFilter: EstadoLote option) : Async<Lote list> =
+    let listarColeccion (productoIdFilter: ProductoId option) (estadoFilter: EstadoLote option) : Async<LecturaColeccion<Lote>> =
         async {
             use conn = DbConnection.crear ()
 
@@ -129,18 +149,10 @@ module LoteRepository =
                 |> conn.SelectAsync<LoteRow>
                 |> Async.AwaitTask
 
-            let lotes =
-                rows
-                |> Seq.choose (fun row ->
-                    match loteFromRow row with
-                    | Ok lote -> Some lote
-                    | Error msg ->
-                        eprintfn "[WARN] LoteRepository.listar: %s" msg
-                        None)
-                |> Seq.toList
+            let coleccion = LecturaColeccion.particionar loteFromRow rows
 
-            let lotesFiltrados =
-                lotes
+            let validosFiltrados =
+                coleccion.Validos
                 |> List.filter (fun l ->
                     let matchProd =
                         match productoIdFilter with
@@ -154,7 +166,13 @@ module LoteRepository =
 
                     matchProd && matchEst)
 
-            return lotesFiltrados
+            return { Validos = validosFiltrados; Inconsistencias = coleccion.Inconsistencias }
+        }
+
+    let listar (productoIdFilter: ProductoId option) (estadoFilter: EstadoLote option) : Async<Lote list> =
+        async {
+            let! col = listarColeccion productoIdFilter estadoFilter
+            return col.Validos
         }
 
     let actualizarStockYEstado (lote: Lote) : Async<unit> =

@@ -4,6 +4,7 @@ open System
 open Dapper
 open Dapper.FSharp.PostgreSQL
 open Sinbas.Domain
+open Sinbas.Application
 
 [<CLIMutable>]
 type ProductoRow =
@@ -45,13 +46,17 @@ module CatalogRepository =
     let private mapUnidadTexto (u: UnidadMedida) : string =
         UnidadMedida.aTexto u
 
-    let private reconstruirProducto (row: ProductoRow) : Result<Producto, string> =
+    let private reconstruirProducto (row: ProductoRow) : Result<Producto, ErrorIntegridad> =
         let prodId = ProductoId row.id
         let unidad = mapUnidad row.unidad_manejo
         let empaque = defaultArg row.empaque "Unidad"
         match Presentacion.reconstruir empaque (defaultArg row.gramos_nominales 1m) unidad with
         | Error err ->
-            Error (sprintf "Producto %A: presentación inválida — %A" row.id err)
+            Error { Entidad = "producto"
+                    RegistroId = string row.id
+                    Campo = "gramos_nominales"
+                    ValorCrudo = row.gramos_nominales |> Option.map string
+                    ErrorDominio = err }
         | Ok presentacion ->
         let trazabilidad = if row.trazabilidad = "PorLote" then PorLote else Simple
         
@@ -99,7 +104,11 @@ module CatalogRepository =
 
         match EstadoComercial.desdeTexto row.estado_comercial with
         | Error err ->
-            Error (sprintf "Producto %A: estado_comercial '%s' inválido — %A" row.id row.estado_comercial err)
+            Error { Entidad = "producto"
+                    RegistroId = string row.id
+                    Campo = "estado_comercial"
+                    ValorCrudo = Some row.estado_comercial
+                    ErrorDominio = err }
         | Ok estadoComercial ->
 
         Ok { Base =
@@ -208,12 +217,13 @@ module CatalogRepository =
                 |> Option.bind (fun row ->
                     match reconstruirProducto row with
                     | Ok p -> Some p
-                    | Error msg ->
-                        eprintfn "[WARN] CatalogRepository.buscarPorId: %s" msg
+                    | Error err ->
+                        eprintfn "[INTEGRIDAD_CRITICA] CatalogRepository.buscarPorId id=%s campo=%s: %A"
+                            err.RegistroId err.Campo err.ErrorDominio
                         None)
         }
 
-    let listarTodos () : Async<Producto list> =
+    let listarColeccion () : Async<LecturaColeccion<Producto>> =
         async {
             use conn = DbConnection.crear ()
 
@@ -225,13 +235,11 @@ module CatalogRepository =
                 |> conn.SelectAsync<ProductoRow>
                 |> Async.AwaitTask
 
-            return
-                rows
-                |> Seq.choose (fun row ->
-                    match reconstruirProducto row with
-                    | Ok p -> Some p
-                    | Error msg ->
-                        eprintfn "[WARN] CatalogRepository.listarTodos: %s" msg
-                        None)
-                |> Seq.toList
+            return LecturaColeccion.particionar reconstruirProducto rows
+        }
+
+    let listarTodos () : Async<Producto list> =
+        async {
+            let! coleccion = listarColeccion ()
+            return coleccion.Validos
         }
