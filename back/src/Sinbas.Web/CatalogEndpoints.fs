@@ -30,7 +30,11 @@ module CatalogEndpoints =
                         if String.IsNullOrWhiteSpace v then None else Some v
                     else None
 
-                let! productos = CatalogService.listarCatalogo listarProductos catParam estParam
+                let! coleccion = CatalogRepository.listarColeccion ()
+                if not (List.isEmpty coleccion.Inconsistencias) then
+                    ctx.Response.Headers.["X-Integrity-Warnings"] <- Microsoft.Extensions.Primitives.StringValues(string coleccion.Inconsistencias.Length)
+
+                let! productos = CatalogService.listarCatalogo (fun () -> async { return coleccion.Validos }) catParam estParam
                 return Results.Ok(productos)
             } |> Async.StartAsTask
         ))

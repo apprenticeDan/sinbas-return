@@ -3,6 +3,7 @@ namespace Sinbas.Infrastructure
 open System
 open Dapper.FSharp.PostgreSQL
 open Sinbas.Domain
+open Sinbas.Application
 
 [<CLIMutable>]
 type AnalisisLaboratorioRow =
@@ -38,7 +39,7 @@ module LabRepository =
           dictamen = DictamenCalidad.aTexto a.Dictamen
           observaciones = Option.toObj a.Observaciones }
 
-    let private analisisFromRow (row: AnalisisLaboratorioRow) : AnalisisLaboratorio =
+    let private analisisFromRow (row: AnalisisLaboratorioRow) : Result<AnalisisLaboratorio, ErrorIntegridad> =
         match AnalisisLaboratorio.reconstruir
                 row.id
                 row.lote_id
@@ -51,8 +52,13 @@ module LabRepository =
                 row.semillas_impurezas_kg
                 row.dictamen
                 (Option.ofObj row.observaciones) with
-        | Ok a -> a
-        | Error err -> failwithf "Registro de análisis corrupto en BD: %A" err
+        | Ok a -> Ok a
+        | Error err ->
+            Error { Entidad = "analisis_laboratorio"
+                    RegistroId = string row.id
+                    Campo = "parametros_calidad"
+                    ValorCrudo = Some (sprintf "G:%M, P:%M, H:%M, V:%M, D:%s" row.germinacion row.pureza row.humedad row.viabilidad row.dictamen)
+                    ErrorDominio = err }
 
     let insertar (analisis: AnalisisLaboratorio) : Async<unit> =
         async {
@@ -79,10 +85,19 @@ module LabRepository =
                 |> conn.SelectAsync<AnalisisLaboratorioRow>
                 |> Async.AwaitTask
 
-            return rows |> Seq.tryHead |> Option.map analisisFromRow
+            return
+                rows
+                |> Seq.tryHead
+                |> Option.bind (fun row ->
+                    match analisisFromRow row with
+                    | Ok a -> Some a
+                    | Error err ->
+                        eprintfn "[INTEGRIDAD_CRITICA] LabRepository.obtenerPorId id=%s campo=%s: %A"
+                            err.RegistroId err.Campo err.ErrorDominio
+                        None)
         }
 
-    let listarPorLoteId (LoteId loteId: LoteId) : Async<AnalisisLaboratorio list> =
+    let listarColeccionPorLoteId (LoteId loteId: LoteId) : Async<LecturaColeccion<AnalisisLaboratorio>> =
         async {
             use conn = DbConnection.crear ()
             let! rows =
@@ -94,7 +109,13 @@ module LabRepository =
                 |> conn.SelectAsync<AnalisisLaboratorioRow>
                 |> Async.AwaitTask
 
-            return rows |> Seq.map analisisFromRow |> Seq.toList
+            return LecturaColeccion.particionar analisisFromRow rows
+        }
+
+    let listarPorLoteId (loteId: LoteId) : Async<AnalisisLaboratorio list> =
+        async {
+            let! col = listarColeccionPorLoteId loteId
+            return col.Validos
         }
 
     let obtenerUltimoPorLoteId (loteId: LoteId) : Async<AnalisisLaboratorio option> =
@@ -103,7 +124,7 @@ module LabRepository =
             return lista |> List.tryHead
         }
 
-    let listarTodos () : Async<AnalisisLaboratorio list> =
+    let listarTodosColeccion () : Async<LecturaColeccion<AnalisisLaboratorio>> =
         async {
             use conn = DbConnection.crear ()
             let! rows =
@@ -115,5 +136,11 @@ module LabRepository =
                 |> conn.SelectAsync<AnalisisLaboratorioRow>
                 |> Async.AwaitTask
 
-            return rows |> Seq.map analisisFromRow |> Seq.toList
+            return LecturaColeccion.particionar analisisFromRow rows
+        }
+
+    let listarTodos () : Async<AnalisisLaboratorio list> =
+        async {
+            let! col = listarTodosColeccion ()
+            return col.Validos
         }

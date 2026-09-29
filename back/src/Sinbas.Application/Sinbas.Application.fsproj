@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Integridad.fs" />
     <Compile Include="AuthService.fs" />
     <Compile Include="UserService.fs" />
     <Compile Include="CatalogService.fs" />

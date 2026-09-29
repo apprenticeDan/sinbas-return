@@ -3,6 +3,7 @@ namespace Sinbas.Infrastructure
 open System
 open Dapper.FSharp.PostgreSQL
 open Sinbas.Domain
+open Sinbas.Application
 
 [<CLIMutable>]
 type LoteRow =
@@ -34,47 +35,56 @@ module LoteRepository =
     let private desmapearUnidad (u: UnidadMedida) : string =
         UnidadMedida.aTexto u
 
-    let private loteFromRow (row: LoteRow) : Lote =
-        let codigo =
-            match CodigoLote.desdeString row.codigo with
-            | Ok c -> c
-            | Error _ -> failwithf "Código de lote corrupto en BD: %s" row.codigo
-
+    let private loteFromRow (row: LoteRow) : Result<Lote, ErrorIntegridad> =
+        match CodigoLote.desdeString row.codigo with
+        | Error err ->
+            Error { Entidad = "lote"
+                    RegistroId = string row.id
+                    Campo = "codigo"
+                    ValorCrudo = Some row.codigo
+                    ErrorDominio = err }
+        | Ok codigo ->
+        match EstadoLote.desdeTexto row.estado with
+        | Error err ->
+            Error { Entidad = "lote"
+                    RegistroId = string row.id
+                    Campo = "estado"
+                    ValorCrudo = Some row.estado
+                    ErrorDominio = err }
+        | Ok estado ->
         let unidad = mapearUnidad row.unidad
-
-        let estado =
-            match row.estado with
-            | "Activo" -> Activo
-            | "EnCuarentena" -> EnCuarentena
-            | "Agotado" -> Agotado
-            | "Bloqueado" -> Bloqueado
-            | "Rechazado" -> Rechazado
-            | "Archivado" -> Archivado
-            | _ -> Activo
-
-        { Id = LoteId row.id
-          Codigo = codigo
-          ProductoId = ProductoId row.producto_id
-          Procedencia = Option.ofObj row.procedencia
-          CantidadInicial = Cantidad.reconstruir row.cantidad_inicial unidad
-          CantidadActual  = Cantidad.reconstruir row.cantidad_actual  unidad
-          FechaIngreso = row.fecha_ingreso
-          Ubicacion = Option.ofObj row.ubicacion
-          Estado = estado
-          Observaciones = Option.ofObj row.observaciones }
+        match Cantidad.reconstruir row.cantidad_inicial unidad with
+        | Error err ->
+            Error { Entidad = "lote"
+                    RegistroId = string row.id
+                    Campo = "cantidad_inicial"
+                    ValorCrudo = Some (string row.cantidad_inicial)
+                    ErrorDominio = err }
+        | Ok cantInicial ->
+        match Cantidad.reconstruir row.cantidad_actual unidad with
+        | Error err ->
+            Error { Entidad = "lote"
+                    RegistroId = string row.id
+                    Campo = "cantidad_actual"
+                    ValorCrudo = Some (string row.cantidad_actual)
+                    ErrorDominio = err }
+        | Ok cantActual ->
+        Ok { Id = LoteId row.id
+             Codigo = codigo
+             ProductoId = ProductoId row.producto_id
+             Procedencia = Option.ofObj row.procedencia
+             CantidadInicial = cantInicial
+             CantidadActual  = cantActual
+             FechaIngreso = row.fecha_ingreso
+             Ubicacion = Option.ofObj row.ubicacion
+             Estado = estado
+             Observaciones = Option.ofObj row.observaciones }
 
     let private rowFromLote (lote: Lote) : LoteRow =
         let (LoteId lId) = lote.Id
         let (ProductoId pId) = lote.ProductoId
 
-        let estadoStr =
-            match lote.Estado with
-            | Activo -> "Activo"
-            | EnCuarentena -> "EnCuarentena"
-            | Agotado -> "Agotado"
-            | Bloqueado -> "Bloqueado"
-            | Rechazado -> "Rechazado"
-            | Archivado -> "Archivado"
+        let estadoStr = EstadoLote.aTexto lote.Estado
 
         { id = lId
           codigo = CodigoLote.valor lote.Codigo
@@ -115,10 +125,19 @@ module LoteRepository =
                 |> conn.SelectAsync<LoteRow>
                 |> Async.AwaitTask
 
-            return rows |> Seq.tryHead |> Option.map loteFromRow
+            return
+                rows
+                |> Seq.tryHead
+                |> Option.bind (fun row ->
+                    match loteFromRow row with
+                    | Ok lote -> Some lote
+                    | Error err ->
+                        eprintfn "[INTEGRIDAD_CRITICA] LoteRepository.obtenerPorId id=%s campo=%s: %A"
+                            err.RegistroId err.Campo err.ErrorDominio
+                        None)
         }
 
-    let listar (productoIdFilter: ProductoId option) (estadoFilter: EstadoLote option) : Async<Lote list> =
+    let listarColeccion (productoIdFilter: ProductoId option) (estadoFilter: EstadoLote option) : Async<LecturaColeccion<Lote>> =
         async {
             use conn = DbConnection.crear ()
 
@@ -130,10 +149,10 @@ module LoteRepository =
                 |> conn.SelectAsync<LoteRow>
                 |> Async.AwaitTask
 
-            let lotes = rows |> Seq.map loteFromRow |> Seq.toList
+            let coleccion = LecturaColeccion.particionar loteFromRow rows
 
-            let lotesFiltrados =
-                lotes
+            let validosFiltrados =
+                coleccion.Validos
                 |> List.filter (fun l ->
                     let matchProd =
                         match productoIdFilter with
@@ -147,7 +166,13 @@ module LoteRepository =
 
                     matchProd && matchEst)
 
-            return lotesFiltrados
+            return { Validos = validosFiltrados; Inconsistencias = coleccion.Inconsistencias }
+        }
+
+    let listar (productoIdFilter: ProductoId option) (estadoFilter: EstadoLote option) : Async<Lote list> =
+        async {
+            let! col = listarColeccion productoIdFilter estadoFilter
+            return col.Validos
         }
 
     let actualizarStockYEstado (lote: Lote) : Async<unit> =

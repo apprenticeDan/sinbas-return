@@ -4,6 +4,7 @@ open System
 open Dapper
 open Dapper.FSharp.PostgreSQL
 open Sinbas.Domain
+open Sinbas.Application
 
 [<CLIMutable>]
 type ProductoRow =
@@ -45,11 +46,18 @@ module CatalogRepository =
     let private mapUnidadTexto (u: UnidadMedida) : string =
         UnidadMedida.aTexto u
 
-    let private reconstruirProducto (row: ProductoRow) : Producto =
+    let private reconstruirProducto (row: ProductoRow) : Result<Producto, ErrorIntegridad> =
         let prodId = ProductoId row.id
         let unidad = mapUnidad row.unidad_manejo
         let empaque = defaultArg row.empaque "Unidad"
-        let presentacion = Presentacion.reconstruir empaque (defaultArg row.gramos_nominales 1m) unidad
+        match Presentacion.reconstruir empaque (defaultArg row.gramos_nominales 1m) unidad with
+        | Error err ->
+            Error { Entidad = "producto"
+                    RegistroId = string row.id
+                    Campo = "gramos_nominales"
+                    ValorCrudo = row.gramos_nominales |> Option.map string
+                    ErrorDominio = err }
+        | Ok presentacion ->
         let trazabilidad = if row.trazabilidad = "PorLote" then PorLote else Simple
         
         let nombresComunesList =
@@ -94,20 +102,24 @@ module CatalogRepository =
                   ModificadoPor = row.precio_usuario_id |> Option.map UsuarioId
                   FechaActualizacion = row.precio_fecha })
 
-        let estadoComercial =
-            match EstadoComercial.desdeTexto row.estado_comercial with
-            | Ok ec -> ec
-            | Error err -> failwithf "Dato corrupto en BD: estado_comercial '%s' inválido — %A" row.estado_comercial err
+        match EstadoComercial.desdeTexto row.estado_comercial with
+        | Error err ->
+            Error { Entidad = "producto"
+                    RegistroId = string row.id
+                    Campo = "estado_comercial"
+                    ValorCrudo = Some row.estado_comercial
+                    ErrorDominio = err }
+        | Ok estadoComercial ->
 
-        { Base =
-            { Id = prodId
-              Presentacion = presentacion
-              Trazabilidad = trazabilidad
-              Activo = row.activo
-              Observaciones = row.observaciones }
-          Categoria = categoria
-          PrecioOficial = precioOpt
-          EstadoComercial = estadoComercial }
+        Ok { Base =
+                { Id = prodId
+                  Presentacion = presentacion
+                  Trazabilidad = trazabilidad
+                  Activo = row.activo
+                  Observaciones = row.observaciones }
+             Categoria = categoria
+             PrecioOficial = precioOpt
+             EstadoComercial = estadoComercial }
 
     let guardar (producto: Producto) : Async<Result<unit, string>> =
         async {
@@ -200,10 +212,18 @@ module CatalogRepository =
                 |> conn.SelectAsync<ProductoRow>
                 |> Async.AwaitTask
 
-            return Seq.tryHead rows |> Option.map reconstruirProducto
+            return
+                Seq.tryHead rows
+                |> Option.bind (fun row ->
+                    match reconstruirProducto row with
+                    | Ok p -> Some p
+                    | Error err ->
+                        eprintfn "[INTEGRIDAD_CRITICA] CatalogRepository.buscarPorId id=%s campo=%s: %A"
+                            err.RegistroId err.Campo err.ErrorDominio
+                        None)
         }
 
-    let listarTodos () : Async<Producto list> =
+    let listarColeccion () : Async<LecturaColeccion<Producto>> =
         async {
             use conn = DbConnection.crear ()
 
@@ -215,5 +235,11 @@ module CatalogRepository =
                 |> conn.SelectAsync<ProductoRow>
                 |> Async.AwaitTask
 
-            return rows |> Seq.map reconstruirProducto |> Seq.toList
+            return LecturaColeccion.particionar reconstruirProducto rows
+        }
+
+    let listarTodos () : Async<Producto list> =
+        async {
+            let! coleccion = listarColeccion ()
+            return coleccion.Validos
         }

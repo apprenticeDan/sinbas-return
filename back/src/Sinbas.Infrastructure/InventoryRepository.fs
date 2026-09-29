@@ -54,130 +54,83 @@ module InventoryRepository =
     let private desmapearUnidad (u: UnidadMedida) : string =
         UnidadMedida.aTexto u
 
-    let private mapearTipoMovimiento
-        (tipoStr: string)
-        (motivoStr: string)
-        (contraparteRef: Nullable<Guid>)
-        (contraparteNombre: string)
-        (departamento: string)
-        (solicitante: string)
-        (observaciones: string)
-        : TipoMovimiento =
-        match tipoStr with
-        | "Entrada" ->
-            match motivoStr with
-            | "Compra" ->
-                let pId =
-                    if contraparteRef.HasValue then ProveedorId contraparteRef.Value
-                    else ProveedorId (Guid.Parse("01917f3a-0005-7000-8000-000000000001"))
-                Entrada (Compra pId)
-            | "Recoleccion" ->
-                let campana = if String.IsNullOrWhiteSpace contraparteNombre then "Campaña General" else contraparteNombre
-                Entrada (Recoleccion campana)
-            | "Donacion" ->
-                let donante = if String.IsNullOrWhiteSpace contraparteNombre then "Donante Anónimo" else contraparteNombre
-                Entrada (DonacionRecibida donante)
-            | "Devolucion" ->
-                let cId =
-                    if contraparteRef.HasValue then ClienteId contraparteRef.Value
-                    else ClienteId (Guid.Parse("01917f3a-0006-7000-8000-000000000001"))
-                Entrada (Devolucion cId)
-            | "Trueque" ->
-                let tId =
-                    if contraparteRef.HasValue then TruequeId contraparteRef.Value
-                    else TruequeId (Guid.Parse("01917f3a-0007-7000-8000-000000000001"))
-                Entrada (TruequeEntrada tId)
-            | _ ->
-                let nom = if String.IsNullOrWhiteSpace motivoStr then "Ingreso General" else motivoStr
-                Entrada (Recoleccion nom)
-        | "Salida" ->
-            match motivoStr with
-            | "Venta" ->
-                let cId =
-                    if contraparteRef.HasValue then ClienteId contraparteRef.Value
-                    else ClienteId (Guid.Parse("01917f3a-0006-7000-8000-000000000001"))
-                Salida (Venta cId)
-            | "Merma" ->
-                let causa = if String.IsNullOrWhiteSpace observaciones then "Merma operativa" else observaciones
-                Salida (Merma causa)
-            | "UsoInterno" ->
-                let partes = [
-                    if not (String.IsNullOrWhiteSpace departamento) then sprintf "[Depto: %s]" departamento
-                    if not (String.IsNullOrWhiteSpace solicitante) then sprintf "[Solicitante: %s]" solicitante
-                    if not (String.IsNullOrWhiteSpace observaciones) then observaciones
-                ]
-                let desc = if List.isEmpty partes then "Uso Interno" else String.concat " " partes
-                Salida (UsoInterno desc)
-            | "MuestraLab" ->
-                let lId =
-                    if contraparteRef.HasValue then LaboratorioId contraparteRef.Value
-                    else LaboratorioId (Guid.Parse("01917f3a-0008-7000-8000-000000000001"))
-                Salida (MuestraLab lId)
-            | "Donacion" ->
-                let dest = if String.IsNullOrWhiteSpace contraparteNombre then "Destinatario General" else contraparteNombre
-                Salida (DonacionEnviada dest)
-            | "Trueque" ->
-                let tId =
-                    if contraparteRef.HasValue then TruequeId contraparteRef.Value
-                    else TruequeId (Guid.Parse("01917f3a-0007-7000-8000-000000000001"))
-                Salida (TruequeSalida tId)
-            | _ ->
-                Salida (UsoInterno (if String.IsNullOrWhiteSpace motivoStr then "Salida General" else motivoStr))
-        | _ ->
-            Entrada (Recoleccion "Movimiento no tipificado")
-
     let private desmapearTipoMovimiento (tipo: TipoMovimiento) : string * string * Nullable<Guid> * string =
         match tipo with
         | Entrada motivoIngreso ->
+            let motivoStr = MotivoIngreso.aTexto motivoIngreso
             match motivoIngreso with
-            | Compra (ProveedorId provId) -> ("Entrada", "Compra", Nullable provId, null)
-            | Recoleccion campana -> ("Entrada", "Recoleccion", Nullable(), campana)
-            | DonacionRecibida donante -> ("Entrada", "Donacion", Nullable(), donante)
-            | Devolucion (ClienteId cliId) -> ("Entrada", "Devolucion", Nullable cliId, null)
-            | TruequeEntrada (TruequeId truId) -> ("Entrada", "Trueque", Nullable truId, null)
+            | Compra (ProveedorId provId) -> ("Entrada", motivoStr, Nullable provId, null)
+            | Recoleccion campana -> ("Entrada", motivoStr, Nullable(), campana)
+            | DonacionRecibida donante -> ("Entrada", motivoStr, Nullable(), donante)
+            | Devolucion (ClienteId cliId) -> ("Entrada", motivoStr, Nullable cliId, null)
+            | TruequeEntrada (TruequeId truId) -> ("Entrada", motivoStr, Nullable truId, null)
         | Salida motivoEgreso ->
+            let motivoStr = MotivoEgreso.aTexto motivoEgreso
             match motivoEgreso with
-            | Venta (ClienteId cliId) -> ("Salida", "Venta", Nullable cliId, null)
-            | MuestraLab (LaboratorioId labId) -> ("Salida", "MuestraLab", Nullable labId, null)
-            | Merma causa -> ("Salida", "Merma", Nullable(), null)
-            | UsoInterno desc -> ("Salida", "UsoInterno", Nullable(), null)
-            | DonacionEnviada dest -> ("Salida", "Donacion", Nullable(), dest)
-            | TruequeSalida (TruequeId truId) -> ("Salida", "Trueque", Nullable truId, null)
+            | Venta (ClienteId cliId) -> ("Salida", motivoStr, Nullable cliId, null)
+            | MuestraLab (LaboratorioId labId) -> ("Salida", motivoStr, Nullable labId, null)
+            | Merma _ -> ("Salida", motivoStr, Nullable(), null)
+            | UsoInterno _ -> ("Salida", motivoStr, Nullable(), null)
+            | DonacionEnviada dest -> ("Salida", motivoStr, Nullable(), dest)
+            | TruequeSalida (TruequeId truId) -> ("Salida", motivoStr, Nullable truId, null)
 
-    let private aMovimientoDominio (row: MovimientoInventarioRow) (lineasRows: LineaMovimientoRow list) : MovimientoInventario =
+    let private aMovimientoDominio (row: MovimientoInventarioRow) (lineasRows: LineaMovimientoRow list) : Result<MovimientoInventario, ErrorIntegridad> =
+        let contraparteOpt = if row.contraparte_ref.HasValue then Some row.contraparte_ref.Value else None
+        let nombreOpt = Option.ofObj row.contraparte_nombre
+        let deptoOpt = Option.ofObj row.departamento
+        let solOpt = Option.ofObj row.solicitante
+        let obsOpt = Option.ofObj row.observaciones
+
+        match TipoMovimiento.resolver
+                row.tipo
+                row.motivo
+                contraparteOpt
+                nombreOpt
+                deptoOpt
+                solOpt
+                obsOpt with
+        | Error err ->
+            Error { Entidad = "movimiento_inventario"
+                    RegistroId = string row.id
+                    Campo = "tipo"
+                    ValorCrudo = Some (sprintf "%s/%s" row.tipo row.motivo)
+                    ErrorDominio = err }
+        | Ok tipoDominio ->
+
         let (movId: MovimientoId) = MovimientoId row.id
         let (empId: EmpleadoId) = EmpleadoId row.responsable_id
         let ordenOpt =
             if row.orden_origen_id.HasValue then Some (OrdenId row.orden_origen_id.Value)
             else None
-        let obsOpt =
-            if String.IsNullOrWhiteSpace row.observaciones then None
-            else Some row.observaciones
 
-        let lineas =
-            lineasRows
-            |> List.map (fun l ->
-                let loteId = LoteId l.lote_id
-                let cantidad = Cantidad.reconstruir l.cantidad (mapearUnidad l.unidad)
-                { Referencia = loteId; Cantidad = cantidad } : LineaMovimiento)
+        let lineasResult =
+            let rec loop acc remaining =
+                match remaining with
+                | [] -> Ok (List.rev acc)
+                | l :: tail ->
+                    let loteId = LoteId l.lote_id
+                    match Cantidad.reconstruir l.cantidad (mapearUnidad l.unidad) with
+                    | Error err ->
+                        Error { Entidad = "linea_movimiento"
+                                RegistroId = string l.id
+                                Campo = "cantidad"
+                                ValorCrudo = Some (sprintf "%M %s" l.cantidad l.unidad)
+                                ErrorDominio = err }
+                    | Ok cantidad ->
+                        let linea : LineaMovimiento = { Referencia = loteId; Cantidad = cantidad }
+                        loop (linea :: acc) tail
+            loop [] lineasRows
 
-        let tipoDominio =
-            mapearTipoMovimiento
-                row.tipo
-                row.motivo
-                row.contraparte_ref
-                row.contraparte_nombre
-                row.departamento
-                row.solicitante
-                row.observaciones
-
-        { Id = movId
-          Fecha = row.fecha
-          Responsable = empId
-          Tipo = tipoDominio
-          OrdenOrigen = ordenOpt
-          Lineas = lineas
-          Observaciones = obsOpt }
+        match lineasResult with
+        | Error err -> Error err
+        | Ok lineas ->
+            Ok { Id = movId
+                 Fecha = row.fecha
+                 Responsable = empId
+                 Tipo = tipoDominio
+                 OrdenOrigen = ordenOpt
+                 Lineas = lineas
+                 Observaciones = obsOpt }
 
     let insertarMovimiento
         (movimiento: MovimientoInventario)
@@ -241,9 +194,9 @@ module InventoryRepository =
                     |> Async.Ignore
         }
 
-    let listarMovimientos
+    let listarColeccionMovimientos
         (tipoFilter: string option)
-        : Async<(MovimientoInventario * MetadataMovimiento) list> =
+        : Async<LecturaColeccion<MovimientoInventario * MetadataMovimiento>> =
         async {
             use conn = DbConnection.crear ()
 
@@ -276,23 +229,37 @@ module InventoryRepository =
                     | None -> true
                     | Some t -> String.Equals(m.tipo, t, StringComparison.OrdinalIgnoreCase))
                 |> Seq.sortByDescending (fun m -> m.fecha)
-                |> Seq.map (fun m ->
-                    let lineas = lineasPorMov |> Map.tryFind m.id |> Option.defaultValue []
-                    let dom = aMovimientoDominio m lineas
+
+            let mapearConMeta (m: MovimientoInventarioRow) =
+                let lineas = lineasPorMov |> Map.tryFind m.id |> Option.defaultValue []
+                match aMovimientoDominio m lineas with
+                | Ok dom ->
                     let meta =
                         { ContraparteNombre = Option.ofObj m.contraparte_nombre
                           Departamento = Option.ofObj m.departamento
                           Solicitante = Option.ofObj m.solicitante }
-                    (dom, meta))
-                |> Seq.toList
+                    Ok (dom, meta)
+                | Error err -> Error err
 
-            return filtrados
+            return LecturaColeccion.particionar mapearConMeta filtrados
+        }
+
+    let listarMovimientos (tipoFilter: string option) : Async<(MovimientoInventario * MetadataMovimiento) list> =
+        async {
+            let! col = listarColeccionMovimientos tipoFilter
+            return col.Validos
+        }
+
+    let listarTodosMovimientosDominioColeccion () : Async<LecturaColeccion<MovimientoInventario>> =
+        async {
+            let! col = listarColeccionMovimientos None
+            return { Validos = col.Validos |> List.map fst; Inconsistencias = col.Inconsistencias }
         }
 
     let listarTodosMovimientosDominio () : Async<MovimientoInventario list> =
         async {
-            let! conMeta = listarMovimientos None
-            return conMeta |> List.map fst
+            let! col = listarTodosMovimientosDominioColeccion ()
+            return col.Validos
         }
 
     let listarMovimientosPorLote (loteId: LoteId) : Async<MovimientoInventario list> =

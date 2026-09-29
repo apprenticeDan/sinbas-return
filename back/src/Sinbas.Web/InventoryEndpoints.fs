@@ -84,9 +84,13 @@ module InventoryEndpoints =
                         if String.IsNullOrWhiteSpace v then None else Some v
                     else None
 
+                let! coleccion = InventoryRepository.listarColeccionMovimientos tipoFilter
+                if not (List.isEmpty coleccion.Inconsistencias) then
+                    ctx.Response.Headers.["X-Integrity-Warnings"] <- Microsoft.Extensions.Primitives.StringValues(string coleccion.Inconsistencias.Length)
+
                 let! dtos =
                     InventoryService.listarMovimientos
-                        InventoryRepository.listarMovimientos
+                        (fun tf -> async { return coleccion.Validos })
                         LoteRepository.obtenerPorId
                         tipoFilter
 
@@ -112,11 +116,23 @@ module InventoryEndpoints =
                         | false, _ -> None
                     else None
 
+                let! prodsCol = CatalogRepository.listarColeccion ()
+                let! lotesCol = LoteRepository.listarColeccion None None
+                let! movsCol = InventoryRepository.listarTodosMovimientosDominioColeccion ()
+                let warnings = prodsCol.Inconsistencias.Length + lotesCol.Inconsistencias.Length + movsCol.Inconsistencias.Length
+                if warnings > 0 then
+                    ctx.Response.Headers.["X-Integrity-Warnings"] <- Microsoft.Extensions.Primitives.StringValues(string warnings)
+
                 let! dtos =
                     InventoryService.consultarStockConsolidado
-                        CatalogRepository.listarTodos
-                        LoteRepository.listar
-                        InventoryRepository.listarTodosMovimientosDominio
+                        (fun () -> async { return prodsCol.Validos })
+                        (fun p e -> async {
+                            return lotesCol.Validos
+                            |> List.filter (fun l ->
+                                (match p with None -> true | Some pid -> l.ProductoId = pid)
+                                && (match e with None -> true | Some est -> l.Estado = est))
+                        })
+                        (fun () -> async { return movsCol.Validos })
                         umbralMinimo
 
                 return Results.Ok(dtos)
@@ -169,11 +185,18 @@ module InventoryEndpoints =
                         if String.IsNullOrWhiteSpace v then None else Some v
                     else None
 
+                let! prodsCol = CatalogRepository.listarColeccion ()
+                let! lotesCol = LoteRepository.listarColeccion None None
+                let! movsCol = InventoryRepository.listarTodosMovimientosDominioColeccion ()
+                let warnings = prodsCol.Inconsistencias.Length + lotesCol.Inconsistencias.Length + movsCol.Inconsistencias.Length
+                if warnings > 0 then
+                    ctx.Response.Headers.["X-Integrity-Warnings"] <- Microsoft.Extensions.Primitives.StringValues(string warnings)
+
                 let! dtos =
                     InventoryService.consultarKardex
-                        CatalogRepository.listarTodos
-                        LoteRepository.listar
-                        InventoryRepository.listarTodosMovimientosDominio
+                        (fun () -> async { return prodsCol.Validos })
+                        (fun p e -> async { return lotesCol.Validos })
+                        (fun () -> async { return movsCol.Validos })
                         prodIdFilter
                         loteIdFilter
 
@@ -196,20 +219,28 @@ module InventoryEndpoints =
             async {
                 let! responsableId = resolverEmpleadoId ctx
 
-                let! res =
-                    InventoryService.registrarEgreso
-                        CatalogRepository.buscarPorId
-                        CatalogRepository.listarTodos
-                        LoteRepository.listar
-                        LoteRepository.actualizarStockYEstado
-                        InventoryRepository.insertarMovimiento
-                        InventoryRepository.listarTodosMovimientosDominio
-                        responsableId
-                        req
+                let! lotesCol = LoteRepository.listarColeccion None None
+                let! movsCol = InventoryRepository.listarTodosMovimientosDominioColeccion ()
+                if not (List.isEmpty lotesCol.Inconsistencias) || not (List.isEmpty movsCol.Inconsistencias) then
+                    let msg =
+                        sprintf "BLOQUEO DE INTEGRIDAD: Se detectaron %d lote(s) y %d movimiento(s) inconsistentes en almacén. Operación de egreso detenida para evitar descuadre de inventario."
+                            lotesCol.Inconsistencias.Length movsCol.Inconsistencias.Length
+                    return Results.BadRequest({| error = msg |})
+                else
+                    let! res =
+                        InventoryService.registrarEgreso
+                            CatalogRepository.buscarPorId
+                            CatalogRepository.listarTodos
+                            LoteRepository.listar
+                            LoteRepository.actualizarStockYEstado
+                            InventoryRepository.insertarMovimiento
+                            InventoryRepository.listarTodosMovimientosDominio
+                            responsableId
+                            req
 
-                match res with
-                | Ok dto -> return Results.Created(sprintf "/api/inventario/movimientos/%s" dto.Id, dto)
-                | Error msg -> return Results.BadRequest({| error = msg |})
+                    match res with
+                    | Ok dto -> return Results.Created(sprintf "/api/inventario/movimientos/%s" dto.Id, dto)
+                    | Error msg -> return Results.BadRequest({| error = msg |})
             } |> Async.StartAsTask
         ))
             .RequireAuthorization()

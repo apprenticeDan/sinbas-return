@@ -30,7 +30,9 @@ module Fifo =
                         Ok (List.rev acc)
                     | (lote, stockGramos) :: tail ->
                         let aTomar = min restante stockGramos
-                        let cantidadATomar = Cantidad.reconstruir aTomar Gramo
+                        match Cantidad.reconstruir aTomar Gramo with
+                        | Error err -> Error err
+                        | Ok cantidadATomar ->
                         let linea = { Referencia = lote.Id; Cantidad = cantidadATomar }
                         consumir (restante - aTomar) tail (linea :: acc)
 
