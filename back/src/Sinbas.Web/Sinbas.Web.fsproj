@@ -12,6 +12,7 @@
     <Compile Include="InventoryEndpoints.fs" />
     <Compile Include="LabEndpoints.fs" />
     <Compile Include="ClientEndpoints.fs" />
+    <Compile Include="AdminEndpoints.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

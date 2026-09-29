@@ -103,6 +103,7 @@ let main args =
     InventoryEndpoints.mapEndpoints app
     LabEndpoints.mapEndpoints app
     ClientEndpoints.mapEndpoints app
+    AdminEndpoints.mapEndpoints app
 
     app.Run()
 

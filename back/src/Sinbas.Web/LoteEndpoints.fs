@@ -54,10 +54,21 @@ module LoteEndpoints =
                         if String.IsNullOrWhiteSpace v then None else Some v
                     else None
 
+                let! lotesCol = LoteRepository.listarColeccion None None
+                let! prodsCol = CatalogRepository.listarColeccion ()
+                let warnings = lotesCol.Inconsistencias.Length + prodsCol.Inconsistencias.Length
+                if warnings > 0 then
+                    ctx.Response.Headers.["X-Integrity-Warnings"] <- Microsoft.Extensions.Primitives.StringValues(string warnings)
+
                 let! dtos =
                     LoteService.listarLotes
-                        LoteRepository.listar
-                        CatalogRepository.listarTodos
+                        (fun p e -> async {
+                            return lotesCol.Validos
+                            |> List.filter (fun l ->
+                                (match p with None -> true | Some pid -> l.ProductoId = pid)
+                                && (match e with None -> true | Some est -> l.Estado = est))
+                        })
+                        (fun () -> async { return prodsCol.Validos })
                         pidFilter
                         estFilter
 
