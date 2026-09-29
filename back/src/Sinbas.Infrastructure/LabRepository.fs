@@ -38,7 +38,7 @@ module LabRepository =
           dictamen = DictamenCalidad.aTexto a.Dictamen
           observaciones = Option.toObj a.Observaciones }
 
-    let private analisisFromRow (row: AnalisisLaboratorioRow) : AnalisisLaboratorio =
+    let private analisisFromRow (row: AnalisisLaboratorioRow) : Result<AnalisisLaboratorio, string> =
         match AnalisisLaboratorio.reconstruir
                 row.id
                 row.lote_id
@@ -51,8 +51,8 @@ module LabRepository =
                 row.semillas_impurezas_kg
                 row.dictamen
                 (Option.ofObj row.observaciones) with
-        | Ok a -> a
-        | Error err -> failwithf "Registro de análisis corrupto en BD: %A" err
+        | Ok a -> Ok a
+        | Error err -> Error (sprintf "Análisis %A: %A" row.id err)
 
     let insertar (analisis: AnalisisLaboratorio) : Async<unit> =
         async {
@@ -79,7 +79,15 @@ module LabRepository =
                 |> conn.SelectAsync<AnalisisLaboratorioRow>
                 |> Async.AwaitTask
 
-            return rows |> Seq.tryHead |> Option.map analisisFromRow
+            return
+                rows
+                |> Seq.tryHead
+                |> Option.bind (fun row ->
+                    match analisisFromRow row with
+                    | Ok a -> Some a
+                    | Error msg ->
+                        eprintfn "[WARN] LabRepository.obtenerPorId: %s" msg
+                        None)
         }
 
     let listarPorLoteId (LoteId loteId: LoteId) : Async<AnalisisLaboratorio list> =
@@ -94,7 +102,15 @@ module LabRepository =
                 |> conn.SelectAsync<AnalisisLaboratorioRow>
                 |> Async.AwaitTask
 
-            return rows |> Seq.map analisisFromRow |> Seq.toList
+            return
+                rows
+                |> Seq.choose (fun row ->
+                    match analisisFromRow row with
+                    | Ok a -> Some a
+                    | Error msg ->
+                        eprintfn "[WARN] LabRepository.listarPorLoteId: %s" msg
+                        None)
+                |> Seq.toList
         }
 
     let obtenerUltimoPorLoteId (loteId: LoteId) : Async<AnalisisLaboratorio option> =
@@ -115,5 +131,13 @@ module LabRepository =
                 |> conn.SelectAsync<AnalisisLaboratorioRow>
                 |> Async.AwaitTask
 
-            return rows |> Seq.map analisisFromRow |> Seq.toList
+            return
+                rows
+                |> Seq.choose (fun row ->
+                    match analisisFromRow row with
+                    | Ok a -> Some a
+                    | Error msg ->
+                        eprintfn "[WARN] LabRepository.listarTodos: %s" msg
+                        None)
+                |> Seq.toList
         }

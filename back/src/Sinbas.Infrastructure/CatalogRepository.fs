@@ -45,7 +45,7 @@ module CatalogRepository =
     let private mapUnidadTexto (u: UnidadMedida) : string =
         UnidadMedida.aTexto u
 
-    let private reconstruirProducto (row: ProductoRow) : Producto =
+    let private reconstruirProducto (row: ProductoRow) : Result<Producto, string> =
         let prodId = ProductoId row.id
         let unidad = mapUnidad row.unidad_manejo
         let empaque = defaultArg row.empaque "Unidad"
@@ -94,20 +94,20 @@ module CatalogRepository =
                   ModificadoPor = row.precio_usuario_id |> Option.map UsuarioId
                   FechaActualizacion = row.precio_fecha })
 
-        let estadoComercial =
-            match EstadoComercial.desdeTexto row.estado_comercial with
-            | Ok ec -> ec
-            | Error err -> failwithf "Dato corrupto en BD: estado_comercial '%s' inválido — %A" row.estado_comercial err
+        match EstadoComercial.desdeTexto row.estado_comercial with
+        | Error err ->
+            Error (sprintf "Producto %A: estado_comercial '%s' inválido — %A" row.id row.estado_comercial err)
+        | Ok estadoComercial ->
 
-        { Base =
-            { Id = prodId
-              Presentacion = presentacion
-              Trazabilidad = trazabilidad
-              Activo = row.activo
-              Observaciones = row.observaciones }
-          Categoria = categoria
-          PrecioOficial = precioOpt
-          EstadoComercial = estadoComercial }
+        Ok { Base =
+                { Id = prodId
+                  Presentacion = presentacion
+                  Trazabilidad = trazabilidad
+                  Activo = row.activo
+                  Observaciones = row.observaciones }
+             Categoria = categoria
+             PrecioOficial = precioOpt
+             EstadoComercial = estadoComercial }
 
     let guardar (producto: Producto) : Async<Result<unit, string>> =
         async {
@@ -200,7 +200,14 @@ module CatalogRepository =
                 |> conn.SelectAsync<ProductoRow>
                 |> Async.AwaitTask
 
-            return Seq.tryHead rows |> Option.map reconstruirProducto
+            return
+                Seq.tryHead rows
+                |> Option.bind (fun row ->
+                    match reconstruirProducto row with
+                    | Ok p -> Some p
+                    | Error msg ->
+                        eprintfn "[WARN] CatalogRepository.buscarPorId: %s" msg
+                        None)
         }
 
     let listarTodos () : Async<Producto list> =
@@ -215,5 +222,13 @@ module CatalogRepository =
                 |> conn.SelectAsync<ProductoRow>
                 |> Async.AwaitTask
 
-            return rows |> Seq.map reconstruirProducto |> Seq.toList
+            return
+                rows
+                |> Seq.choose (fun row ->
+                    match reconstruirProducto row with
+                    | Ok p -> Some p
+                    | Error msg ->
+                        eprintfn "[WARN] CatalogRepository.listarTodos: %s" msg
+                        None)
+                |> Seq.toList
         }

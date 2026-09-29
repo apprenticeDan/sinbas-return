@@ -34,47 +34,32 @@ module LoteRepository =
     let private desmapearUnidad (u: UnidadMedida) : string =
         UnidadMedida.aTexto u
 
-    let private loteFromRow (row: LoteRow) : Lote =
-        let codigo =
-            match CodigoLote.desdeString row.codigo with
-            | Ok c -> c
-            | Error _ -> failwithf "Código de lote corrupto en BD: %s" row.codigo
-
+    let private loteFromRow (row: LoteRow) : Result<Lote, string> =
+        match CodigoLote.desdeString row.codigo with
+        | Error _ ->
+            Error (sprintf "Lote %A: código corrupto '%s'" row.id row.codigo)
+        | Ok codigo ->
+        match EstadoLote.desdeTexto row.estado with
+        | Error _ ->
+            Error (sprintf "Lote %A: estado desconocido '%s'" row.id row.estado)
+        | Ok estado ->
         let unidad = mapearUnidad row.unidad
-
-        let estado =
-            match row.estado with
-            | "Activo" -> Activo
-            | "EnCuarentena" -> EnCuarentena
-            | "Agotado" -> Agotado
-            | "Bloqueado" -> Bloqueado
-            | "Rechazado" -> Rechazado
-            | "Archivado" -> Archivado
-            | _ -> Activo
-
-        { Id = LoteId row.id
-          Codigo = codigo
-          ProductoId = ProductoId row.producto_id
-          Procedencia = Option.ofObj row.procedencia
-          CantidadInicial = Cantidad.reconstruir row.cantidad_inicial unidad
-          CantidadActual  = Cantidad.reconstruir row.cantidad_actual  unidad
-          FechaIngreso = row.fecha_ingreso
-          Ubicacion = Option.ofObj row.ubicacion
-          Estado = estado
-          Observaciones = Option.ofObj row.observaciones }
+        Ok { Id = LoteId row.id
+             Codigo = codigo
+             ProductoId = ProductoId row.producto_id
+             Procedencia = Option.ofObj row.procedencia
+             CantidadInicial = Cantidad.reconstruir row.cantidad_inicial unidad
+             CantidadActual  = Cantidad.reconstruir row.cantidad_actual  unidad
+             FechaIngreso = row.fecha_ingreso
+             Ubicacion = Option.ofObj row.ubicacion
+             Estado = estado
+             Observaciones = Option.ofObj row.observaciones }
 
     let private rowFromLote (lote: Lote) : LoteRow =
         let (LoteId lId) = lote.Id
         let (ProductoId pId) = lote.ProductoId
 
-        let estadoStr =
-            match lote.Estado with
-            | Activo -> "Activo"
-            | EnCuarentena -> "EnCuarentena"
-            | Agotado -> "Agotado"
-            | Bloqueado -> "Bloqueado"
-            | Rechazado -> "Rechazado"
-            | Archivado -> "Archivado"
+        let estadoStr = EstadoLote.aTexto lote.Estado
 
         { id = lId
           codigo = CodigoLote.valor lote.Codigo
@@ -115,7 +100,15 @@ module LoteRepository =
                 |> conn.SelectAsync<LoteRow>
                 |> Async.AwaitTask
 
-            return rows |> Seq.tryHead |> Option.map loteFromRow
+            return
+                rows
+                |> Seq.tryHead
+                |> Option.bind (fun row ->
+                    match loteFromRow row with
+                    | Ok lote -> Some lote
+                    | Error msg ->
+                        eprintfn "[WARN] LoteRepository.obtenerPorId: %s" msg
+                        None)
         }
 
     let listar (productoIdFilter: ProductoId option) (estadoFilter: EstadoLote option) : Async<Lote list> =
@@ -130,7 +123,15 @@ module LoteRepository =
                 |> conn.SelectAsync<LoteRow>
                 |> Async.AwaitTask
 
-            let lotes = rows |> Seq.map loteFromRow |> Seq.toList
+            let lotes =
+                rows
+                |> Seq.choose (fun row ->
+                    match loteFromRow row with
+                    | Ok lote -> Some lote
+                    | Error msg ->
+                        eprintfn "[WARN] LoteRepository.listar: %s" msg
+                        None)
+                |> Seq.toList
 
             let lotesFiltrados =
                 lotes
