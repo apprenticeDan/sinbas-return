@@ -167,8 +167,15 @@ module Producto =
 
     /// Helper de conveniencia para crear borrador especificando únicamente la UnidadMedida
     let crearBorradorConUnidad id (unidad: UnidadMedida) trazabilidad categoria observaciones =
-        let pres = Presentacion.reconstruir "Unidad" 1m unidad
-        crearBorrador id pres trazabilidad categoria observaciones
+        match Presentacion.reconstruir "Unidad" 1m unidad with
+        | Ok pres -> crearBorrador id pres trazabilidad categoria observaciones
+        | Error _ ->
+            // Invariante: empaque="Unidad", contenido=1m siempre es válido
+            // Este branch es inalcanzable por construcción
+            let pres = Presentacion.crear "Unidad" 1m unidad
+            match pres with
+            | Ok p -> crearBorrador id p trazabilidad categoria observaciones
+            | Error _ -> failwith "Invariante rota: Presentacion(Unidad, 1m) debería ser siempre válido"
 
     let asignarPrecio (monto: decimal) (moneda: string option) (usuarioId: UsuarioId option) (p: Producto) : Result<Producto, DomainError> =
         if monto <= 0m then

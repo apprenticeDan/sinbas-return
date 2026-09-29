@@ -16,7 +16,7 @@ let crearLoteValido () =
         | Ok c -> c
         | Error e -> failwithf "Error generando código de lote: %A" e
 
-    let cantInicial = Cantidad.reconstruir 50m Kilogramo
+    let cantInicial = unwrap (Cantidad.reconstruir 50m Kilogramo)
 
     match Lote.crear loteId codigo prodId (Some "Bosque Chiquitano") cantInicial (DateOnly(2026, 8, 15)) (Some "Almacén Central") (Some "Observación inicial") with
     | Ok l -> l
@@ -35,7 +35,7 @@ let ``Creacion de Lote valido inicia en estado Activo con CantidadInicial y Cant
 [<Fact>]
 let ``Descuento parcial de stock preserva estado Activo`` () =
     let lote = crearLoteValido ()
-    let aDescontar = Cantidad.reconstruir 10m Kilogramo
+    let aDescontar = unwrap (Cantidad.reconstruir 10m Kilogramo)
 
     match Lote.descontarStock aDescontar lote with
     | Error e -> failwithf "Falló descuento: %A" e
@@ -47,7 +47,7 @@ let ``Descuento parcial de stock preserva estado Activo`` () =
 [<Fact>]
 let ``Descuento total de stock cambia automaticamente estado a Agotado`` () =
     let lote = crearLoteValido ()
-    let aDescontar = Cantidad.reconstruir 50m Kilogramo
+    let aDescontar = unwrap (Cantidad.reconstruir 50m Kilogramo)
 
     match Lote.descontarStock aDescontar lote with
     | Error e -> failwithf "Falló descuento: %A" e
@@ -59,7 +59,7 @@ let ``Descuento total de stock cambia automaticamente estado a Agotado`` () =
 [<Fact>]
 let ``Intento de descontar mas stock del disponible retorna error StockInsuficiente`` () =
     let lote = crearLoteValido ()
-    let aDescontar = Cantidad.reconstruir 60m Kilogramo
+    let aDescontar = unwrap (Cantidad.reconstruir 60m Kilogramo)
 
     match Lote.descontarStock aDescontar lote with
     | Error (StockInsuficiente msg) -> Assert.Contains("insuficiente", msg)
@@ -68,11 +68,11 @@ let ``Intento de descontar mas stock del disponible retorna error StockInsuficie
 [<Fact>]
 let ``Lote.actualizarSaldo actualiza saldo y transiciona bidireccionalmente entre Activo y Agotado`` () =
     let lote = crearLoteValido ()
-    let agotado = Lote.actualizarSaldo 0m lote
+    let agotado = unwrap (Lote.actualizarSaldo 0m lote)
     Assert.Equal(Agotado, agotado.Estado)
     Assert.Equal(0m, Cantidad.valor agotado.CantidadActual)
 
-    let reactivado = Lote.actualizarSaldo 1500m agotado
+    let reactivado = unwrap (Lote.actualizarSaldo 1500m agotado)
     Assert.Equal(Activo, reactivado.Estado)
     Assert.Equal(1500m, Cantidad.valor reactivado.CantidadActual)
 

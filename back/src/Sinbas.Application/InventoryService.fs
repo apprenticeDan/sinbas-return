@@ -235,8 +235,10 @@ module InventoryService =
                                     let! lOpt = obtenerLotePorId (LoteId lGuid)
                                     match lOpt with
                                     | Some l ->
-                                        // Aumentar stock del lote existente
-                                        let nuevaCant = Cantidad.reconstruir (l.CantidadActual.Valor + req.Cantidad) l.CantidadActual.Unidad
+                                        match Cantidad.reconstruir (l.CantidadActual.Valor + req.Cantidad) l.CantidadActual.Unidad with
+                                        | Error (CantidadInvalida msg) -> return Error msg
+                                        | Error err -> return Error (sprintf "%A" err)
+                                        | Ok nuevaCant ->
                                         let loteActualizado = { l with CantidadActual = nuevaCant; Estado = Activo }
                                         do! actualizarLoteStock loteActualizado
                                         return Ok loteActualizado
@@ -247,7 +249,10 @@ module InventoryService =
                                     let! lotesActivos = listarLotes (Some prodId) (Some Activo)
                                     match lotesActivos |> List.tryHead with
                                     | Some loteExistente ->
-                                        let nuevaCant = Cantidad.reconstruir (loteExistente.CantidadActual.Valor + req.Cantidad) loteExistente.CantidadActual.Unidad
+                                        match Cantidad.reconstruir (loteExistente.CantidadActual.Valor + req.Cantidad) loteExistente.CantidadActual.Unidad with
+                                        | Error (CantidadInvalida msg) -> return Error msg
+                                        | Error err -> return Error (sprintf "%A" err)
+                                        | Ok nuevaCant ->
                                         let loteActualizado = { loteExistente with CantidadActual = nuevaCant }
                                         do! actualizarLoteStock loteActualizado
                                         return Ok loteActualizado
@@ -694,8 +699,11 @@ module InventoryService =
                                 | Some lote ->
                                     let cantDeducidaGramos = Cantidad.enGramos linea.Cantidad
                                     let saldoRestante = max 0m (Cantidad.enGramos lote.CantidadActual - cantDeducidaGramos)
-                                    let loteActualizado = Lote.actualizarSaldo saldoRestante lote
-                                    do! actualizarLoteStock loteActualizado
+                                    match Lote.actualizarSaldo saldoRestante lote with
+                                    | Ok loteActualizado ->
+                                        do! actualizarLoteStock loteActualizado
+                                    | Error err ->
+                                        eprintfn "[WARN] Fifo invariant broken updating Lote %A: %A" lote.Id err
                                 | None -> ()
 
                             // 6. Construir tipo de movimiento de dominio

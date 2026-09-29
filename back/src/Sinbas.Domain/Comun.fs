@@ -251,13 +251,14 @@ module Presentacion =
                  _Unidad = unidad }
 
     /// Reconstruye una Presentación desde persistencia garantizando invariantes mínimos
-    let reconstruir (empaque: string) (contenido: decimal) (unidad: UnidadMedida) : Presentacion =
+    let reconstruir (empaque: string) (contenido: decimal) (unidad: UnidadMedida) : Result<Presentacion, DomainError> =
         let empLimpio = if String.IsNullOrWhiteSpace(empaque) then "Unidad" else empaque.Trim()
         if contenido <= 0m then
-            failwithf "Dato corrupto en BD: Contenido nominal de presentación no positivo %M" contenido
-        { _Empaque = empLimpio
-          _ContenidoNominal = contenido
-          _Unidad = unidad }
+            Error (CantidadInvalida (sprintf "Contenido nominal de presentación no positivo: %M" contenido))
+        else
+            Ok { _Empaque = empLimpio
+                 _ContenidoNominal = contenido
+                 _Unidad = unidad }
 
     let aTexto (p: Presentacion) : string =
         sprintf "%s %g %s" p.Empaque (float p.ContenidoNominal) (UnidadMedida.etiqueta p.Unidad)
@@ -288,12 +289,13 @@ module Cantidad =
         else
             Ok { _Valor = valor; _Unidad = unidad }
 
-    /// Para Infrastructure al leer de BD: omite re-validación de negocio,
-    /// pero falla rápido si el dato en BD está corrupto (negativo).
-    let reconstruir (valor: decimal) (unidad: UnidadMedida) : Cantidad =
+    /// Para Infrastructure al leer de BD: valida invariantes y retorna Result.
+    /// El dominio puro no conoce conceptos de BD (tabla, columna, fila).
+    let reconstruir (valor: decimal) (unidad: UnidadMedida) : Result<Cantidad, DomainError> =
         if valor < 0m then
-            failwithf "Dato corrupto en BD: Cantidad negativa %M" valor
-        { _Valor = valor; _Unidad = unidad }
+            Error (CantidadInvalida (sprintf "Cantidad negativa: %M" valor))
+        else
+            Ok { _Valor = valor; _Unidad = unidad }
 
     // ── Operaciones ──────────────────────────────────────────────────────────
 

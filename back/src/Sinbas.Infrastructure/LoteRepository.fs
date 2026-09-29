@@ -44,12 +44,18 @@ module LoteRepository =
             Error (sprintf "Lote %A: estado desconocido '%s'" row.id row.estado)
         | Ok estado ->
         let unidad = mapearUnidad row.unidad
+        match Cantidad.reconstruir row.cantidad_inicial unidad with
+        | Error err -> Error (sprintf "Lote %A: cantidad_inicial inválida — %A" row.id err)
+        | Ok cantInicial ->
+        match Cantidad.reconstruir row.cantidad_actual unidad with
+        | Error err -> Error (sprintf "Lote %A: cantidad_actual inválida — %A" row.id err)
+        | Ok cantActual ->
         Ok { Id = LoteId row.id
              Codigo = codigo
              ProductoId = ProductoId row.producto_id
              Procedencia = Option.ofObj row.procedencia
-             CantidadInicial = Cantidad.reconstruir row.cantidad_inicial unidad
-             CantidadActual  = Cantidad.reconstruir row.cantidad_actual  unidad
+             CantidadInicial = cantInicial
+             CantidadActual  = cantActual
              FechaIngreso = row.fecha_ingreso
              Ubicacion = Option.ofObj row.ubicacion
              Estado = estado

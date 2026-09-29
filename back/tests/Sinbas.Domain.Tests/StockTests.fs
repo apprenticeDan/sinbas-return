@@ -14,8 +14,8 @@ let private crearLote prodId codigoStr estado cantInicialGramos fechaIngreso =
       Codigo = parseCodigo codigoStr
       ProductoId = prodId
       Procedencia = None
-      CantidadInicial = Cantidad.reconstruir cantInicialGramos Gramo
-      CantidadActual = Cantidad.reconstruir cantInicialGramos Gramo
+      CantidadInicial = unwrap (Cantidad.reconstruir cantInicialGramos Gramo)
+      CantidadActual = unwrap (Cantidad.reconstruir cantInicialGramos Gramo)
       FechaIngreso = fechaIngreso
       Ubicacion = None
       Estado = estado
@@ -27,7 +27,7 @@ let private crearMovEntrada loteId cantGramos fecha responsableId =
       Responsable = responsableId
       Tipo = Entrada (Recoleccion "Campaña Origen")
       OrdenOrigen = None
-      Lineas = [ { Referencia = loteId; Cantidad = Cantidad.reconstruir cantGramos Gramo } ]
+      Lineas = [ { Referencia = loteId; Cantidad = unwrap (Cantidad.reconstruir cantGramos Gramo) } ]
       Observaciones = None }
 
 let private crearMovSalida loteId cantGramos fecha responsableId motivo =
@@ -36,7 +36,7 @@ let private crearMovSalida loteId cantGramos fecha responsableId motivo =
       Responsable = responsableId
       Tipo = Salida motivo
       OrdenOrigen = None
-      Lineas = [ { Referencia = loteId; Cantidad = Cantidad.reconstruir cantGramos Gramo } ]
+      Lineas = [ { Referencia = loteId; Cantidad = unwrap (Cantidad.reconstruir cantGramos Gramo) } ]
       Observaciones = None }
 
 // ─────────────────────────────────────────────────────────────
@@ -65,8 +65,8 @@ let ``MF-05-01: Proyección pura calcula stock acumulado por lote y producto con
     Assert.Equal(2500m, stockL2)
 
     // 2. Verificación operacional unificada leyendo directamente de los lotes actualizados
-    let lote1Actualizado = Lote.actualizarSaldo stockL1 lote1
-    let lote2Actualizado = Lote.actualizarSaldo stockL2 lote2
+    let lote1Actualizado = unwrap (Lote.actualizarSaldo stockL1 lote1)
+    let lote2Actualizado = unwrap (Lote.actualizarSaldo stockL2 lote2)
 
     let stockTotal = Stock.stockProducto prodId [ lote1Actualizado; lote2Actualizado ]
     let stockDisponible = Stock.disponibleParaVenta prodId [ lote1Actualizado; lote2Actualizado ]

@@ -22,7 +22,7 @@ let crearLoteBase () =
         | Ok c -> c
         | Error e -> failwithf "Codigo invalido: %A" e
 
-    let cantInicial = Cantidad.reconstruir 50m Kilogramo
+    let cantInicial = unwrap (Cantidad.reconstruir 50m Kilogramo)
     match Lote.crear loteId codigo prodId (Some "Bosque Chiquitano") cantInicial (DateOnly(2026, 8, 15)) (Some "Almacén Central") None with
     | Ok l -> l
     | Error e -> failwithf "Error creando lote: %A" e
@@ -157,7 +157,7 @@ let ``Lote con analisis observado pasa a EnCuarentena y queda excluido de stock 
     Assert.Equal(0m, stock)
 
     // Fifo.resolverFIFO no lo asigna
-    let req = Cantidad.reconstruir 1000m Gramo
+    let req = unwrap (Cantidad.reconstruir 1000m Gramo)
     match Fifo.resolverFIFO prodId req [loteCuarentena] with
     | Error (StockInsuficiente _) -> ()
     | res -> failwithf "FIFO no debio asignar lote en cuarentena, obtuvo: %A" res

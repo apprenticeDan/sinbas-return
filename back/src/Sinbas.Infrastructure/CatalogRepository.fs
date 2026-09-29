@@ -49,7 +49,10 @@ module CatalogRepository =
         let prodId = ProductoId row.id
         let unidad = mapUnidad row.unidad_manejo
         let empaque = defaultArg row.empaque "Unidad"
-        let presentacion = Presentacion.reconstruir empaque (defaultArg row.gramos_nominales 1m) unidad
+        match Presentacion.reconstruir empaque (defaultArg row.gramos_nominales 1m) unidad with
+        | Error err ->
+            Error (sprintf "Producto %A: presentación inválida — %A" row.id err)
+        | Ok presentacion ->
         let trazabilidad = if row.trazabilidad = "PorLote" then PorLote else Simple
         
         let nombresComunesList =

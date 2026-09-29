@@ -19,8 +19,11 @@ module PorcentajeCalidad =
         else
             Ok { Valor = v }
 
-    let reconstruir (v: decimal) : PorcentajeCalidad =
-        { Valor = v }
+    let reconstruir (v: decimal) : Result<PorcentajeCalidad, DomainError> =
+        if v < 0.0m || v > 100.0m then
+            Error (PorcentajeInvalido (sprintf "Porcentaje fuera de rango [0..100]: %M%%" v))
+        else
+            Ok { Valor = v }
 
 // ─────────────────────────────────────────────────────────────
 // Dictamen técnico oficial de laboratorio (DU cerrada)
@@ -155,14 +158,31 @@ module AnalisisLaboratorio =
         match DictamenCalidad.desdeTexto dictamen with
         | Error err -> Error err
         | Ok dict ->
+        match PorcentajeCalidad.reconstruir germinacion with
+        | Error err -> Error err
+        | Ok germ ->
+        match PorcentajeCalidad.reconstruir pureza with
+        | Error err -> Error err
+        | Ok pur ->
+        match PorcentajeCalidad.reconstruir humedad with
+        | Error err -> Error err
+        | Ok hum ->
+        match PorcentajeCalidad.reconstruir viabilidad with
+        | Error err -> Error err
+        | Ok viab ->
+        if semillasPurasKg < 0 then
+            Error (CantidadInvalida (sprintf "Semillas puras/kg negativas: %d" semillasPurasKg))
+        elif semillasImpurezasKg < 0 then
+            Error (CantidadInvalida (sprintf "Impurezas/kg negativas: %d" semillasImpurezasKg))
+        else
             Ok
                 { Id = LaboratorioId id
                   LoteId = LoteId loteId
                   FechaAnalisis = fechaAnalisis
-                  Germinacion = PorcentajeCalidad.reconstruir germinacion
-                  Pureza = PorcentajeCalidad.reconstruir pureza
-                  Humedad = PorcentajeCalidad.reconstruir humedad
-                  Viabilidad = PorcentajeCalidad.reconstruir viabilidad
+                  Germinacion = germ
+                  Pureza = pur
+                  Humedad = hum
+                  Viabilidad = viab
                   SemillasPurasKg = semillasPurasKg
                   SemillasImpurezasKg = semillasImpurezasKg
                   Dictamen = dict

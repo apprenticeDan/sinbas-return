@@ -99,20 +99,29 @@ module InventoryRepository =
             if row.orden_origen_id.HasValue then Some (OrdenId row.orden_origen_id.Value)
             else None
 
-        let lineas =
-            lineasRows
-            |> List.map (fun l ->
-                let loteId = LoteId l.lote_id
-                let cantidad = Cantidad.reconstruir l.cantidad (mapearUnidad l.unidad)
-                { Referencia = loteId; Cantidad = cantidad } : LineaMovimiento)
+        let lineasResult =
+            let rec loop acc remaining =
+                match remaining with
+                | [] -> Ok (List.rev acc)
+                | l :: tail ->
+                    let loteId = LoteId l.lote_id
+                    match Cantidad.reconstruir l.cantidad (mapearUnidad l.unidad) with
+                    | Error err -> Error (sprintf "Movimiento %A, Línea %A: cantidad inválida — %A" row.id l.id err)
+                    | Ok cantidad ->
+                        let linea : LineaMovimiento = { Referencia = loteId; Cantidad = cantidad }
+                        loop (linea :: acc) tail
+            loop [] lineasRows
 
-        Ok { Id = movId
-             Fecha = row.fecha
-             Responsable = empId
-             Tipo = tipoDominio
-             OrdenOrigen = ordenOpt
-             Lineas = lineas
-             Observaciones = obsOpt }
+        match lineasResult with
+        | Error err -> Error err
+        | Ok lineas ->
+            Ok { Id = movId
+                 Fecha = row.fecha
+                 Responsable = empId
+                 Tipo = tipoDominio
+                 OrdenOrigen = ordenOpt
+                 Lineas = lineas
+                 Observaciones = obsOpt }
 
     let insertarMovimiento
         (movimiento: MovimientoInventario)
