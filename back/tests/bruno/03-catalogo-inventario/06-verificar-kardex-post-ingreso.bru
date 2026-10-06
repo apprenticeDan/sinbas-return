@@ -1,0 +1,23 @@
+meta {
+  name: 06 - Verificar kardex tras ingreso
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/inventario/kardex?productoId={{testProductoId}}
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+  res.body.length: gte 1
+  res.body[0].tipo: eq "Entrada"
+  res.body[0].cantidad: eq 500
+  res.body[0].saldoResultanteGramos: eq 500
+}

@@ -1,0 +1,36 @@
+meta {
+  name: 07 - Registrar egreso FIFO
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/inventario/egreso
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+body:json {
+  {
+    "productoId": "{{testProductoId}}",
+    "descripcion": "{{testNombreVisible}}",
+    "tipoEgreso": "Venta",
+    "cantidad": 200,
+    "unidad": "g",
+    "contraparteNombre": "Cliente Pruebas Integracion",
+    "departamento": "",
+    "solicitante": "",
+    "observaciones": "Egreso parcial por venta",
+    "fecha": "2026-10-05T12:00:00Z"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.tipo: eq "Salida"
+}

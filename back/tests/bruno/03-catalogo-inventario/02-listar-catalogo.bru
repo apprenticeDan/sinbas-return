@@ -1,0 +1,20 @@
+meta {
+  name: 02 - Listar catalogo de productos
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/catalogo/productos
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+  res.body.length: gte 1
+}

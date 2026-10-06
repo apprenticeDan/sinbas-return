@@ -1,0 +1,20 @@
+meta {
+  name: 03 - Verificar stock inicial en cero
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/inventario/stock/{{testProductoId}}
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.stockTotalGramos: eq 0
+  res.body.lotes: length 0
+}

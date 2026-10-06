@@ -1,0 +1,35 @@
+meta {
+  name: 10 - Egreso con stock insuficiente debe fallar
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/inventario/egreso
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+body:json {
+  {
+    "productoId": "{{testProductoId}}",
+    "descripcion": "{{testNombreVisible}}",
+    "tipoEgreso": "Venta",
+    "cantidad": 999999,
+    "unidad": "g",
+    "contraparteNombre": "Cliente Pruebas",
+    "departamento": "",
+    "solicitante": "",
+    "observaciones": "Intento de egreso superior al stock disponible",
+    "fecha": "2026-10-05T14:00:00Z"
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.error: isDefined
+}

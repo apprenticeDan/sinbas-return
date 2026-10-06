@@ -5,7 +5,7 @@
  * Feature: F8 / F9 (MF-08-03 / MF-09-01) — Registro de Salidas, Venta, Merma y Uso Interno con FIFO
  *
  * Conectado a backend real vía API REST con persistencia y resolución FIFO de lotes.
- * Incluye botón 'Solicitudes Egreso' (deshabilitado/próximamente) según requerimiento.
+ * El selector de productos se construye dinámicamente desde el catálogo oficial (F1).
  *
  * EXTENSIBILITY:
  * - F6 (Clientes): Cabecera preparada para filtro multifactorial (nombre, apellido, NIT, teléfono, email).
@@ -17,39 +17,49 @@ import { almacenStore } from '../store/almacenStore';
 import {
   CATEGORIAS,
   TIPOS_EGRESO,
-  DESCRIPCIONES_POR_CATEGORIA,
   CONSIGNATARIOS_MOCK,
   type CategoriaAlmacen,
   type TipoEgreso,
 } from '../../domain/models/Almacen';
+import type { Product } from '../../domain/models/Product';
 import { DataTable, type Column } from '../components/DataTable';
 
 export const EgresosView: Component = () => {
   // ─── Form state (inline header) ──────────────────────────────
   const [formFecha, setFormFecha] = createSignal(new Date().toISOString().split('T')[0]);
   const [formCategoria, setFormCategoria] = createSignal<CategoriaAlmacen | ''>('');
-  const [formDescripcion, setFormDescripcion] = createSignal('');
+  const [formProductoId, setFormProductoId] = createSignal('');
   const [formTipo, setFormTipo] = createSignal<TipoEgreso | ''>('');
   const [formConsignatario, setFormConsignatario] = createSignal('');
   const [formCantidad, setFormCantidad] = createSignal<string>('');
   const [formCostoAdic, setFormCostoAdic] = createSignal<string>('');
   const [formError, setFormError] = createSignal<string | null>(null);
 
-  // Cargar movimientos de egreso reales al montar (F8 / F9)
-  onMount(() => {
+  // Cargar catálogo y movimientos de egreso reales al montar
+  onMount(async () => {
+    await almacenStore.asegurarCatalogoCargado();
     almacenStore.cargarEgresos();
   });
 
-  const descripcionesDisponibles = createMemo(() => {
+  // Productos del catálogo filtrados por categoría seleccionada
+  const productosDisponibles = createMemo(() => {
     const cat = formCategoria();
-    return cat ? DESCRIPCIONES_POR_CATEGORIA[cat] : [];
+    const productos = almacenStore.productosCache();
+    if (!cat) return productos;
+    return productos.filter((p) => p.categoria === cat);
+  });
+
+  // Producto seleccionado actualmente
+  const productoSeleccionado = createMemo(() => {
+    const id = formProductoId();
+    if (!id) return null;
+    return almacenStore.productosCache().find((p) => p.id === id) || null;
   });
 
   const canSubmit = createMemo(() => {
     const cant = Number(formCantidad());
     return (
-      formCategoria() !== '' &&
-      formDescripcion() !== '' &&
+      formProductoId() !== '' &&
       formTipo() !== '' &&
       !isNaN(cant) &&
       cant > 0 &&
@@ -65,24 +75,33 @@ export const EgresosView: Component = () => {
     }
     if (!canSubmit()) return;
     setFormError(null);
+
+    const prod = productoSeleccionado();
+    if (!prod) {
+      setFormError('Debe seleccionar un producto del catálogo.');
+      return;
+    }
+
     try {
       await almacenStore.registrarEgreso({
+        productoId: prod.id,
         fecha: formFecha(),
-        categoria: formCategoria() as CategoriaAlmacen,
-        descripcion: formDescripcion(),
+        categoria: prod.categoria as CategoriaAlmacen,
+        descripcion: prod.nombreVisible,
         tipo: formTipo() as TipoEgreso,
         cantidad: cant,
+        unidad: prod.unidadManejo || 'Kilogramo',
         consignatario: formConsignatario(),
         costoAdicional: formCostoAdic() ? Number(formCostoAdic()) : undefined,
       });
       // Reset parcial
-      setFormDescripcion('');
+      setFormProductoId('');
       setFormTipo('');
       setFormConsignatario('');
       setFormCantidad('');
       setFormCostoAdic('');
     } catch (err: any) {
-      setFormError(err.message || 'Error al registrar el egreso. Guardado localmente.');
+      setFormError(err.message || 'Error al registrar el egreso.');
     }
   }
 
@@ -154,7 +173,7 @@ export const EgresosView: Component = () => {
     },
     {
       header: 'Cantidad',
-      width: '90px',
+      width: '120px',
       cell: (item: any) => (
         <span style={{
           'font-family': 'monospace',
@@ -162,7 +181,7 @@ export const EgresosView: Component = () => {
           'font-weight': '700',
           color: item.cantidad != null ? 'var(--ink)' : 'var(--ink-faint)',
         }}>
-          {item.cantidad != null ? item.cantidad : '—'}
+          {item.cantidad != null ? `${item.cantidad} ${item.unidad || ''}` : '—'}
         </span>
       ),
     },
@@ -242,26 +261,29 @@ export const EgresosView: Component = () => {
               value={formCategoria()}
               onChange={(e) => {
                 setFormCategoria(e.currentTarget.value as CategoriaAlmacen | '');
-                setFormDescripcion('');
+                setFormProductoId('');
               }}
             >
-              <option value="">— Seleccionar —</option>
+              <option value="">— Todas —</option>
               <For each={CATEGORIAS}>
                 {(c) => <option value={c.value}>{c.label}</option>}
               </For>
             </select>
           </div>
 
-          <div class="field" style={{ 'min-width': '160px', flex: '1' }}>
-            <label>Descripción</label>
+          <div class="field" style={{ 'min-width': '200px', flex: '1' }}>
+            <label>Producto (Catálogo)</label>
             <select
-              value={formDescripcion()}
-              onChange={(e) => setFormDescripcion(e.currentTarget.value)}
-              disabled={!formCategoria()}
+              value={formProductoId()}
+              onChange={(e) => setFormProductoId(e.currentTarget.value)}
             >
               <option value="">— Seleccionar producto —</option>
-              <For each={descripcionesDisponibles()}>
-                {(d) => <option value={d}>{d}</option>}
+              <For each={productosDisponibles()}>
+                {(p: Product) => (
+                  <option value={p.id}>
+                    {p.nombreVisible} ({p.unidadManejo})
+                  </option>
+                )}
               </For>
             </select>
           </div>
@@ -307,6 +329,18 @@ export const EgresosView: Component = () => {
             />
           </div>
 
+          <Show when={productoSeleccionado()}>
+            <div class="field" style={{ 'min-width': '60px', 'max-width': '80px' }}>
+              <label>Unidad</label>
+              <input
+                type="text"
+                value={productoSeleccionado()?.unidadManejo || ''}
+                disabled
+                style={{ background: 'var(--surface-alt)', color: 'var(--ink-soft)' }}
+              />
+            </div>
+          </Show>
+
           <div class="field" style={{ 'min-width': '80px', 'max-width': '100px' }}>
             <label>Costo Adq.</label>
             <input
@@ -322,7 +356,7 @@ export const EgresosView: Component = () => {
             class="btn btn-primary almacen-add-btn"
             onClick={handleRegistrar}
             disabled={!canSubmit()}
-            title={canSubmit() ? 'Registrar egreso' : 'Completa categoría, descripción, tipo y una cantidad mayor a 0'}
+            title={canSubmit() ? 'Registrar egreso' : 'Seleccione un producto del catálogo, tipo y una cantidad mayor a 0'}
             style={{ 'align-self': 'flex-end' }}
           >
             <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
