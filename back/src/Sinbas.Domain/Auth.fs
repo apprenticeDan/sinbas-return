@@ -106,6 +106,7 @@ type AuthError =
     | UsuarioInactivo
     | NombreUsuarioInvalido of string
     | NombreUsuarioExistente of string
+    | CiExistente of string
     | EmpleadoYaTieneUsuario of EmpleadoId
     | RolesRequeridos of string
     | RefreshTokenInvalido of RefreshTokenError

@@ -101,7 +101,7 @@ module UserUseCase =
             | Ok item -> return Ok (aUserListItem item.Usuario item.Empleado)
         }
 
-    let crearUsuario buscarPorNombre guardarUsuarioYEmpleado hashPassword (cmd: CreateUserCommand) =
+    let crearUsuario buscarPorNombre (buscarEmpleadoPorCi: CI -> Async<Empleado option>) guardarUsuarioYEmpleado hashPassword (cmd: CreateUserCommand) =
         async {
             match Usuario.validarNombreUsuario cmd.NombreUsuario with
             | Error e -> return Error e
@@ -116,28 +116,33 @@ module UserUseCase =
                     | Error (CIInvalido msg) -> return Error (NombreUsuarioInvalido msg)
                     | Error err -> return Error (NombreUsuarioInvalido (sprintf "%A" err))
                     | Ok ci ->
-                        match Empleado.crearDeDatos cmd.Nombres cmd.ApellidoPaterno cmd.ApellidoMaterno ci cmd.Telefono cmd.Email with
-                        | Error (ValorRequerido msg) -> return Error (NombreUsuarioInvalido msg)
-                        | Error (SimbolosNoPermitidos msg) -> return Error (NombreUsuarioInvalido msg)
-                        | Error (LetrasNoPermitidas msg) -> return Error (NombreUsuarioInvalido msg)
-                        | Error err -> return Error (NombreUsuarioInvalido (sprintf "%A" err))
-                        | Ok nuevoEmpleado ->
-                            let hash = hashPassword cmd.Contrasena
-                            let parsedRoles =
-                                cmd.Roles
-                                |> Array.choose (fun r ->
-                                    match NombreRol.fromString r with
-                                    | Ok role -> Some role
-                                    | Error _ -> None)
-                                |> Set.ofArray
+                        let! empExistente = buscarEmpleadoPorCi ci
+                        match empExistente with
+                        | Some _ ->
+                            return Error (CiExistente "Ya existe un empleado registrado con la cédula de identidad indicada")
+                        | None ->
+                            match Empleado.crearDeDatos cmd.Nombres cmd.ApellidoPaterno cmd.ApellidoMaterno ci cmd.Telefono cmd.Email with
+                            | Error (ValorRequerido msg) -> return Error (NombreUsuarioInvalido msg)
+                            | Error (SimbolosNoPermitidos msg) -> return Error (NombreUsuarioInvalido msg)
+                            | Error (LetrasNoPermitidas msg) -> return Error (NombreUsuarioInvalido msg)
+                            | Error err -> return Error (NombreUsuarioInvalido (sprintf "%A" err))
+                            | Ok nuevoEmpleado ->
+                                let hash = hashPassword cmd.Contrasena
+                                let parsedRoles =
+                                    cmd.Roles
+                                    |> Array.choose (fun r ->
+                                        match NombreRol.fromString r with
+                                        | Ok role -> Some role
+                                        | Error _ -> None)
+                                    |> Set.ofArray
 
-                            match Usuario.crear nuevoEmpleado.Id nombreUsuario hash parsedRoles with
-                            | Error e -> return Error e
-                            | Ok nuevoUsuario ->
-                                return! guardarUsuarioYEmpleado nuevoUsuario nuevoEmpleado
+                                match Usuario.crear nuevoEmpleado.Id nombreUsuario hash parsedRoles with
+                                | Error e -> return Error e
+                                | Ok nuevoUsuario ->
+                                    return! guardarUsuarioYEmpleado nuevoUsuario nuevoEmpleado
         }
 
-    let actualizarUsuario buscarUsuarioConEmpleado buscarPorNombre guardarUsuarioYEmpleado hashPassword (cmd: UpdateUserCommand) =
+    let actualizarUsuario buscarUsuarioConEmpleado buscarPorNombre (buscarEmpleadoPorCi: CI -> Async<Empleado option>) guardarUsuarioYEmpleado hashPassword (cmd: UpdateUserCommand) =
         async {
             let! usuarioResult = buscarUsuarioConEmpleado (UsuarioId cmd.UsuarioId)
             match usuarioResult with
@@ -171,12 +176,27 @@ module UserUseCase =
                     | Error (CIInvalido msg) -> return Error (NombreUsuarioInvalido msg)
                     | Error err -> return Error (NombreUsuarioInvalido (sprintf "%A" err))
                     | Ok ci ->
-                        match Empleado.actualizar cmd.Nombres cmd.ApellidoPaterno cmd.ApellidoMaterno ci cmd.Telefono cmd.Email empleadoActual with
-                        | Error (ValorRequerido msg) -> return Error (NombreUsuarioInvalido msg)
-                        | Error (SimbolosNoPermitidos msg) -> return Error (NombreUsuarioInvalido msg)
-                        | Error (LetrasNoPermitidas msg) -> return Error (NombreUsuarioInvalido msg)
-                        | Error err -> return Error (NombreUsuarioInvalido (sprintf "%A" err))
-                        | Ok empleadoActualizado ->
+                        let! validarCiRes =
+                            async {
+                                if not (CI.coincideNumeroYComplemento ci empleadoActual.CI) then
+                                    let! existente = buscarEmpleadoPorCi ci
+                                    match existente with
+                                    | Some otroEmp when otroEmp.Id <> empleadoActual.Id ->
+                                        return Error (CiExistente "La cédula de identidad ya se encuentra registrada por otro empleado")
+                                    | _ -> return Ok ()
+                                else
+                                    return Ok ()
+                            }
+
+                        match validarCiRes with
+                        | Error e -> return Error e
+                        | Ok () ->
+                            match Empleado.actualizar cmd.Nombres cmd.ApellidoPaterno cmd.ApellidoMaterno ci cmd.Telefono cmd.Email empleadoActual with
+                            | Error (ValorRequerido msg) -> return Error (NombreUsuarioInvalido msg)
+                            | Error (SimbolosNoPermitidos msg) -> return Error (NombreUsuarioInvalido msg)
+                            | Error (LetrasNoPermitidas msg) -> return Error (NombreUsuarioInvalido msg)
+                            | Error err -> return Error (NombreUsuarioInvalido (sprintf "%A" err))
+                            | Ok empleadoActualizado ->
                             let parsedRoles =
                                 cmd.Roles
                                 |> Array.choose (fun r ->

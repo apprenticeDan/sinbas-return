@@ -13,6 +13,7 @@ module UserEndpoints =
         
         let buscarPorId = AuthRepository.buscarUsuarioPorId
         let buscarPorNombre = AuthRepository.buscarUsuarioPorNombre
+        let buscarEmpleadoPorCi = AuthRepository.buscarEmpleadoPorCi
         let buscarUsuarioConEmpleado = AuthRepository.buscarUsuarioConEmpleadoPorId
         let guardarUsuario = AuthRepository.guardarUsuario
         let guardarUsuarioYEmpleado = AuthRepository.guardarUsuarioYEmpleado
@@ -51,7 +52,7 @@ module UserEndpoints =
         app.MapPost("/api/usuarios", Func<CreateUserCommand, Threading.Tasks.Task<IResult>>(fun cmd ->
             async {
                 printfn "[UserEndpoints] Petición POST /api/usuarios recibida: %+A" cmd
-                let! result = UserUseCase.crearUsuario buscarPorNombre guardarUsuarioYEmpleado hashPassword cmd
+                let! result = UserUseCase.crearUsuario buscarPorNombre buscarEmpleadoPorCi guardarUsuarioYEmpleado hashPassword cmd
                 match result with
                 | Ok () ->
                     printfn "[UserEndpoints] Usuario creado exitosamente: %s" cmd.NombreUsuario
@@ -61,6 +62,7 @@ module UserEndpoints =
                     match err with
                     | NombreUsuarioInvalido msg -> return Results.BadRequest({| error = msg |})
                     | NombreUsuarioExistente msg -> return Results.Conflict({| error = msg |})
+                    | CiExistente msg -> return Results.Conflict({| error = msg |})
                     | EmpleadoYaTieneUsuario _ -> return Results.Conflict({| error = "El empleado ya tiene un usuario asociado" |})
                     | RolesRequeridos msg -> return Results.BadRequest({| error = msg |})
                     | ErrorInterno _ -> return Results.Json({| error = "Ocurrió un error interno en el servidor" |}, statusCode = Nullable 500)
@@ -76,7 +78,7 @@ module UserEndpoints =
         app.MapPut("/api/usuarios/{id}", Func<Guid, UpdateUserCommand, Threading.Tasks.Task<IResult>>(fun id cmd ->
             async {
                 let command = { cmd with UsuarioId = id }
-                let! result = UserUseCase.actualizarUsuario buscarUsuarioConEmpleado buscarPorNombre guardarUsuarioYEmpleado hashPassword command
+                let! result = UserUseCase.actualizarUsuario buscarUsuarioConEmpleado buscarPorNombre buscarEmpleadoPorCi guardarUsuarioYEmpleado hashPassword command
                 match result with
                 | Ok () -> return Results.Ok()
                 | Error (err: AuthError) ->
@@ -84,6 +86,7 @@ module UserEndpoints =
                     match err with
                     | NombreUsuarioInvalido msg -> return Results.BadRequest({| error = msg |})
                     | NombreUsuarioExistente msg -> return Results.Conflict({| error = msg |})
+                    | CiExistente msg -> return Results.Conflict({| error = msg |})
                     | EmpleadoYaTieneUsuario _ -> return Results.Conflict({| error = "El empleado ya tiene un usuario asociado" |})
                     | RolesRequeridos msg -> return Results.BadRequest({| error = msg |})
                     | ErrorInterno _ -> return Results.Json({| error = "Ocurrió un error interno en el servidor" |}, statusCode = Nullable 500)

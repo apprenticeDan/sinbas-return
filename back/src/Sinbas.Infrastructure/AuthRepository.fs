@@ -245,6 +245,28 @@ module AuthRepository =
             return rows |> Seq.tryHead |> Option.map reconstruirEmpleado
         }
 
+    let buscarEmpleadoPorCi (ci: CI) : Async<Empleado option> =
+        async {
+            use conn = DbConnection.crear ()
+            let num = ci.Numero.Trim()
+            let comp =
+                ci.Complemento
+                |> Option.map (fun s -> s.Trim().ToUpperInvariant())
+                |> Option.defaultValue ""
+
+            let sql = """
+                select id, nombres, apellido_paterno, apellido_materno, ci_numero, ci_complemento, ci_extension, telefono, email, nombre_completo, estado
+                from empleado
+                where ci_numero = @num
+                  and upper(coalesce(ci_complemento, '')) = @comp
+                limit 1
+            """
+            let! rows =
+                conn.QueryAsync<EmpleadoRow>(sql, {| num = num; comp = comp |})
+                |> Async.AwaitTask
+            return rows |> Seq.tryHead |> Option.map reconstruirEmpleado
+        }
+
     let buscarUsuarioConEmpleadoPorId (id: UsuarioId) : Async<Result<UsuarioConEmpleado, AuthError>> =
         async {
             let! uRes = buscarUsuarioPorId id
@@ -422,7 +444,11 @@ module AuthRepository =
                 do! persistirRoles conn id roles
                 return Ok ()
             with ex ->
-                return Error (ErrorInterno ex.Message)
+                let msg = ex.Message
+                if msg.Contains("ix_empleado_ci_unico") then
+                    return Error (CiExistente "Ya existe un empleado registrado con la cédula de identidad indicada")
+                else
+                    return Error (ErrorInterno msg)
         }
 
     let guardarUsuario (usuario: Usuario) : Async<Result<unit, AuthError>> =

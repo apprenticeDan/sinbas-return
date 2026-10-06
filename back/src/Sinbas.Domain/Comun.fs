@@ -154,6 +154,17 @@ module CI =
           _Complemento = compLimpio
           _Extension = extension }
 
+    /// Determina si dos CIs corresponden al mismo documento según las reglas de SEGIP:
+    /// El número base y el complemento opcional deben coincidir exactamente (ignorando mayúsculas/espacios).
+    /// Dos CIs con el mismo número pero diferente complemento (e.g. "123456" y "123456-1A") son documentos distintos.
+    let coincideNumeroYComplemento (a: CI) (b: CI) : bool =
+        let numA = a.Numero.Trim()
+        let numB = b.Numero.Trim()
+        let compA = a.Complemento |> Option.map (fun s -> s.Trim().ToUpperInvariant()) |> Option.defaultValue ""
+        let compB = b.Complemento |> Option.map (fun s -> s.Trim().ToUpperInvariant()) |> Option.defaultValue ""
+        numA = numB && compA = compB
+
+
 // ─────────────────────────────────────────────────────────────
 // Unidades de medida estrictas por dimensión física
 // ─────────────────────────────────────────────────────────────

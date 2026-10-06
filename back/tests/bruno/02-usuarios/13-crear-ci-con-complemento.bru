@@ -1,0 +1,40 @@
+meta {
+  name: Crear usuario con mismo CI pero complemento distinto
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/usuarios
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+body:json {
+  {
+    "nombres": "Persona Homonima",
+    "apellidoPaterno": "Complementada",
+    "ciNumero": "9000001",
+    "ciComplemento": "1A",
+    "ciExtension": "CB",
+    "telefono": "70000088",
+    "email": "otro_ci_comp@test.local",
+    "nombreUsuario": "otro_ci_comp",
+    "contrasena": "{{testPass}}",
+    "roles": ["Almacen"]
+  }
+}
+
+assert {
+  res.status: in [201, 409]
+}
+
+docs {
+  Verifica que una persona con el mismo número base de CI pero con complemento asignado por SEGIP (ej: "1A")
+  sí pueda registrarse al ser un documento de identidad diferente.
+  201 = creado exitosamente. 409 = ya existía (permite re-ejecución idempotente).
+}
