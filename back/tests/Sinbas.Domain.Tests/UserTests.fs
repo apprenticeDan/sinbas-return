@@ -6,6 +6,7 @@ open Sinbas.Domain
 open Sinbas.Application
 
 let private hashFake (p: string) = PasswordHash ($"hash_{p}")
+let private buscarEmpleadoPorCiVacio _ = async { return None }
 
 [<Fact>]
 let ``Crear usuario exitosamente con solo apellido materno (caso docente)`` () =
@@ -37,7 +38,7 @@ let ``Crear usuario exitosamente con solo apellido materno (caso docente)`` () =
               Contrasena = "contrasenaSegura123"
               Roles = [| "Almacen"; "Laboratorio" |] }
 
-        let! res = UserUseCase.crearUsuario buscarPorNombre guardarUsuarioYEmpleado hashFake cmd
+        let! res = UserUseCase.crearUsuario buscarPorNombre buscarEmpleadoPorCiVacio guardarUsuarioYEmpleado hashFake cmd
         match res with
         | Ok () -> Assert.True(guardado)
         | Error err -> failwithf "Debería haber creado usuario con solo apellido materno: %A" err
@@ -63,7 +64,7 @@ let ``Crear usuario falla si no tiene ningun apellido`` () =
               Contrasena = "contrasenaSegura123"
               Roles = [| "Almacen" |] }
 
-        let! res = UserUseCase.crearUsuario buscarPorNombre guardarUsuarioYEmpleado hashFake cmd
+        let! res = UserUseCase.crearUsuario buscarPorNombre buscarEmpleadoPorCiVacio guardarUsuarioYEmpleado hashFake cmd
         match res with
         | Error (NombreUsuarioInvalido msg) ->
             Assert.Contains("al menos un apellido", msg)
@@ -90,7 +91,7 @@ let ``Crear usuario falla si el nombre contiene numeros`` () =
               Contrasena = "contrasenaSegura123"
               Roles = [| "Almacen" |] }
 
-        let! res = UserUseCase.crearUsuario buscarPorNombre guardarUsuarioYEmpleado hashFake cmd
+        let! res = UserUseCase.crearUsuario buscarPorNombre buscarEmpleadoPorCiVacio guardarUsuarioYEmpleado hashFake cmd
         match res with
         | Error (NombreUsuarioInvalido msg) ->
             Assert.Contains("números", msg)
@@ -125,11 +126,92 @@ let ``Crear usuario falla si el nombre de usuario ya esta registrado`` () =
               Contrasena = "contrasenaSegura123"
               Roles = [| "Almacen" |] }
 
-        let! res = UserUseCase.crearUsuario buscarPorNombre guardarUsuarioYEmpleado hashFake cmd
+        let! res = UserUseCase.crearUsuario buscarPorNombre buscarEmpleadoPorCiVacio guardarUsuarioYEmpleado hashFake cmd
         match res with
         | Error (NombreUsuarioExistente msg) ->
             Assert.Contains("ya está registrado", msg)
         | res -> failwithf "Debería haber fallado por usuario duplicado, obtuvo: %A" res
+    }
+
+[<Fact>]
+let ``Crear usuario falla si la cedula de identidad ya pertenece a otro empleado registrado`` () =
+    async {
+        let ci = match CI.crear "9000001" None (Some CB) with Ok c -> c | Error _ -> failwith "CI"
+        let empleadoExistente = match Empleado.crearDeDatos "Juan" (Some "Perez") None ci None None with Ok e -> e | Error _ -> failwith "Emp"
+
+        let buscarPorNombre _ = async { return Error CredencialesInvalidas }
+        let buscarEmpleadoPorCi (ciBuscado: CI) =
+            async {
+                if CI.coincideNumeroYComplemento ciBuscado ci then
+                    return Some empleadoExistente
+                else
+                    return None
+            }
+        let guardarUsuarioYEmpleado _ _ = async { return Ok () }
+
+        let cmd : CreateUserCommand =
+            { EmpleadoId = None
+              Nombres = "Pedro"
+              ApellidoPaterno = Some "Rojas"
+              ApellidoMaterno = None
+              CiNumero = "9000001"
+              CiComplemento = None
+              CiExtension = Some "LP"
+              Telefono = None
+              Email = None
+              NombreUsuario = "pedro.rojas"
+              Contrasena = "contrasenaSegura123"
+              Roles = [| "Almacen" |] }
+
+        let! res = UserUseCase.crearUsuario buscarPorNombre buscarEmpleadoPorCi guardarUsuarioYEmpleado hashFake cmd
+        match res with
+        | Error (CiExistente msg) ->
+            Assert.Contains("cédula de identidad", msg)
+        | res -> failwithf "Debería haber fallado por CI duplicado, obtuvo: %A" res
+    }
+
+[<Fact>]
+let ``Crear usuario permite mismo numero de CI si el complemento es distinto`` () =
+    async {
+        let ciExistente = match CI.crear "9000001" None (Some CB) with Ok c -> c | Error _ -> failwith "CI"
+        let empleadoExistente = match Empleado.crearDeDatos "Juan" (Some "Perez") None ciExistente None None with Ok e -> e | Error _ -> failwith "Emp"
+
+        let buscarPorNombre _ = async { return Error CredencialesInvalidas }
+        let buscarEmpleadoPorCi (ciBuscado: CI) =
+            async {
+                if CI.coincideNumeroYComplemento ciBuscado ciExistente then
+                    return Some empleadoExistente
+                else
+                    return None
+            }
+        let mutable guardado = false
+        let guardarUsuarioYEmpleado _ (e: Empleado) =
+            async {
+                guardado <- true
+                Assert.Equal("9000001", e.CI.Numero)
+                Assert.Equal(Some "1A", e.CI.Complemento)
+                return Ok ()
+            }
+
+        // Mismo número 9000001, pero con complemento "1A"
+        let cmd : CreateUserCommand =
+            { EmpleadoId = None
+              Nombres = "Pedro"
+              ApellidoPaterno = Some "Rojas"
+              ApellidoMaterno = None
+              CiNumero = "9000001"
+              CiComplemento = Some "1A"
+              CiExtension = Some "LP"
+              Telefono = None
+              Email = None
+              NombreUsuario = "pedro.rojas"
+              Contrasena = "contrasenaSegura123"
+              Roles = [| "Almacen" |] }
+
+        let! res = UserUseCase.crearUsuario buscarPorNombre buscarEmpleadoPorCi guardarUsuarioYEmpleado hashFake cmd
+        match res with
+        | Ok () -> Assert.True(guardado)
+        | Error err -> failwithf "Debería permitir registrar con complemento distinto, obtuvo: %A" err
     }
 
 [<Fact>]
@@ -175,7 +257,7 @@ let ``Actualizar usuario modifica datos de empleado, usuario y roles`` () =
               Roles = [| "Administrador"; "Almacen" |]
               NuevaContrasena = None }
 
-        let! res = UserUseCase.actualizarUsuario buscarUsuarioConEmpleado buscarPorNombre guardarUsuarioYEmpleado hashFake cmd
+        let! res = UserUseCase.actualizarUsuario buscarUsuarioConEmpleado buscarPorNombre buscarEmpleadoPorCiVacio guardarUsuarioYEmpleado hashFake cmd
         match res with
         | Ok () -> Assert.True(actualizado)
         | Error err -> failwithf "Debería haber actualizado correctamente: %A" err
@@ -213,11 +295,57 @@ let ``Actualizar usuario falla si el nuevo username ya pertenece a otra cuenta``
               Roles = [| "Almacen" |]
               NuevaContrasena = None }
 
-        let! res = UserUseCase.actualizarUsuario buscarUsuarioConEmpleado buscarPorNombre guardarUsuarioYEmpleado hashFake cmd
+        let! res = UserUseCase.actualizarUsuario buscarUsuarioConEmpleado buscarPorNombre buscarEmpleadoPorCiVacio guardarUsuarioYEmpleado hashFake cmd
         match res with
         | Error (NombreUsuarioExistente msg) ->
             Assert.Contains("otra cuenta", msg)
         | res -> failwithf "Debería haber fallado por username en uso, obtuvo: %A" res
+    }
+
+[<Fact>]
+let ``Actualizar usuario falla si el nuevo CI ya pertenece a otro empleado distinto`` () =
+    async {
+        let uid = Guid.NewGuid()
+        let eid = Guid.NewGuid()
+        let ciOriginal = match CI.crear "1234567" None None with Ok c -> c | Error _ -> failwith "CI"
+        let persona = Persona.reconstruir eid "Pedro" (Some "Ramos") None ciOriginal None None
+        let emp = Empleado.reconstruir eid persona EstadoEmpleado.Activo
+        let usr = Usuario.reconstruir uid eid "pedro" "hash" (Set.singleton NombreRol.Almacen) EstadoUsuario.Activo
+
+        let otroEid = Guid.NewGuid()
+        let ciOcupado = match CI.crear "9998887" None None with Ok c -> c | Error _ -> failwith "CI"
+        let otroEmp = Empleado.reconstruir otroEid (Persona.reconstruir otroEid "Otro" (Some "User") None ciOcupado None None) EstadoEmpleado.Activo
+
+        let buscarUsuarioConEmpleado _ = async { return Ok { Usuario = usr; Empleado = emp } }
+        let buscarPorNombre _ = async { return Error CredencialesInvalidas }
+        let buscarEmpleadoPorCi (ci: CI) =
+            async {
+                if CI.coincideNumeroYComplemento ci ciOcupado then
+                    return Some otroEmp
+                else
+                    return None
+            }
+        let guardarUsuarioYEmpleado _ _ = async { return Ok () }
+
+        let cmd : UpdateUserCommand =
+            { UsuarioId = uid
+              Nombres = "Pedro"
+              ApellidoPaterno = Some "Ramos"
+              ApellidoMaterno = None
+              CiNumero = "9998887"
+              CiComplemento = None
+              CiExtension = None
+              Telefono = None
+              Email = None
+              NombreUsuario = "pedro"
+              Roles = [| "Almacen" |]
+              NuevaContrasena = None }
+
+        let! res = UserUseCase.actualizarUsuario buscarUsuarioConEmpleado buscarPorNombre buscarEmpleadoPorCi guardarUsuarioYEmpleado hashFake cmd
+        match res with
+        | Error (CiExistente msg) ->
+            Assert.Contains("cédula de identidad", msg)
+        | res -> failwithf "Debería haber fallado por CI en uso por otro empleado, obtuvo: %A" res
     }
 
 [<Fact>]

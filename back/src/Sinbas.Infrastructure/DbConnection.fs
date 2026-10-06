@@ -79,6 +79,10 @@ alter table empleado add column if not exists ci_extension text;
 alter table empleado add column if not exists telefono text;
 alter table empleado add column if not exists email text;
 
+create unique index if not exists ix_empleado_ci_unico
+    on empleado(ci_numero, coalesce(upper(ci_complemento), ''))
+    where ci_numero is not null and ci_numero <> '-' and ci_numero <> '';
+
 create table if not exists usuario (
     id              uuid primary key,
     empleado_id     uuid    not null references empleado(id) on delete cascade,

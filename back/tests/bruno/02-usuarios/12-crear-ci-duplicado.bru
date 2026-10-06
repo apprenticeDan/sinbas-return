@@ -1,0 +1,38 @@
+meta {
+  name: Crear usuario con CI duplicado
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/usuarios
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+body:json {
+  {
+    "nombres": "Otra Persona",
+    "apellidoPaterno": "Distinto",
+    "ciNumero": "9000001",
+    "ciExtension": "CB",
+    "telefono": "70000099",
+    "email": "otro_ci@test.local",
+    "nombreUsuario": "otro_ci_dup",
+    "contrasena": "{{testPass}}",
+    "roles": ["Almacen"]
+  }
+}
+
+assert {
+  res.status: eq 409
+}
+
+docs {
+  Verifica que no se permita registrar un empleado/usuario con un CI que ya pertenece a otra persona en el sistema.
+  Debe retornar 409 Conflict si el CI ya existe.
+}

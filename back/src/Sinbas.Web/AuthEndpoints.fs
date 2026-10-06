@@ -106,6 +106,7 @@ module AuthEndpoints =
                     | UsuarioInactivo -> return Results.StatusCode(403)
                     | NombreUsuarioInvalido msg -> return Results.BadRequest({| error = msg |})
                     | NombreUsuarioExistente msg -> return Results.Conflict({| error = msg |})
+                    | CiExistente msg -> return Results.Conflict({| error = msg |})
                     | EmpleadoYaTieneUsuario msg -> return Results.Conflict({| error = msg |})
                     | RolesRequeridos msg -> return Results.BadRequest({| error = msg |})
                     | RefreshTokenInvalido _ -> return Results.Unauthorized()
