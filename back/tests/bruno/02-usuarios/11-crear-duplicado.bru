@@ -1,0 +1,37 @@
+meta {
+  name: Crear usuario duplicado
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/usuarios
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+body:json {
+  {
+    "nombres": "Test",
+    "apellidoPaterno": "Almacen",
+    "ciNumero": "9000001",
+    "ciExtension": "CB",
+    "telefono": "700000012",
+    "email": "test_almacen@test.local",
+    "nombreUsuario": "test_almacen",
+    "contrasena": "{{testPass}}",
+    "roles": ["Almacen"]
+  }
+}
+
+assert {
+  res.status: eq 409
+}
+
+docs {
+  201 = creado. 409 = ya existia (permite re-ejecutar la coleccion).
+}

@@ -1,0 +1,24 @@
+meta {
+  name: Probar token refrescado
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/usuarios
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenRefrescado}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Demuestra que el token emitido durante la rotacion (04-refresh)
+  es un JWT valido y permite consumir endpoints protegidos.
+}
