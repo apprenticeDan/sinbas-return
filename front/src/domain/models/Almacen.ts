@@ -1,11 +1,12 @@
 /**
  * Tipos de dominio para el módulo de Almacén (Ingresos y Egresos).
  *
- * Mock UI — estos tipos modelan la estructura visual de los wireframes
- * y serán refinados cuando se implemente el backend (F4 / F8 / F9).
+ * Conectado con el backend real para Ingresos (F4), Egresos (F8/F9)
+ * y el catálogo oficial de productos (F1).
  */
 
-export type CategoriaAlmacen = 'Semillas' | 'Plantas' | 'Insumos' | 'Servicios';
+// Categorías alineadas con el backend (Sinbas.Domain/Producto.fs)
+export type CategoriaAlmacen = 'Semilla' | 'Plantin' | 'Insumo';
 
 export type TipoIngreso = 'Compra' | 'Recoleccion' | 'Intercambio' | 'Devolucion';
 
@@ -13,22 +14,26 @@ export type TipoEgreso = 'Venta' | 'Merma' | 'UsoLabor' | 'UsoVivero' | 'Interca
 
 export interface IngresoItem {
   id: string;
+  productoId?: string;
   fecha: string;
   categoria: CategoriaAlmacen;
   descripcion: string;
   tipo: TipoIngreso;
   cantidad: number | null;
+  unidad?: string;
   procedencia: string;
   observaciones?: string;
 }
 
 export interface EgresoItem {
   id: string;
+  productoId?: string;
   fecha: string;
   categoria: CategoriaAlmacen;
   descripcion: string;
   tipo: TipoEgreso;
   cantidad: number | null;
+  unidad?: string;
   consignatario?: string;
   costoAdicional?: number;
   observaciones?: string;
@@ -135,23 +140,14 @@ export const TIPOS_EGRESO: { value: TipoEgreso; label: string }[] = [
   { value: 'Intercambio', label: 'Intercambio' },
 ];
 
-/** Categorías disponibles */
+/** Categorías disponibles — alineadas con el backend (Semilla, Plantin, Insumo) */
 export const CATEGORIAS: { value: CategoriaAlmacen; label: string; abbr: string }[] = [
-  { value: 'Semillas', label: 'Semillas', abbr: 'Sem' },
-  { value: 'Plantas', label: 'Plantas', abbr: 'Plan' },
-  { value: 'Insumos', label: 'Insumos', abbr: 'Ins' },
-  { value: 'Servicios', label: 'Servicios', abbr: 'Servi' },
+  { value: 'Semilla', label: 'Semillas', abbr: 'Sem' },
+  { value: 'Plantin', label: 'Plantines', abbr: 'Plan' },
+  { value: 'Insumo', label: 'Insumos', abbr: 'Ins' },
 ];
 
-/** Descripciones de productos mock, agrupadas por categoría */
-export const DESCRIPCIONES_POR_CATEGORIA: Record<CategoriaAlmacen, string[]> = {
-  Semillas: ['Anona cherimoya', 'Prunus persica', 'Swietenia macrophylla', 'Casuarina spp', 'Pinus canariensis'],
-  Plantas: ['Pinus canariensis', 'Puya raymondi', 'Tipuana tipu', 'Jacaranda mimosifolia'],
-  Insumos: ['Sustrato orgánico', 'Fertilizante NPK', 'Fungicida sistémico'],
-  Servicios: ['Servicio laboratorio', 'Transporte semillas'],
-};
-
-/** Consignatarios mock para egresos */
+/** Consignatarios sugeridos para egresos (extensible con F6 Clientes) */
 export const CONSIGNATARIOS_MOCK = [
   'Cliente 1',
   'Encargado 1',

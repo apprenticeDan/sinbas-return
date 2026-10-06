@@ -264,9 +264,25 @@ module InventoryService =
                                             | Plantin(nc, _, _) -> (nc.Genero, nc.Epiteto)
                                             | Insumo(n, _, _) -> (n, "INS")
 
-                                        let! lotesTotal = listarLotes (Some prodId) None
-                                        let secuencia = min 99 (lotesTotal.Length + 1)
-                                        let resCodigo = CodigoLote.generar genero epiteto fechaIngresoDateOnly (max 1 secuencia)
+                                        let! todosLosLotes = listarLotes None None
+                                        let codigosExistentes =
+                                            todosLosLotes
+                                            |> List.map (fun l -> (CodigoLote.valor l.Codigo).ToUpperInvariant())
+                                            |> Set.ofList
+
+                                        let rec encontrarSecuenciaDisponible seqNum =
+                                            if seqNum > 99 then Error "Se alcanzó el límite de 99 lotes para esta especie en la misma fecha"
+                                            else
+                                                match CodigoLote.generar genero epiteto fechaIngresoDateOnly seqNum with
+                                                | Error err -> Error (sprintf "Error generando código de lote: %A" err)
+                                                | Ok codigo ->
+                                                    let cStr = CodigoLote.valor codigo
+                                                    if codigosExistentes.Contains(cStr.ToUpperInvariant()) then
+                                                        encontrarSecuenciaDisponible (seqNum + 1)
+                                                    else
+                                                        Ok codigo
+
+                                        let resCodigo = encontrarSecuenciaDisponible 1
 
                                         match resCodigo with
                                         | Error err -> return Error (sprintf "Error generando código de lote: %A" err)

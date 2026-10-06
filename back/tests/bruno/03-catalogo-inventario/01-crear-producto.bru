@@ -1,0 +1,41 @@
+meta {
+  name: 01 - Crear producto en catalogo
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/catalogo/productos
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+body:json {
+  {
+    "categoria": "Semilla",
+    "genero": "Polylepis",
+    "epiteto": "incana",
+    "observacionesNc": "Especie nativa andina de prueba",
+    "nombresComunes": ["Queñua", "Queñoa"],
+    "empaque": "Bolsa 500g",
+    "unidadManejo": "Gramo",
+    "gramosNominales": 500,
+    "trazabilidad": "PorLote",
+    "observaciones": "Producto creado para test de integración"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.categoria: eq "Semilla"
+}
+
+vars:post-response {
+  testProductoId: res.body.id
+  testNombreVisible: res.body.nombreVisible
+}

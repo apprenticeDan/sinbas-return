@@ -1,0 +1,20 @@
+meta {
+  name: 05 - Verificar stock tras ingreso
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/inventario/stock/{{testProductoId}}
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.stockTotalGramos: eq 500
+  res.body.lotes.length: gte 1
+}

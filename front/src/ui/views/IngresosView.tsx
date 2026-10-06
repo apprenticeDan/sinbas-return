@@ -1,12 +1,11 @@
 /**
- * Vista de Registro de Ingresos a Almacén (Mock UI).
+ * Vista de Registro de Ingresos a Almacén.
  *
  * Basado en wireframe: docs/borradores/wireframes/ui_inv_ingreso.png
  * Feature: F4 / MF-04-01 — Registro de Ingreso de Productos / Semillas
  *
- * MOCK: Los datos son estáticos. No hay comunicación con backend.
- * El formulario inline en la cabecera permite "registrar" ingresos
- * que se agregan al store local en memoria.
+ * Conectado a backend real vía API REST.
+ * El selector de productos se construye dinámicamente desde el catálogo oficial (F1).
  */
 
 import { Component, createSignal, For, Show, createMemo, onMount } from 'solid-js';
@@ -14,37 +13,47 @@ import { almacenStore } from '../store/almacenStore';
 import {
   CATEGORIAS,
   TIPOS_INGRESO,
-  DESCRIPCIONES_POR_CATEGORIA,
   type CategoriaAlmacen,
   type TipoIngreso,
 } from '../../domain/models/Almacen';
+import type { Product } from '../../domain/models/Product';
 import { DataTable, type Column } from '../components/DataTable';
 
 export const IngresosView: Component = () => {
   // ─── Form state (inline header) ──────────────────────────────
   const [formFecha, setFormFecha] = createSignal(new Date().toISOString().split('T')[0]);
   const [formCategoria, setFormCategoria] = createSignal<CategoriaAlmacen | ''>('');
-  const [formDescripcion, setFormDescripcion] = createSignal('');
+  const [formProductoId, setFormProductoId] = createSignal('');
   const [formTipo, setFormTipo] = createSignal<TipoIngreso | ''>('');
   const [formProcedencia, setFormProcedencia] = createSignal('');
   const [formCantidad, setFormCantidad] = createSignal<string>('');
   const [formError, setFormError] = createSignal<string | null>(null);
 
-  // Cargar movimientos reales al montar (F4 / MF-04-01)
-  onMount(() => {
+  // Cargar catálogo y movimientos reales al montar
+  onMount(async () => {
+    await almacenStore.asegurarCatalogoCargado();
     almacenStore.cargarIngresos();
   });
 
-  const descripcionesDisponibles = createMemo(() => {
+  // Productos del catálogo filtrados por categoría seleccionada
+  const productosDisponibles = createMemo(() => {
     const cat = formCategoria();
-    return cat ? DESCRIPCIONES_POR_CATEGORIA[cat] : [];
+    const productos = almacenStore.productosCache();
+    if (!cat) return productos;
+    return productos.filter((p) => p.categoria === cat);
+  });
+
+  // Producto seleccionado actualmente
+  const productoSeleccionado = createMemo(() => {
+    const id = formProductoId();
+    if (!id) return null;
+    return almacenStore.productosCache().find((p) => p.id === id) || null;
   });
 
   const canSubmit = createMemo(() => {
     const cant = Number(formCantidad());
     return (
-      formCategoria() !== '' &&
-      formDescripcion() !== '' &&
+      formProductoId() !== '' &&
       formTipo() !== '' &&
       !isNaN(cant) &&
       cant > 0 &&
@@ -60,22 +69,31 @@ export const IngresosView: Component = () => {
     }
     if (!canSubmit()) return;
     setFormError(null);
+
+    const prod = productoSeleccionado();
+    if (!prod) {
+      setFormError('Debe seleccionar un producto del catálogo.');
+      return;
+    }
+
     try {
       await almacenStore.registrarIngreso({
+        productoId: prod.id,
         fecha: formFecha(),
-        categoria: formCategoria() as CategoriaAlmacen,
-        descripcion: formDescripcion(),
+        categoria: prod.categoria as CategoriaAlmacen,
+        descripcion: prod.nombreVisible,
         tipo: formTipo() as TipoIngreso,
         cantidad: cant,
+        unidad: prod.unidadManejo || 'Kilogramo',
         procedencia: formProcedencia(),
       });
       // Reset form parcial (mantener fecha y categoría)
-      setFormDescripcion('');
+      setFormProductoId('');
       setFormTipo('');
       setFormProcedencia('');
       setFormCantidad('');
     } catch (err: any) {
-      setFormError(err.message || 'Error al registrar el ingreso. Ingreso guardado localmente.');
+      setFormError(err.message || 'Error al registrar el ingreso.');
     }
   }
 
@@ -146,7 +164,7 @@ export const IngresosView: Component = () => {
     },
     {
       header: 'Cantidad',
-      width: '90px',
+      width: '120px',
       cell: (item: any) => (
         <span style={{
           'font-family': 'monospace',
@@ -154,7 +172,7 @@ export const IngresosView: Component = () => {
           'font-weight': '700',
           color: item.cantidad != null ? 'var(--ink)' : 'var(--ink-faint)',
         }}>
-          {item.cantidad != null ? item.cantidad : '—'}
+          {item.cantidad != null ? `${item.cantidad} ${item.unidad || ''}` : '—'}
         </span>
       ),
     },
@@ -207,26 +225,29 @@ export const IngresosView: Component = () => {
               value={formCategoria()}
               onChange={(e) => {
                 setFormCategoria(e.currentTarget.value as CategoriaAlmacen | '');
-                setFormDescripcion('');
+                setFormProductoId('');
               }}
             >
-              <option value="">— Seleccionar —</option>
+              <option value="">— Todas —</option>
               <For each={CATEGORIAS}>
                 {(c) => <option value={c.value}>{c.label}</option>}
               </For>
             </select>
           </div>
 
-          <div class="field" style={{ 'min-width': '170px', flex: '1' }}>
-            <label>Descripción</label>
+          <div class="field" style={{ 'min-width': '200px', flex: '1' }}>
+            <label>Producto (Catálogo)</label>
             <select
-              value={formDescripcion()}
-              onChange={(e) => setFormDescripcion(e.currentTarget.value)}
-              disabled={!formCategoria()}
+              value={formProductoId()}
+              onChange={(e) => setFormProductoId(e.currentTarget.value)}
             >
               <option value="">— Seleccionar producto —</option>
-              <For each={descripcionesDisponibles()}>
-                {(d) => <option value={d}>{d}</option>}
+              <For each={productosDisponibles()}>
+                {(p: Product) => (
+                  <option value={p.id}>
+                    {p.nombreVisible} ({p.unidadManejo})
+                  </option>
+                )}
               </For>
             </select>
           </div>
@@ -265,11 +286,23 @@ export const IngresosView: Component = () => {
             />
           </div>
 
+          <Show when={productoSeleccionado()}>
+            <div class="field" style={{ 'min-width': '60px', 'max-width': '80px' }}>
+              <label>Unidad</label>
+              <input
+                type="text"
+                value={productoSeleccionado()?.unidadManejo || ''}
+                disabled
+                style={{ background: 'var(--surface-alt)', color: 'var(--ink-soft)' }}
+              />
+            </div>
+          </Show>
+
           <button
             class="btn btn-primary almacen-add-btn"
             onClick={handleRegistrar}
             disabled={!canSubmit()}
-            title={canSubmit() ? 'Registrar ingreso' : 'Completa categoría, descripción, tipo y una cantidad mayor a 0'}
+            title={canSubmit() ? 'Registrar ingreso' : 'Seleccione un producto del catálogo, tipo y una cantidad mayor a 0'}
             style={{ 'align-self': 'flex-end' }}
           >
             <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
