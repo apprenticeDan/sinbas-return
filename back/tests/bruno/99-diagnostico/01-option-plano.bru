@@ -1,0 +1,32 @@
+meta {
+  name: Option - forma plana
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/catalogo/productos
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+body:json {
+  {
+    "categoria": "Semilla",
+    "genero": "Pinus",
+    "epiteto": "plano",
+    "nombresComunes": ["Diagnostico plano"],
+    "empaque": "Bolsa",
+    "unidadManejo": "Kilogramo",
+    "gramosNominales": 1000,
+    "trazabilidad": "PorLote"
+  }
+}
+
+assert {
+  res.status: in [200, 201]
+}

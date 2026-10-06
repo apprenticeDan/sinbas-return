@@ -1,0 +1,9 @@
+{
+	"devDependencies": {
+		"@usebruno/cli": "^4.2.0"
+	},
+	"scripts": {
+    "test:api": "bru run",
+    "test:api:env": "bru run --env local"
+  }
+}

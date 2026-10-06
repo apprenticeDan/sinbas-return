@@ -1,0 +1,19 @@
+meta {
+  name: Listar usuarios (admin)
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/usuarios
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+assert {
+  res.status: eq 200
+}

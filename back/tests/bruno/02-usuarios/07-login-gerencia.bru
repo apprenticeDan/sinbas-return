@@ -1,0 +1,26 @@
+meta {
+  name: Login gerencia
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "nombreUsuarioRaw": "test_gerencia",
+    "contrasena": "{{testPass}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+vars:post-response {
+  tokenGerencia: res.body.token
+}

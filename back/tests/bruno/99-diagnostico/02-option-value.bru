@@ -1,0 +1,32 @@
+meta {
+  name: Option - forma value
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/catalogo/productos
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+body:json {
+  {
+    "categoria": "Semilla",
+    "genero": { "value": "Pinus" },
+    "epiteto": "value",
+    "nombresComunes": ["Diagnostico value"],
+    "empaque": { "value": "Bolsa" },
+    "unidadManejo": "Kilogramo",
+    "gramosNominales": { "value": 1000 },
+    "trazabilidad": "PorLote"
+  }
+}
+
+assert {
+  res.status: in [200, 201]
+}
