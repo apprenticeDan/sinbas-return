@@ -171,3 +171,49 @@ let ``Cantidad.reconstruir instancia Cantidad directamente para persistencia si 
     match Cantidad.reconstruir -5m Gramo with
     | Error (CantidadInvalida _) -> ()
     | res -> failwithf "Debio rechazar cantidad negativa pero retorno: %A" res
+
+[<Fact>]
+let ``UnidadMedida.convertir convierte correctamente entre unidades de la misma dimension fisica`` () =
+    // Peso: kg -> g y g -> kg
+    Assert.Equal(Ok 2500m, UnidadMedida.convertir Kilogramo Gramo 2.5m)
+    Assert.Equal(Ok 1.75m, UnidadMedida.convertir Gramo Kilogramo 1750m)
+
+    // Volumen: l -> ml y ml -> l
+    Assert.Equal(Ok 1200m, UnidadMedida.convertir Litro Mililitro 1.2m)
+    Assert.Equal(Ok 0.75m, UnidadMedida.convertir Mililitro Litro 750m)
+
+    // Conteo: UnidadDiscreta -> UnidadDiscreta
+    Assert.Equal(Ok 10m, UnidadMedida.convertir UnidadDiscreta UnidadDiscreta 10m)
+
+[<Fact>]
+let ``UnidadMedida.convertir rechaza conversiones entre dimensiones fisicas incompatibles`` () =
+    match UnidadMedida.convertir Kilogramo Litro 1m with
+    | Error (UnidadIncompatible msg) -> Assert.Contains("No se puede convertir", msg)
+    | res -> failwithf "Debió rechazar conversión de kg a l: %A" res
+
+    match UnidadMedida.convertir Gramo UnidadDiscreta 100m with
+    | Error (UnidadIncompatible msg) -> Assert.Contains("No se puede convertir", msg)
+    | res -> failwithf "Debió rechazar conversión de g a u: %A" res
+
+[<Fact>]
+let ``Cantidad.enUnidad convierte una Cantidad manteniendo coherencia dimensional`` () =
+    let cantKg = unwrap (Cantidad.crear 3.5m Kilogramo)
+    let cantG = unwrap (Cantidad.enUnidad Gramo cantKg)
+    Assert.Equal(3500m, Cantidad.valor cantG)
+    Assert.Equal(Gramo, Cantidad.unidad cantG)
+
+    let cantMl = unwrap (Cantidad.crear 500m Mililitro)
+    let cantL = unwrap (Cantidad.enUnidad Litro cantMl)
+    Assert.Equal(0.5m, Cantidad.valor cantL)
+    Assert.Equal(Litro, Cantidad.unidad cantL)
+
+[<Fact>]
+let ``Cantidad.sumar con volumenes compatibles suma y preserva unidad del primer termino`` () =
+    let c1 = unwrap (Cantidad.reconstruir 1m Litro)
+    let c2 = unwrap (Cantidad.reconstruir 250m Mililitro)
+
+    match Cantidad.sumar c1 c2 with
+    | Ok res ->
+        Assert.Equal(1.25m, Cantidad.valor res)
+        Assert.Equal(Litro, Cantidad.unidad res)
+    | Error err -> failwithf "sumar volumen valido fallo: %A" err

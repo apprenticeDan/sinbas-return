@@ -71,21 +71,26 @@ module Lote =
                   Estado = Activo
                   Observaciones = observaciones }
 
-    /// Actualiza el saldo proyectado del lote y reevalúa su estado si llega a cero
-    let actualizarSaldo (nuevoSaldoGramos: decimal) (lote: Lote) : Result<Lote, DomainError> =
-        let saldoNormalizado = max 0m nuevoSaldoGramos
-        match Cantidad.reconstruir saldoNormalizado Gramo with
+    /// Actualiza el saldo proyectado del lote (en unidad base) y reevalúa su estado si llega a cero,
+    /// preservando la unidad física declarada en el lote.
+    let actualizarSaldo (nuevoSaldoBase: decimal) (lote: Lote) : Result<Lote, DomainError> =
+        let saldoNormalizado = max 0m nuevoSaldoBase
+        let targetUnit = lote.CantidadInicial.Unidad
+        let uBase = UnidadMedida.unidadBase targetUnit
+        match UnidadMedida.convertir uBase targetUnit saldoNormalizado with
         | Error err -> Error err
-        | Ok nuevaCantidad ->
+        | Ok valorEnUnidadLote ->
+            match Cantidad.reconstruir valorEnUnidadLote targetUnit with
+            | Error err -> Error err
+            | Ok nuevaCantidad ->
+                let nuevoEstado =
+                    if saldoNormalizado = 0m then Agotado
+                    elif lote.Estado = Agotado && saldoNormalizado > 0m then Activo
+                    else lote.Estado
 
-        let nuevoEstado =
-            if saldoNormalizado = 0m then Agotado
-            elif lote.Estado = Agotado && saldoNormalizado > 0m then Activo
-            else lote.Estado
-
-        Ok { lote with
-                CantidadActual = nuevaCantidad
-                Estado = nuevoEstado }
+                Ok { lote with
+                        CantidadActual = nuevaCantidad
+                        Estado = nuevoEstado }
 
     let descontarStock (cantidadADescontar: Cantidad) (lote: Lote) : Result<Lote, DomainError> =
         if cantidadADescontar.Valor <= 0m then
@@ -104,10 +109,10 @@ module Lote =
                     )
                 )
             | Ok true ->
-                let disponibleGramos = Cantidad.enGramos lote.CantidadActual
-                let aDescontarGramos = Cantidad.enGramos cantidadADescontar
-                let restanteGramos = disponibleGramos - aDescontarGramos
-                actualizarSaldo restanteGramos lote
+                let disponibleBase = Cantidad.aUnidadBase lote.CantidadActual
+                let aDescontarBase = Cantidad.aUnidadBase cantidadADescontar
+                let restanteBase = disponibleBase - aDescontarBase
+                actualizarSaldo restanteBase lote
 
     let marcarAgotado lote =
         actualizarSaldo 0m lote

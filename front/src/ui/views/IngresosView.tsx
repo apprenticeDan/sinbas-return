@@ -27,6 +27,7 @@ export const IngresosView: Component = () => {
   const [formTipo, setFormTipo] = createSignal<TipoIngreso | ''>('');
   const [formProcedencia, setFormProcedencia] = createSignal('');
   const [formCantidad, setFormCantidad] = createSignal<string>('');
+  const [formUnidad, setFormUnidad] = createSignal<string>('Kilogramo');
   const [formError, setFormError] = createSignal<string | null>(null);
 
   // Cargar catálogo y movimientos reales al montar
@@ -48,6 +49,26 @@ export const IngresosView: Component = () => {
     const id = formProductoId();
     if (!id) return null;
     return almacenStore.productosCache().find((p) => p.id === id) || null;
+  });
+
+  // Opciones de unidades compatibles según la dimensión física del producto
+  const unidadesCompatibles = createMemo(() => {
+    const prod = productoSeleccionado();
+    if (!prod) return [{ value: 'Kilogramo', label: 'kg' }, { value: 'Gramo', label: 'g' }];
+    const u = (prod.unidadManejo || '').toLowerCase();
+    if (u.includes('kilo') || u.includes('gram')) {
+      return [
+        { value: 'Kilogramo', label: 'kg' },
+        { value: 'Gramo', label: 'g' },
+      ];
+    }
+    if (u.includes('lit') || u.includes('mili')) {
+      return [
+        { value: 'Litro', label: 'l' },
+        { value: 'Mililitro', label: 'ml' },
+      ];
+    }
+    return [{ value: 'Unidad', label: 'u' }];
   });
 
   const canSubmit = createMemo(() => {
@@ -84,7 +105,7 @@ export const IngresosView: Component = () => {
         descripcion: prod.nombreVisible,
         tipo: formTipo() as TipoIngreso,
         cantidad: cant,
-        unidad: prod.unidadManejo || 'Kilogramo',
+        unidad: formUnidad() || prod.unidadManejo || 'Kilogramo',
         procedencia: formProcedencia(),
       });
       // Reset form parcial (mantener fecha y categoría)
@@ -239,7 +260,14 @@ export const IngresosView: Component = () => {
             <label>Producto (Catálogo)</label>
             <select
               value={formProductoId()}
-              onChange={(e) => setFormProductoId(e.currentTarget.value)}
+              onChange={(e) => {
+                const id = e.currentTarget.value;
+                setFormProductoId(id);
+                const prod = almacenStore.productosCache().find((p) => p.id === id);
+                if (prod && prod.unidadManejo) {
+                  setFormUnidad(prod.unidadManejo);
+                }
+              }}
             >
               <option value="">— Seleccionar producto —</option>
               <For each={productosDisponibles()}>
@@ -280,23 +308,25 @@ export const IngresosView: Component = () => {
             <input
               type="number"
               min="0"
+              step="any"
               placeholder="0"
               value={formCantidad()}
               onInput={(e) => setFormCantidad(e.currentTarget.value)}
             />
           </div>
 
-          <Show when={productoSeleccionado()}>
-            <div class="field" style={{ 'min-width': '60px', 'max-width': '80px' }}>
-              <label>Unidad</label>
-              <input
-                type="text"
-                value={productoSeleccionado()?.unidadManejo || ''}
-                disabled
-                style={{ background: 'var(--surface-alt)', color: 'var(--ink-soft)' }}
-              />
-            </div>
-          </Show>
+          <div class="field" style={{ 'min-width': '80px', 'max-width': '100px' }}>
+            <label>Unidad</label>
+            <select
+              value={formUnidad()}
+              onChange={(e) => setFormUnidad(e.currentTarget.value)}
+              disabled={!productoSeleccionado()}
+            >
+              <For each={unidadesCompatibles()}>
+                {(u) => <option value={u.value}>{u.label}</option>}
+              </For>
+            </select>
+          </div>
 
           <button
             class="btn btn-primary almacen-add-btn"

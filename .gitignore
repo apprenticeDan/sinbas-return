@@ -210,6 +210,9 @@ npm-debug.log*
 
 docs/borradores/
 docs/bundles_analisis/
+docs/borradores.zip
+docs.zip
+*.zip
 
 *.txt  
 **/ejemplo_infra_contenedor/

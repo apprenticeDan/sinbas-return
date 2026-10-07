@@ -221,6 +221,23 @@ module UnidadMedida =
         | UnidadDiscreta, UnidadDiscreta -> true
         | _ -> false
 
+    /// Obtiene la unidad base canónica de la misma dimensión física
+    let unidadBase = function
+        | Gramo | Kilogramo -> Gramo
+        | Mililitro | Litro -> Mililitro
+        | UnidadDiscreta -> UnidadDiscreta
+
+    /// Convierte un valor numérico entre unidades compatibles
+    let convertir (origen: UnidadMedida) (destino: UnidadMedida) (valor: decimal) : Result<decimal, DomainError> =
+        if not (sonCompatibles origen destino) then
+            Error(UnidadIncompatible(sprintf "No se puede convertir de %s a %s" (etiqueta origen) (etiqueta destino)))
+        else
+            let baseVal = aUnidadBase origen valor
+            match destino with
+            | Kilogramo -> Ok (baseVal / 1000m)
+            | Litro     -> Ok (baseVal / 1000m)
+            | _         -> Ok baseVal
+
 type Unidad = UnidadMedida
 
 module Unidad =
@@ -228,6 +245,9 @@ module Unidad =
     let aTexto = UnidadMedida.aTexto
     let desdeTexto = UnidadMedida.desdeTexto
     let aGramos = UnidadMedida.aUnidadBase
+    let aUnidadBase = UnidadMedida.aUnidadBase
+    let unidadBase = UnidadMedida.unidadBase
+    let convertir = UnidadMedida.convertir
     let sonCompatibles = UnidadMedida.sonCompatibles
 
 // ─────────────────────────────────────────────────────────────
@@ -317,6 +337,15 @@ module Cantidad =
 
     let aUnidadBase (c: Cantidad) : decimal =
         UnidadMedida.aUnidadBase c.Unidad c.Valor
+
+    let enUnidadBase (c: Cantidad) : decimal =
+        UnidadMedida.aUnidadBase c.Unidad c.Valor
+
+    /// Convierte una Cantidad a otra unidad compatible
+    let enUnidad (destino: UnidadMedida) (c: Cantidad) : Result<Cantidad, DomainError> =
+        match UnidadMedida.convertir c.Unidad destino c.Valor with
+        | Ok v -> Ok { _Valor = v; _Unidad = destino }
+        | Error err -> Error err
 
     let sonCompatibles (a: Cantidad) (b: Cantidad) : bool =
         UnidadMedida.sonCompatibles a.Unidad b.Unidad

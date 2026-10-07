@@ -32,12 +32,16 @@ export const EgresosView: Component = () => {
   const [formTipo, setFormTipo] = createSignal<TipoEgreso | ''>('');
   const [formConsignatario, setFormConsignatario] = createSignal('');
   const [formCantidad, setFormCantidad] = createSignal<string>('');
+  const [formUnidad, setFormUnidad] = createSignal<string>('Kilogramo');
   const [formCostoAdic, setFormCostoAdic] = createSignal<string>('');
   const [formError, setFormError] = createSignal<string | null>(null);
 
-  // Cargar catálogo y movimientos de egreso reales al montar
+  // Cargar catálogo, clientes y movimientos de egreso reales al montar
   onMount(async () => {
-    await almacenStore.asegurarCatalogoCargado();
+    await Promise.all([
+      almacenStore.asegurarCatalogoCargado(),
+      almacenStore.asegurarClientesCargados(),
+    ]);
     almacenStore.cargarEgresos();
   });
 
@@ -54,6 +58,35 @@ export const EgresosView: Component = () => {
     const id = formProductoId();
     if (!id) return null;
     return almacenStore.productosCache().find((p) => p.id === id) || null;
+  });
+
+  // Opciones de unidades compatibles según la dimensión física del producto
+  const unidadesCompatibles = createMemo(() => {
+    const prod = productoSeleccionado();
+    if (!prod) return [{ value: 'Kilogramo', label: 'kg' }, { value: 'Gramo', label: 'g' }];
+    const u = (prod.unidadManejo || '').toLowerCase();
+    if (u.includes('kilo') || u.includes('gram')) {
+      return [
+        { value: 'Kilogramo', label: 'kg' },
+        { value: 'Gramo', label: 'g' },
+      ];
+    }
+    if (u.includes('lit') || u.includes('mili')) {
+      return [
+        { value: 'Litro', label: 'l' },
+        { value: 'Mililitro', label: 'ml' },
+      ];
+    }
+    return [{ value: 'Unidad', label: 'u' }];
+  });
+
+  // Clientes reales registrados + valores predeterminados para departamentos internos
+  const opcionesConsignatario = createMemo(() => {
+    const clientes = almacenStore.clientesCache();
+    const nombresClientes = clientes.map((c) =>
+      c.nit ? `${c.nombreVisible} (NIT: ${c.nit})` : c.nombreVisible
+    );
+    return Array.from(new Set([...nombresClientes, ...CONSIGNATARIOS_MOCK]));
   });
 
   const canSubmit = createMemo(() => {
@@ -90,7 +123,7 @@ export const EgresosView: Component = () => {
         descripcion: prod.nombreVisible,
         tipo: formTipo() as TipoEgreso,
         cantidad: cant,
-        unidad: prod.unidadManejo || 'Kilogramo',
+        unidad: formUnidad() || prod.unidadManejo || 'Kilogramo',
         consignatario: formConsignatario(),
         costoAdicional: formCostoAdic() ? Number(formCostoAdic()) : undefined,
       });
@@ -275,7 +308,14 @@ export const EgresosView: Component = () => {
             <label>Producto (Catálogo)</label>
             <select
               value={formProductoId()}
-              onChange={(e) => setFormProductoId(e.currentTarget.value)}
+              onChange={(e) => {
+                const id = e.currentTarget.value;
+                setFormProductoId(id);
+                const prod = almacenStore.productosCache().find((p) => p.id === id);
+                if (prod && prod.unidadManejo) {
+                  setFormUnidad(prod.unidadManejo);
+                }
+              }}
             >
               <option value="">— Seleccionar producto —</option>
               <For each={productosDisponibles()}>
@@ -302,17 +342,17 @@ export const EgresosView: Component = () => {
           </div>
 
           {/* EXTENSIBILITY (F6 / F9): Selector multivariable (nombre/apellido/nit/tel/email) para clientes y depto/solicitante para uso interno */}
-          <div class="field" style={{ 'min-width': '130px' }}>
-            <label>Consignatario</label>
+          <div class="field" style={{ 'min-width': '140px', flex: '1' }}>
+            <label>Consignatario / Destino</label>
             <input
               type="text"
               list="consignatarios-list"
-              placeholder="Destino / Cliente..."
+              placeholder="Buscar cliente o escribir..."
               value={formConsignatario()}
               onInput={(e) => setFormConsignatario(e.currentTarget.value)}
             />
             <datalist id="consignatarios-list">
-              <For each={CONSIGNATARIOS_MOCK}>
+              <For each={opcionesConsignatario()}>
                 {(c) => <option value={c} />}
               </For>
             </datalist>
@@ -323,23 +363,25 @@ export const EgresosView: Component = () => {
             <input
               type="number"
               min="0"
+              step="any"
               placeholder="0"
               value={formCantidad()}
               onInput={(e) => setFormCantidad(e.currentTarget.value)}
             />
           </div>
 
-          <Show when={productoSeleccionado()}>
-            <div class="field" style={{ 'min-width': '60px', 'max-width': '80px' }}>
-              <label>Unidad</label>
-              <input
-                type="text"
-                value={productoSeleccionado()?.unidadManejo || ''}
-                disabled
-                style={{ background: 'var(--surface-alt)', color: 'var(--ink-soft)' }}
-              />
-            </div>
-          </Show>
+          <div class="field" style={{ 'min-width': '80px', 'max-width': '100px' }}>
+            <label>Unidad</label>
+            <select
+              value={formUnidad()}
+              onChange={(e) => setFormUnidad(e.currentTarget.value)}
+              disabled={!productoSeleccionado()}
+            >
+              <For each={unidadesCompatibles()}>
+                {(u) => <option value={u.value}>{u.label}</option>}
+              </For>
+            </select>
+          </div>
 
           <div class="field" style={{ 'min-width': '80px', 'max-width': '100px' }}>
             <label>Costo Adq.</label>

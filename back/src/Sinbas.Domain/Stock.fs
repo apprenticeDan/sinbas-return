@@ -2,10 +2,10 @@ namespace Sinbas.Domain
 
 module Stock =
 
-    /// Stock disponible de un lote según su saldo actual proyectado en gramos
+    /// Stock disponible de un lote según su saldo actual proyectado en su unidad base
     let stockLote (lote: Lote) : decimal =
         if lote.Estado = Activo then
-            Cantidad.enGramos lote.CantidadActual
+            Cantidad.aUnidadBase lote.CantidadActual
         else
             0m
 
@@ -16,13 +16,13 @@ module Stock =
             let signo = TipoMovimiento.signo mov.Tipo
             mov.Lineas
             |> List.filter (fun l -> l.Referencia = loteId)
-            |> List.sumBy (fun l -> signo * Cantidad.enGramos l.Cantidad))
+            |> List.sumBy (fun l -> signo * Cantidad.aUnidadBase l.Cantidad))
 
-    /// Stock total de un producto sumando el saldo de todos sus lotes activos
+    /// Stock total de un producto sumando el saldo de todos sus lotes activos en unidad base
     let stockProducto (productoId: ProductoId) (lotes: Lote list) : decimal =
         lotes
         |> List.filter (fun l -> l.ProductoId = productoId && Lote.estaActivo l)
-        |> List.sumBy (fun l -> Cantidad.enGramos l.CantidadActual)
+        |> List.sumBy (fun l -> Cantidad.aUnidadBase l.CantidadActual)
 
     /// Stock disponible para venta (lotes únicamente en estado Activo)
     let disponibleParaVenta (productoId: ProductoId) (lotes: Lote list) : decimal =
@@ -32,9 +32,33 @@ module Stock =
     let lotesDisponibles (productoId: ProductoId) (lotes: Lote list) : (Lote * decimal) list =
         lotes
         |> List.filter (fun l -> l.ProductoId = productoId && Lote.estaActivo l)
-        |> List.map (fun l -> l, Cantidad.enGramos l.CantidadActual)
+        |> List.map (fun l -> l, Cantidad.aUnidadBase l.CantidadActual)
         |> List.filter (fun (_, stock) -> stock > 0m)
         |> List.sortBy (fun (l, _) -> l.FechaIngreso)
+
+    /// Valida si el stock disponible cubre la cantidad requerida, considerando unidades compatibles
+    let validarDisponibilidad (disponible: Cantidad) (requerida: Cantidad) : Result<unit, DomainError> =
+        if not (Cantidad.sonCompatibles disponible requerida) then
+            Error(
+                UnidadIncompatible(
+                    sprintf "Unidades incompatibles: disponible en %s, requerida en %s"
+                        (UnidadMedida.etiqueta (Cantidad.unidad disponible))
+                        (UnidadMedida.etiqueta (Cantidad.unidad requerida))
+                )
+            )
+        else
+            let baseDisp = Cantidad.aUnidadBase disponible
+            let baseReq = Cantidad.aUnidadBase requerida
+            if baseReq > baseDisp then
+                Error(
+                    StockInsuficiente(
+                        sprintf "Stock insuficiente: disponible %s, solicitado %s"
+                            (Cantidad.formatear disponible)
+                            (Cantidad.formatear requerida)
+                    )
+                )
+            else
+                Ok ()
 
     // ─────────────────────────────────────────────────────────────
     // MF-05-02 & MF-05-03: Kardex Digital y Alertas de Stock
@@ -91,8 +115,8 @@ module Stock =
                 let (nuevoSaldo, lineasGeneradas) =
                     lineasProducto
                     |> List.fold (fun (s, accLineas) linea ->
-                        let cantGramos = Cantidad.enGramos linea.Cantidad
-                        let sActual = s + (signo * cantGramos)
+                        let cantBase = Cantidad.aUnidadBase linea.Cantidad
+                        let sActual = s + (signo * cantBase)
                         let kl =
                             { MovimientoId = mov.Id
                               Fecha = mov.Fecha

@@ -145,3 +145,45 @@ let ``MF-05-03: Evaluación de alerta categoriza SinStock, BajoStock y StockNorm
     Assert.Equal(Stock.BajoStock umbralMinimo, alertaBajoIgual)
     Assert.Equal(Stock.BajoStock umbralMinimo, alertaBajoMenor)
     Assert.Equal(Stock.StockNormal, alertaNormal)
+
+// ─────────────────────────────────────────────────────────────
+// Soporte Multidimensional y Validacion de Disponibilidad
+// ─────────────────────────────────────────────────────────────
+
+[<Fact>]
+let ``Stock.validarDisponibilidad aprueba cuando stock en kg cubre solicitud en g`` () =
+    let disp = unwrap (Cantidad.reconstruir 5m Kilogramo) // 5000 g
+    let req = unwrap (Cantidad.reconstruir 2500m Gramo)   // 2500 g
+
+    match Stock.validarDisponibilidad disp req with
+    | Ok () -> ()
+    | Error err -> failwithf "Debió aprobar disponibilidad: %A" err
+
+[<Fact>]
+let ``Stock.validarDisponibilidad rechaza cuando stock en kg no cubre solicitud en g`` () =
+    let disp = unwrap (Cantidad.reconstruir 2m Kilogramo) // 2000 g
+    let req = unwrap (Cantidad.reconstruir 2500m Gramo)   // 2500 g
+
+    match Stock.validarDisponibilidad disp req with
+    | Error (StockInsuficiente msg) ->
+        Assert.Contains("Stock insuficiente", msg)
+    | res -> failwithf "Debió retornar StockInsuficiente pero retornó: %A" res
+
+[<Fact>]
+let ``Stock.validarDisponibilidad rechaza unidades de dimensiones incompatibles (peso vs volumen)`` () =
+    let disp = unwrap (Cantidad.reconstruir 5m Kilogramo)
+    let req = unwrap (Cantidad.reconstruir 2m Litro)
+
+    match Stock.validarDisponibilidad disp req with
+    | Error (UnidadIncompatible msg) ->
+        Assert.Contains("incompatibles", msg)
+    | res -> failwithf "Debió retornar UnidadIncompatible pero retornó: %A" res
+
+[<Fact>]
+let ``Stock.validarDisponibilidad aprueba unidades discretas idénticas`` () =
+    let disp = unwrap (Cantidad.reconstruir 10m UnidadDiscreta)
+    let req = unwrap (Cantidad.reconstruir 10m UnidadDiscreta)
+
+    match Stock.validarDisponibilidad disp req with
+    | Ok () -> ()
+    | Error err -> failwithf "Debió aprobar: %A" err
