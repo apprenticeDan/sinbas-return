@@ -1,0 +1,38 @@
+meta {
+  name: 11 - Registrar ingreso en kilogramos
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/inventario/ingreso
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+body:json {
+  {
+    "productoId": "{{testProductoId}}",
+    "loteId": "",
+    "descripcion": "{{testNombreVisible}}",
+    "categoria": "Semilla",
+    "tipoIngreso": "Compra",
+    "cantidad": 1.5,
+    "unidad": "kg",
+    "procedencia": "Vivero Central",
+    "observaciones": "Ingreso en kg para probar conversion multidimensional",
+    "fecha": "2026-10-06T10:00:00Z"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.tipo: eq "Entrada"
+  res.body.lineas: isArray
+  res.body.lineas.length: gte 1
+}

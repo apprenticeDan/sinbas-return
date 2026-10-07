@@ -235,13 +235,14 @@ module InventoryService =
                                     let! lOpt = obtenerLotePorId (LoteId lGuid)
                                     match lOpt with
                                     | Some l ->
-                                        match Cantidad.reconstruir (l.CantidadActual.Valor + req.Cantidad) l.CantidadActual.Unidad with
+                                        match Cantidad.sumar l.CantidadActual cantidadIngreso with
                                         | Error (CantidadInvalida msg) -> return Error msg
+                                        | Error (UnidadIncompatible msg) -> return Error msg
                                         | Error err -> return Error (sprintf "%A" err)
                                         | Ok nuevaCant ->
-                                        let loteActualizado = { l with CantidadActual = nuevaCant; Estado = Activo }
-                                        do! actualizarLoteStock loteActualizado
-                                        return Ok loteActualizado
+                                            let loteActualizado = { l with CantidadActual = nuevaCant; Estado = Activo }
+                                            do! actualizarLoteStock loteActualizado
+                                            return Ok loteActualizado
                                     | None ->
                                         return Error "El lote especificado no existe"
                                 | false, _ ->
@@ -249,13 +250,14 @@ module InventoryService =
                                     let! lotesActivos = listarLotes (Some prodId) (Some Activo)
                                     match lotesActivos |> List.tryHead with
                                     | Some loteExistente ->
-                                        match Cantidad.reconstruir (loteExistente.CantidadActual.Valor + req.Cantidad) loteExistente.CantidadActual.Unidad with
+                                        match Cantidad.sumar loteExistente.CantidadActual cantidadIngreso with
                                         | Error (CantidadInvalida msg) -> return Error msg
+                                        | Error (UnidadIncompatible msg) -> return Error msg
                                         | Error err -> return Error (sprintf "%A" err)
                                         | Ok nuevaCant ->
-                                        let loteActualizado = { loteExistente with CantidadActual = nuevaCant }
-                                        do! actualizarLoteStock loteActualizado
-                                        return Ok loteActualizado
+                                            let loteActualizado = { loteExistente with CantidadActual = nuevaCant }
+                                            do! actualizarLoteStock loteActualizado
+                                            return Ok loteActualizado
                                     | None ->
                                         // Generar nuevo lote automáticamente
                                         let (genero, epiteto) =
@@ -449,6 +451,9 @@ module InventoryService =
                                 | Rechazado -> "Rechazado"
                                 | Archivado -> "Archivado"
 
+                            let esMayorUnidad = l.CantidadActual.Unidad = Kilogramo || l.CantidadActual.Unidad = Litro
+                            let stockDisp = if esMayorUnidad then stockG / 1000m else stockG
+
                             { LoteId = lId.ToString()
                               Codigo = CodigoLote.valor l.Codigo
                               ProductoId = pId.ToString()
@@ -457,7 +462,7 @@ module InventoryService =
                               FechaIngreso = l.FechaIngreso.ToString("yyyy-MM-dd")
                               Estado = estadoStr
                               StockGramos = stockG
-                              StockDisplay = if l.CantidadActual.Unidad = Kilogramo then stockG / 1000m else stockG
+                              StockDisplay = stockDisp
                               Unidad = desmapearUnidad l.CantidadActual.Unidad })
 
                     return Ok { ProductoId = pGuid.ToString()
@@ -517,6 +522,9 @@ module InventoryService =
                                 | Rechazado -> "Rechazado"
                                 | Archivado -> "Archivado"
 
+                            let esMayorUnidad = l.CantidadActual.Unidad = Kilogramo || l.CantidadActual.Unidad = Litro
+                            let stockDisp = if esMayorUnidad then stockG / 1000m else stockG
+
                             { LoteId = lId.ToString()
                               Codigo = CodigoLote.valor l.Codigo
                               ProductoId = pGuid.ToString()
@@ -525,11 +533,12 @@ module InventoryService =
                               FechaIngreso = l.FechaIngreso.ToString("yyyy-MM-dd")
                               Estado = estadoStr
                               StockGramos = stockG
-                              StockDisplay = if l.CantidadActual.Unidad = Kilogramo then stockG / 1000m else stockG
+                              StockDisplay = stockDisp
                               Unidad = desmapearUnidad l.CantidadActual.Unidad })
 
-                    let totalDisp = if prod.Base.UnidadManejo = Kilogramo then item.StockTotalGramos / 1000m else item.StockTotalGramos
-                    let ventaDisp = if prod.Base.UnidadManejo = Kilogramo then item.StockDisponibleVentaGramos / 1000m else item.StockDisponibleVentaGramos
+                    let esMayorUnidadProd = prod.Base.UnidadManejo = Kilogramo || prod.Base.UnidadManejo = Litro
+                    let totalDisp = if esMayorUnidadProd then item.StockTotalGramos / 1000m else item.StockTotalGramos
+                    let ventaDisp = if esMayorUnidadProd then item.StockDisponibleVentaGramos / 1000m else item.StockDisponibleVentaGramos
 
                     { ProductoId = pGuid.ToString()
                       NombreProducto = Producto.nombreVisible prod
@@ -621,7 +630,7 @@ module InventoryService =
                             | TruequeSalida _ -> "Trueque / Intercambio"
 
                     let dispResultante =
-                        if kl.Cantidad.Unidad = Kilogramo then kl.SaldoResultanteGramos / 1000m
+                        if kl.Cantidad.Unidad = Kilogramo || kl.Cantidad.Unidad = Litro then kl.SaldoResultanteGramos / 1000m
                         else kl.SaldoResultanteGramos
 
                     { MovimientoId = mId.ToString()
@@ -713,9 +722,9 @@ module InventoryService =
                             for linea in resolucionesFifo do
                                 match lotesActivos |> List.tryFind (fun (l: Sinbas.Domain.Lote) -> l.Id = linea.Referencia) with
                                 | Some lote ->
-                                    let cantDeducidaGramos = Cantidad.enGramos linea.Cantidad
-                                    let saldoRestante = max 0m (Cantidad.enGramos lote.CantidadActual - cantDeducidaGramos)
-                                    match Lote.actualizarSaldo saldoRestante lote with
+                                    let cantDeducidaBase = Cantidad.aUnidadBase linea.Cantidad
+                                    let saldoRestanteBase = max 0m (Cantidad.aUnidadBase lote.CantidadActual - cantDeducidaBase)
+                                    match Lote.actualizarSaldo saldoRestanteBase lote with
                                     | Ok loteActualizado ->
                                         do! actualizarLoteStock loteActualizado
                                     | Error err ->

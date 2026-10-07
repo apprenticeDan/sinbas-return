@@ -41,8 +41,8 @@ let ``Descuento parcial de stock preserva estado Activo`` () =
     | Error e -> failwithf "Falló descuento: %A" e
     | Ok loteActualizado ->
         Assert.Equal(Activo, loteActualizado.Estado)
-        Assert.Equal(40000m, Cantidad.valor loteActualizado.CantidadActual) // 40 kg en gramos
-        Assert.Equal(Gramo, Cantidad.unidad loteActualizado.CantidadActual)
+        Assert.Equal(40m, Cantidad.valor loteActualizado.CantidadActual)
+        Assert.Equal(Kilogramo, Cantidad.unidad loteActualizado.CantidadActual)
 
 [<Fact>]
 let ``Descuento total de stock cambia automaticamente estado a Agotado`` () =
@@ -74,7 +74,8 @@ let ``Lote.actualizarSaldo actualiza saldo y transiciona bidireccionalmente entr
 
     let reactivado = unwrap (Lote.actualizarSaldo 1500m agotado)
     Assert.Equal(Activo, reactivado.Estado)
-    Assert.Equal(1500m, Cantidad.valor reactivado.CantidadActual)
+    Assert.Equal(1.5m, Cantidad.valor reactivado.CantidadActual)
+    Assert.Equal(Kilogramo, Cantidad.unidad reactivado.CantidadActual)
 
 [<Fact>]
 let ``Bloqueo de lote acumula observaciones de justificacion inmutablemente`` () =

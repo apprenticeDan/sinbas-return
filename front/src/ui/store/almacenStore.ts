@@ -18,6 +18,7 @@ import type {
 } from '../../domain/models/Almacen';
 import { InventoryUseCases } from '../../application/usecases/InventoryUseCases';
 import { CatalogUseCases } from '../../application/usecases/CatalogUseCases';
+import { ApiClientGateway, type ClienteDto } from '../../infrastructure/api/ApiClientGateway';
 import type { Product } from '../../domain/models/Product';
 
 // ─── Signals ──────────────────────────────────────────────────────
@@ -31,6 +32,8 @@ const [errorEgresos, setErrorEgresos] = createSignal<string | null>(null);
 
 // Catálogo de productos cargado para resolver categorías y nombres
 const [productosCache, setProductosCache] = createSignal<Product[]>([]);
+// Clientes registrados en F6 para autocomplete y selección en egresos / ventas
+const [clientesCache, setClientesCache] = createSignal<ClienteDto[]>([]);
 
 // Filtros de Ingresos
 const [ingresoFiltroCategoria, setIngresoFiltroCategoria] = createSignal<CategoriaAlmacen | ''>('');
@@ -89,6 +92,20 @@ async function asegurarCatalogoCargado(): Promise<Product[]> {
     }
   }
   return prods;
+}
+
+/** Carga los clientes registrados si no están en cache */
+async function asegurarClientesCargados(): Promise<ClienteDto[]> {
+  let clis = clientesCache();
+  if (clis.length === 0) {
+    try {
+      clis = await ApiClientGateway.listarClientes();
+      setClientesCache(clis);
+    } catch (err) {
+      console.warn('[almacenStore] No se pudo cargar clientes:', err);
+    }
+  }
+  return clis;
 }
 
 /** Resuelve la categoría de un producto por su nombre visible */
@@ -290,6 +307,10 @@ export const almacenStore = {
   // Catálogo de productos
   productosCache,
   asegurarCatalogoCargado,
+
+  // Clientes registrados
+  clientesCache,
+  asegurarClientesCargados,
 
   // Filtros Ingresos
   ingresoFiltroCategoria,

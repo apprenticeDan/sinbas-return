@@ -14,11 +14,16 @@ module Fifo =
             Error (CantidadInvalida (sprintf "La cantidad requerida debe ser mayor a cero, recibido: %M" cantidadRequerida.Valor))
         else
             let disponibles = Stock.lotesDisponibles productoId lotes
-            let totalDisponibleGramos = disponibles |> List.sumBy snd
-            let reqGramos = Cantidad.enGramos cantidadRequerida
+            let totalDisponibleBase = disponibles |> List.sumBy snd
+            let reqBase = Cantidad.aUnidadBase cantidadRequerida
 
-            if totalDisponibleGramos < reqGramos then
-                let msg = sprintf "Stock insuficiente para el producto %A. Requerido: %M g, Disponible: %M g" productoId reqGramos totalDisponibleGramos
+            if totalDisponibleBase < reqBase then
+                let msg =
+                    sprintf "Stock insuficiente para el producto %A. Requerido: %s, Disponible: %g %s"
+                        productoId
+                        (Cantidad.formatear cantidadRequerida)
+                        (float totalDisponibleBase)
+                        (UnidadMedida.etiqueta (UnidadMedida.unidadBase (Cantidad.unidad cantidadRequerida)))
                 Error (StockInsuficiente msg)
             else
             let rec consumir (restante: decimal) (lotesRestantes: (Lote * decimal) list) (acc: LineaMovimiento list) =
@@ -28,12 +33,17 @@ module Fifo =
                     match lotesRestantes with
                     | [] ->
                         Ok (List.rev acc)
-                    | (lote, stockGramos) :: tail ->
-                        let aTomar = min restante stockGramos
-                        match Cantidad.reconstruir aTomar Gramo with
+                    | (lote, stockBase) :: tail ->
+                        let aTomarBase = min restante stockBase
+                        let targetUnit = lote.CantidadActual.Unidad
+                        let uBase = UnidadMedida.unidadBase targetUnit
+                        match UnidadMedida.convertir uBase targetUnit aTomarBase with
                         | Error err -> Error err
-                        | Ok cantidadATomar ->
-                        let linea = { Referencia = lote.Id; Cantidad = cantidadATomar }
-                        consumir (restante - aTomar) tail (linea :: acc)
+                        | Ok valorEnUnidadLote ->
+                            match Cantidad.reconstruir valorEnUnidadLote targetUnit with
+                            | Error err -> Error err
+                            | Ok cantidadATomar ->
+                                let linea = { Referencia = lote.Id; Cantidad = cantidadATomar }
+                                consumir (restante - aTomarBase) tail (linea :: acc)
 
-            consumir reqGramos disponibles []
+            consumir reqBase disponibles []
