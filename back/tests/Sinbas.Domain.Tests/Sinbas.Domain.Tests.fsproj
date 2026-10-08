@@ -21,6 +21,7 @@
     <Compile Include="UserTests.fs" />
     <Compile Include="RefreshTokenTests.fs" />
     <Compile Include="ProformaTests.fs" />
+    <Compile Include="VentaDespachoTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

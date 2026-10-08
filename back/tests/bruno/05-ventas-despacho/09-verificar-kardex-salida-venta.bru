@@ -1,0 +1,21 @@
+meta {
+  name: 09 - Verificar registro en Kardex con motivo Venta
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/inventario/kardex?productoId=01917f3a-0003-7000-8000-000000000001
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAlmacen}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+  res.body[0].tipo: eq "Salida"
+  res.body[0].motivo: contains "Venta"
+}

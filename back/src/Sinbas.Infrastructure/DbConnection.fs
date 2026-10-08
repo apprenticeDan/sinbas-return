@@ -464,10 +464,90 @@ do $$ begin
             check (subtotal >= 0);
     end if;
 end $$;
+
+-- ─────────────────────────────────────────────────────────────
+-- Feature F8: Confirmación de Venta y Despacho Físico
+-- ─────────────────────────────────────────────────────────────
+
+create table if not exists orden_venta (
+    id                  uuid primary key,
+    codigo              text not null unique,
+    proforma_id         uuid not null unique references proforma(id),
+    cliente_id          uuid not null references cliente(id),
+    fecha               date not null default current_date,
+    responsable_id      uuid not null references empleado(id),
+    total               numeric(14,2) not null check (total >= 0),
+    moneda              text not null default 'BOB',
+    estado              text not null default 'Confirmada',
+    creado_en           timestamptz not null default current_timestamp,
+    anulacion_motivo    text,
+    anulado_por         uuid references empleado(id),
+    anulado_en          timestamptz
+);
+
+create index if not exists ix_orden_venta_cliente on orden_venta(cliente_id);
+create index if not exists ix_orden_venta_estado on orden_venta(estado);
+create index if not exists ix_orden_venta_fecha on orden_venta(fecha);
+create index if not exists ix_orden_venta_proforma on orden_venta(proforma_id);
+
+do $$ begin
+    if not exists (select 1 from pg_constraint where conname = 'ck_orden_venta_estado') then
+        alter table orden_venta add constraint ck_orden_venta_estado
+            check (estado in ('Confirmada', 'Despachada', 'Anulada'));
+    end if;
+end $$;
+
+create table if not exists linea_orden_venta (
+    orden_venta_id      uuid not null references orden_venta(id) on delete cascade,
+    item                integer not null,
+    producto_id         uuid not null references producto(id),
+    cantidad            numeric(14,4) not null check (cantidad > 0),
+    unidad              text not null,
+    precio_unitario     numeric(14,2) not null check (precio_unitario > 0),
+    subtotal            numeric(14,2) not null check (subtotal >= 0),
+    primary key (orden_venta_id, item)
+);
+
+create index if not exists ix_linea_orden_venta_producto on linea_orden_venta(producto_id);
+
+create table if not exists orden_despacho (
+    id                  uuid primary key,
+    codigo              text not null unique,
+    orden_venta_id      uuid unique references orden_venta(id),
+    origen_tipo         text not null default 'DeVenta',
+    cliente_id          uuid references cliente(id),
+    estado              text not null default 'Pendiente',
+    movimiento_id       uuid references movimiento_inventario(id),
+    creado_en           timestamptz not null default current_timestamp,
+    anulacion_motivo    text,
+    anulado_por         uuid references empleado(id),
+    anulado_en          timestamptz
+);
+
+create index if not exists ix_orden_despacho_estado on orden_despacho(estado);
+create index if not exists ix_orden_despacho_venta on orden_despacho(orden_venta_id);
+
+do $$ begin
+    if not exists (select 1 from pg_constraint where conname = 'ck_orden_despacho_estado') then
+        alter table orden_despacho add constraint ck_orden_despacho_estado
+            check (estado in ('Pendiente', 'Despachado', 'Anulado'));
+    end if;
+end $$;
+
+create table if not exists linea_despacho (
+    orden_despacho_id   uuid not null references orden_despacho(id) on delete cascade,
+    item                integer not null,
+    producto_id         uuid not null references producto(id),
+    cantidad            numeric(14,4) not null check (cantidad > 0),
+    unidad              text not null,
+    primary key (orden_despacho_id, item)
+);
+
+create index if not exists ix_linea_despacho_producto on linea_despacho(producto_id);
 """
             use cmd = new NpgsqlCommand(sqlAuth, conn)
             cmd.ExecuteNonQuery() |> ignore
-            printfn "[DbConnection] Base de datos e inicialización Auth/Productos/Lotes/Inventario (UUID v7) completadas exitosamente."
+            printfn "[DbConnection] Base de datos e inicialización Auth/Productos/Lotes/Inventario/Ventas/Despachos (UUID v7) completadas exitosamente."
         with ex ->
             printfn "[DbConnection] Advertencia al inicializar BD: %s" ex.Message
 

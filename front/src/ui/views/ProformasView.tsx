@@ -12,7 +12,9 @@
 
 import { Component, createSignal, For, Show, createMemo, onMount } from 'solid-js';
 import { proformaStore } from '../store/proformaStore';
+import { ventaStore } from '../store/ventaStore';
 import type { ProformaDto, CrearProformaRequest, LineaCotizadaRequest, StockDisponibleDto } from '../../infrastructure/api/ApiProformaGateway';
+import type { VentaConfirmadaDto } from '../../infrastructure/api/ApiVentaGateway';
 import type { Product } from '../../domain/models/Product';
 
 interface LineaForm {
@@ -31,7 +33,14 @@ export const ProformasView: Component = () => {
   const [modalNuevoOpen, setModalNuevoOpen] = createSignal(false);
   const [modalDetalleOpen, setModalDetalleOpen] = createSignal(false);
   const [modalAnularOpen, setModalAnularOpen] = createSignal(false);
+  const [modalConfirmarVentaOpen, setModalConfirmarVentaOpen] = createSignal(false);
   const [proformaSeleccionada, setProformaSeleccionada] = createSignal<ProformaDto | null>(null);
+
+  // ─── Confirmación de Venta State ─────────────────────────────
+  const [confirmarVentaClienteId, setConfirmarVentaClienteId] = createSignal('');
+  const [confirmarVentaSubmitting, setConfirmarVentaSubmitting] = createSignal(false);
+  const [confirmarVentaError, setConfirmarVentaError] = createSignal<string | null>(null);
+  const [confirmarVentaExito, setConfirmarVentaExito] = createSignal<VentaConfirmadaDto | null>(null);
 
   // ─── Form State para Nueva Proforma ───────────────────────────
   const [clienteTipo, setClienteTipo] = createSignal<'registrado' | 'libre'>('registrado');
@@ -244,6 +253,38 @@ export const ProformasView: Component = () => {
     setProformaSeleccionada(res.data || null);
   };
 
+  const abrirModalConfirmarVenta = (p: ProformaDto) => {
+    setProformaSeleccionada(p);
+    setConfirmarVentaClienteId(p.clienteId || '');
+    setConfirmarVentaError(null);
+    setConfirmarVentaExito(null);
+    setModalConfirmarVentaOpen(true);
+  };
+
+  const handleConfirmarVenta = async (e: Event) => {
+    e.preventDefault();
+    setConfirmarVentaError(null);
+    const p = proformaSeleccionada();
+    if (!p) return;
+
+    const clienteIdFinal = p.clienteId || confirmarVentaClienteId();
+    if (!clienteIdFinal) {
+      setConfirmarVentaError('Debe seleccionar un cliente registrado para confirmar la venta.');
+      return;
+    }
+
+    setConfirmarVentaSubmitting(true);
+    try {
+      const res = await ventaStore.confirmarVenta(p.id, clienteIdFinal);
+      setConfirmarVentaExito(res);
+      await proformaStore.cargarProformas();
+    } catch (err: any) {
+      setConfirmarVentaError(err.message || 'Error al confirmar la venta');
+    } finally {
+      setConfirmarVentaSubmitting(false);
+    }
+  };
+
   const badgeEstadoClass = (estado: string) => {
     switch (estado) {
       case 'Vigente':
@@ -374,6 +415,13 @@ export const ProformasView: Component = () => {
                               Ver / Imprimir
                             </button>
                             <Show when={(p.estadoProyectado || p.estado) === 'Vigente'}>
+                              <button
+                                class="btn btn-sm text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 font-semibold"
+                                onClick={() => abrirModalConfirmarVenta(p)}
+                                title="Confirmar venta y generar orden de despacho (F8)"
+                              >
+                                ✓ Vender
+                              </button>
                               <button
                                 class="btn btn-sm text-xs bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
                                 onClick={() => {
@@ -696,6 +744,18 @@ export const ProformasView: Component = () => {
                 <div class="p-4 border-b flex justify-between items-center bg-gray-50 print:hidden">
                   <h3 class="font-bold text-gray-800">Documento de Cotización / Proforma</h3>
                   <div class="flex items-center gap-2">
+                    <Show when={(p.estadoProyectado || p.estado) === 'Vigente'}>
+                      <button
+                        class="btn btn-sm bg-emerald-600 text-white hover:bg-emerald-700 font-semibold flex items-center gap-1.5"
+                        onClick={() => {
+                          setModalDetalleOpen(false);
+                          abrirModalConfirmarVenta(p);
+                        }}
+                        title="Convertir esta proforma en venta definitiva"
+                      >
+                        ✓ Confirmar Venta
+                      </button>
+                    </Show>
                     <button
                       class="btn btn-sm btn-primary flex items-center gap-1.5"
                       onClick={() => window.print()}
@@ -848,6 +908,163 @@ export const ProformasView: Component = () => {
             </form>
           </div>
         </div>
+      </Show>
+
+      {/* ─── Modal: Confirmar Venta (F8) ─────────────────────────── */}
+      <Show when={modalConfirmarVentaOpen() && proformaSeleccionada()}>
+        {(() => {
+          const p = proformaSeleccionada()!;
+          const tieneClienteRegistrado = !!p.clienteId;
+          return (
+            <div class="modal-overlay fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div class="modal-content bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+                <Show
+                  when={confirmarVentaExito()}
+                  fallback={
+                    <>
+                      <div class="flex items-center justify-between mb-3 border-b pb-3">
+                        <h3 class="text-lg font-bold text-gray-900">Confirmar Venta Definitiva (F8)</h3>
+                        <button
+                          class="text-gray-400 hover:text-gray-600 font-bold text-lg"
+                          onClick={() => setModalConfirmarVentaOpen(false)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      <p class="text-xs text-gray-600 mb-4">
+                        Al confirmar la venta, la proforma pasará a estado <strong>Convertida</strong>, el stock quedará congelado y se emitirá automáticamente una <strong>Orden de Despacho</strong> para el almacén.
+                      </p>
+
+                      <div class="bg-gray-50 p-3 rounded-lg border text-xs mb-4 flex flex-col gap-1.5">
+                        <div class="flex justify-between">
+                          <span class="text-gray-500">Proforma:</span>
+                          <span class="font-mono font-semibold">{p.id}</span>
+                        </div>
+                        <div class="flex justify-between">
+                          <span class="text-gray-500">Cliente en Proforma:</span>
+                          <span class="font-semibold">{p.clienteNombre}</span>
+                        </div>
+                        <div class="flex justify-between">
+                          <span class="text-gray-500">Total a Facturar:</span>
+                          <span class="font-bold text-emerald-700 text-sm font-mono">
+                            {p.total.toFixed(2)} {p.moneda}
+                          </span>
+                        </div>
+                        <div class="flex justify-between">
+                          <span class="text-gray-500">Ítems cotizados:</span>
+                          <span>{p.lineas.length} producto(s)</span>
+                        </div>
+                      </div>
+
+                      <Show when={confirmarVentaError()}>
+                        <div class="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200 mb-3">
+                          {confirmarVentaError()}
+                        </div>
+                      </Show>
+
+                      <form onSubmit={handleConfirmarVenta} class="flex flex-col gap-4">
+                        <Show
+                          when={!tieneClienteRegistrado}
+                          fallback={
+                            <div class="p-2.5 bg-emerald-50 text-emerald-800 text-xs rounded border border-emerald-200">
+                              ✓ Cliente verificado: <strong>{p.clienteNombre}</strong>
+                            </div>
+                          }
+                        >
+                          <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">
+                              Asignar Cliente Registrado *
+                            </label>
+                            <p class="text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 mb-2">
+                              ⚠️ Esta proforma fue emitida como libre/anónima. La normativa contable exige asignar un cliente registrado en SINBAS antes de confirmar la venta.
+                            </p>
+                            <select
+                              class="input-field text-sm w-full"
+                              value={confirmarVentaClienteId()}
+                              onChange={(e) => setConfirmarVentaClienteId(e.currentTarget.value)}
+                              required
+                            >
+                              <option value="">-- Seleccionar cliente formal --</option>
+                              <For each={proformaStore.clientesCache()}>
+                                {(c) => (
+                                  <option value={c.id}>
+                                    {c.nombreVisible} {c.nit ? `(NIT: ${c.nit})` : ''}
+                                  </option>
+                                )}
+                              </For>
+                            </select>
+                          </div>
+                        </Show>
+
+                        <div class="flex justify-end gap-2 pt-3 border-t">
+                          <button
+                            type="button"
+                            class="btn btn-outline text-xs"
+                            onClick={() => setModalConfirmarVentaOpen(false)}
+                            disabled={confirmarVentaSubmitting()}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="submit"
+                            class="btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center gap-1.5"
+                            disabled={confirmarVentaSubmitting()}
+                          >
+                            {confirmarVentaSubmitting() ? 'Procesando Venta...' : '✓ Confirmar y Emitir Despacho'}
+                          </button>
+                        </div>
+                      </form>
+                    </>
+                  }
+                >
+                  <div class="text-center py-4">
+                    <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl">
+                      ✓
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-1">¡Venta Confirmada Exitosamente!</h3>
+                    <p class="text-xs text-gray-600 mb-4">
+                      Se ha generado la orden de venta y la orden de despacho físico para almacén.
+                    </p>
+
+                    <div class="bg-gray-50 p-4 rounded-lg border text-left text-xs mb-4 flex flex-col gap-2">
+                      <div class="flex justify-between">
+                        <span class="text-gray-500">Orden de Venta:</span>
+                        <strong class="font-mono text-emerald-800">{confirmarVentaExito()?.venta.codigo}</strong>
+                      </div>
+                      <div class="flex justify-between">
+                        <span class="text-gray-500">Orden de Despacho:</span>
+                        <strong class="font-mono text-blue-800">{confirmarVentaExito()?.despacho.codigo}</strong>
+                      </div>
+                      <div class="flex justify-between">
+                        <span class="text-gray-500">Estado de Despacho:</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                          {confirmarVentaExito()?.despacho.estado} (En Almacén)
+                        </span>
+                      </div>
+                      <div class="flex justify-between">
+                        <span class="text-gray-500">Total Facturado:</span>
+                        <span class="font-mono font-bold">
+                          Bs. {Number(confirmarVentaExito()?.venta.total || 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      class="btn btn-primary text-xs w-full"
+                      onClick={() => {
+                        setModalConfirmarVentaOpen(false);
+                        setConfirmarVentaExito(null);
+                      }}
+                    >
+                      Aceptar y Cerrar
+                    </button>
+                  </div>
+                </Show>
+              </div>
+            </div>
+          );
+        })()}
       </Show>
     </div>
   );

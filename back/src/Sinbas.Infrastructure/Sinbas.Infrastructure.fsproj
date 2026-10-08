@@ -17,6 +17,7 @@
     <Compile Include="PdfEtiquetaService.fs" />
     <Compile Include="ClientRepository.fs" />
     <Compile Include="ProformaRepository.fs" />
+    <Compile Include="VentaRepository.fs" />
     <Compile Include="IdempotenciaRepository.fs" />
   </ItemGroup>
 
