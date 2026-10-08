@@ -21,13 +21,6 @@ type EstadoOperacion =
     | Ejecutada
     | Anulada of Anulacion
 
-type EstadoProforma =
-    | Borrador
-    | Vigente
-    | Vencida
-    | Convertida of OrdenId
-    | ProformaAnulada of Anulacion
-
 // ─────────────────────────────────────────────
 // Contraparte
 // ─────────────────────────────────────────────
@@ -205,15 +198,6 @@ type SolicitudEgreso = Documento<MotivoEgreso, LineaSolicitud>
 type OrdenIngreso = Documento<MotivoIngreso, LineaMovimiento>
 type OrdenEgreso = Documento<MotivoEgreso, LineaMovimiento>
 
-
-// type Venta = Documento<MotivoEgreso, LineaSolicitud>
-
-type Proforma =
-    { Encabezado: EncabezadoOperacion
-      FechaVencimiento: DateOnly
-      EstadoProforma: EstadoProforma
-      Lineas: LineaSolicitud list }
-
 type Trueque =
     { Id: TruequeId
       Encabezado: EncabezadoOperacion
@@ -252,43 +236,4 @@ module EstadoOperacion =
                       Motivo = motivo
                       AnuladoPor = empleado }
             )
-
-module EstadoProforma =
-
-    let estaVigente (hoy: DateOnly) (p: Proforma) =
-        match p.EstadoProforma with
-        | Vigente -> p.FechaVencimiento >= hoy
-        | _ -> false
-
-    let emitir (p: Proforma) =
-        match p.EstadoProforma with
-        | Borrador -> Ok { p with EstadoProforma = Vigente }
-        | _ -> Error(ValorRequerido "Solo una proforma en estado Borrador puede pasar a Vigente")
-
-    let vencer (p: Proforma) =
-        match p.EstadoProforma with
-        | Vigente -> { p with EstadoProforma = Vencida }
-        | _ -> p
-
-    let convertir (ordenId: OrdenId) (p: Proforma) =
-        match p.EstadoProforma with
-        | Vigente ->
-            Ok
-                { p with
-                    EstadoProforma = Convertida ordenId }
-        | Vencida -> Error(ValorRequerido "No se puede convertir una proforma vencida")
-        | _ -> Error(ValorRequerido "La proforma no está vigente")
-
-    let anular (motivo: string) (empleado: EmpleadoId) (ahora: DateTime) (p: Proforma) =
-        match p.EstadoProforma with
-        | Convertida _ -> Error(ValorRequerido "No se puede anular una proforma ya convertida")
-        | ProformaAnulada _ -> Error(ValorRequerido "La proforma ya está anulada")
-        | _ ->
-            Ok
-                { p with
-                    EstadoProforma =
-                        ProformaAnulada
-                            { Fecha = ahora
-                              Motivo = motivo
-                              AnuladoPor = empleado } }
 

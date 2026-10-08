@@ -1,0 +1,28 @@
+meta {
+  name: 07 - Anular proforma vigente
+  type: http
+  seq: 8
+}
+
+put {
+  url: {{baseUrl}}/api/proformas/{{proformaValidaId}}/anular
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenComercial}}
+}
+
+body:json {
+  {
+    "motivo": "Cliente canceló el pedido por presupuesto"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{proformaValidaId}}
+  res.body.estado: eq "Anulada"
+  res.body.anulacionMotivo: eq "Cliente canceló el pedido por presupuesto"
+}

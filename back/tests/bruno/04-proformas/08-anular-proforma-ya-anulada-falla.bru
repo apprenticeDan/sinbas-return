@@ -1,0 +1,26 @@
+meta {
+  name: 08 - Anular proforma ya anulada falla
+  type: http
+  seq: 9
+}
+
+put {
+  url: {{baseUrl}}/api/proformas/{{proformaValidaId}}/anular
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenComercial}}
+}
+
+body:json {
+  {
+    "motivo": "Intento de doble anulación"
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.error: contains "ya fue anulada"
+}

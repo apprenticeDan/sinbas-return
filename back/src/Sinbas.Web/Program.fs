@@ -104,6 +104,7 @@ let main args =
     LabEndpoints.mapEndpoints app
     ClientEndpoints.mapEndpoints app
     AdminEndpoints.mapEndpoints app
+    ProformaEndpoints.mapEndpoints app
 
     app.Run()
 

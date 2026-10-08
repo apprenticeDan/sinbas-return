@@ -1,0 +1,24 @@
+meta {
+  name: 03 - Verificar proforma detalle leyenda y totales
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/proformas/{{proformaValidaId}}
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenComercial}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{proformaValidaId}}
+  res.body.leyenda: contains "Disponibilidad sujeta a cambios - La proforma no reserva stock"
+  res.body.total: eq 375
+  res.body.estado: eq "Vigente"
+  res.body.estadoProyectado: eq "Vigente"
+  res.body.lineas: length 1
+}

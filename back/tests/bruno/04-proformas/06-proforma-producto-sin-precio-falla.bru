@@ -1,0 +1,33 @@
+meta {
+  name: 06 - Proforma con producto sin precio falla RN16
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/proformas
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenComercial}}
+}
+
+body:json {
+  {
+    "clienteNombreLibre": "Cliente Test",
+    "lineas": [
+      {
+        "productoId": "01a0414d-b9f7-716e-ba17-79e5c8f04e93",
+        "cantidad": 1.0,
+        "unidad": "kg"
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.error: contains "no está activo para venta o no tiene precio"
+}

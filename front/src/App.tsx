@@ -12,6 +12,7 @@ import { EgresosView } from './ui/views/EgresosView';
 import { StockView } from './ui/views/StockView';
 import { LabView } from './ui/views/LabView';
 import { ClientesView } from './ui/views/ClientesView';
+import { ProformasView } from './ui/views/ProformasView';
 
 export const App: Component = () => {
   const [currentView, setCurrentView] = createSignal(authStore.getDefaultView());
@@ -52,6 +53,9 @@ export const App: Component = () => {
           </Show>
           <Show when={currentView() === 'clientes' && authStore.canAccessView('clientes')}>
             <ClientesView />
+          </Show>
+          <Show when={currentView() === 'proformas' && authStore.canAccessView('proformas')}>
+            <ProformasView />
           </Show>
         </main>
       </div>
