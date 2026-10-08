@@ -1,0 +1,43 @@
+meta {
+  name: 01 - Crear proforma valida con precio congelado
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/proformas
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenComercial}}
+}
+
+body:json {
+  {
+    "clienteNombreLibre": "Vivero El Bosque",
+    "lineas": [
+      {
+        "productoId": "01917f3a-0003-7000-8000-000000000001",
+        "cantidad": 2.5,
+        "unidad": "kg"
+      }
+    ],
+    "observaciones": "Cotización de mara para reforestación"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isString
+  res.body.estado: eq "Vigente"
+  res.body.total: eq 375
+  res.body.leyenda: contains "La proforma no reserva stock"
+  res.body.lineas[0].precioUnitario: eq 150
+  res.body.lineas[0].subtotal: eq 375
+}
+
+vars:post-response {
+  proformaValidaId: res.body.id
+}

@@ -1,0 +1,33 @@
+meta {
+  name: 05 - Proforma con stock insuficiente falla RN04
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/proformas
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenComercial}}
+}
+
+body:json {
+  {
+    "clienteNombreLibre": "Comprador Excesivo",
+    "lineas": [
+      {
+        "productoId": "01917f3a-0003-7000-8000-000000000001",
+        "cantidad": 99999.0,
+        "unidad": "kg"
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.error: contains "Stock insuficiente"
+}

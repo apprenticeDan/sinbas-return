@@ -13,6 +13,7 @@
     <Compile Include="LabEndpoints.fs" />
     <Compile Include="ClientEndpoints.fs" />
     <Compile Include="AdminEndpoints.fs" />
+    <Compile Include="ProformaEndpoints.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

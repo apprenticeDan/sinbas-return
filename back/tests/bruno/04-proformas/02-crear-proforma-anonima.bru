@@ -1,0 +1,35 @@
+meta {
+  name: 02 - Crear proforma cliente mostrador anonimo
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/proformas
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenComercial}}
+}
+
+body:json {
+  {
+    "lineas": [
+      {
+        "productoId": "01917f3a-0003-7000-8000-000000000001",
+        "cantidad": 1.0,
+        "unidad": "kg"
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isString
+  res.body.clienteNombre: eq "Cliente sin registro"
+  res.body.estado: eq "Vigente"
+  res.body.total: eq 150
+}

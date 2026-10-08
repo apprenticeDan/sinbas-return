@@ -1,0 +1,20 @@
+meta {
+  name: 04 - Listar proformas con filtro de estado
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/proformas?estado=Vigente
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenComercial}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+  res.body.length: gte 1
+}
