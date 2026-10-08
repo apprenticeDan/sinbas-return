@@ -1,0 +1,24 @@
+meta {
+  name: 03 - Rechazo de doble confirmacion sobre la misma proforma
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/proformas/{{proformaF8Id}}/confirmar-venta
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenComercial}}
+}
+
+body:json {
+  {}
+}
+
+assert {
+  res.status: eq 409
+  res.body.error: contains "convertida"
+}

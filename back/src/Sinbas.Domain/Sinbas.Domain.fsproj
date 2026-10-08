@@ -19,6 +19,8 @@
     <Compile Include="Persona.fs" />
     <Compile Include="Cliente.fs" />
     <Compile Include="Proforma.fs" />
+    <Compile Include="Venta.fs" />
+    <Compile Include="Despacho.fs" />
     <Compile Include="Empleado.fs" />
     <Compile Include="Auth.fs" />
   </ItemGroup>

@@ -1,0 +1,33 @@
+meta {
+  name: 07 - Confirmar despacho fisico en almacen con FIFO
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/despachos/{{despachoId}}/confirmar
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAlmacen}}
+}
+
+body:json {
+  {
+    "observaciones": "Despacho físico completado en almacén central"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.despachoId: eq "{{despachoId}}"
+  res.body.movimientoId: isString
+  res.body.lineasDespachadas: isArray
+  res.body.lineasDespachadas.length: gte 1
+}
+
+vars:post-response {
+  movimientoDespachoId: res.body.movimientoId
+}

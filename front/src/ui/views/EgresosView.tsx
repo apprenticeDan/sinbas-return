@@ -14,6 +14,11 @@
 
 import { Component, createSignal, For, Show, createMemo, onMount } from 'solid-js';
 import { almacenStore } from '../store/almacenStore';
+import { ventaStore } from '../store/ventaStore';
+import type {
+  OrdenDespachoDto,
+  DespachoConfirmadoDto,
+} from '../../infrastructure/api/ApiVentaGateway';
 import {
   CATEGORIAS,
   TIPOS_EGRESO,
@@ -25,7 +30,18 @@ import type { Product } from '../../domain/models/Product';
 import { DataTable, type Column } from '../components/DataTable';
 
 export const EgresosView: Component = () => {
-  // ─── Form state (inline header) ──────────────────────────────
+  // ─── Tabs de Navegación (F8) ──────────────────────────────────
+  const [tabActivo, setTabActivo] = createSignal<'despachos' | 'manual'>('despachos');
+
+  // ─── Despachos Pendientes State ───────────────────────────────
+  const [modalDespachoOpen, setModalDespachoOpen] = createSignal(false);
+  const [despachoSeleccionadoLocal, setDespachoSeleccionadoLocal] = createSignal<OrdenDespachoDto | null>(null);
+  const [obsDespacho, setObsDespacho] = createSignal('');
+  const [despachando, setDespachando] = createSignal(false);
+  const [despachoError, setDespachoError] = createSignal<string | null>(null);
+  const [despachoExito, setDespachoExito] = createSignal<DespachoConfirmadoDto | null>(null);
+
+  // ─── Form state (inline header para egreso manual) ───────────
   const [formFecha, setFormFecha] = createSignal(new Date().toISOString().split('T')[0]);
   const [formCategoria, setFormCategoria] = createSignal<CategoriaAlmacen | ''>('');
   const [formProductoId, setFormProductoId] = createSignal('');
@@ -36,14 +52,43 @@ export const EgresosView: Component = () => {
   const [formCostoAdic, setFormCostoAdic] = createSignal<string>('');
   const [formError, setFormError] = createSignal<string | null>(null);
 
-  // Cargar catálogo, clientes y movimientos de egreso reales al montar
+  // Cargar catálogo, clientes, movimientos de egreso y despachos al montar
   onMount(async () => {
     await Promise.all([
       almacenStore.asegurarCatalogoCargado(),
       almacenStore.asegurarClientesCargados(),
+      ventaStore.cargarDespachosPendientes(),
     ]);
     almacenStore.cargarEgresos();
   });
+
+  const abrirModalDespacho = async (d: OrdenDespachoDto) => {
+    setDespachoSeleccionadoLocal(d);
+    setObsDespacho('');
+    setDespachoError(null);
+    setDespachoExito(null);
+    setModalDespachoOpen(true);
+    await ventaStore.cargarDespachoDetalle(d.id);
+  };
+
+  const handleConfirmarDespachoFisico = async (e: Event) => {
+    e.preventDefault();
+    const d = despachoSeleccionadoLocal();
+    if (!d) return;
+
+    setDespachando(true);
+    setDespachoError(null);
+    try {
+      const res = await ventaStore.confirmarDespacho(d.id, obsDespacho().trim() || undefined);
+      setDespachoExito(res);
+      // Recargar histórico de egresos de almacén para reflejar el movimiento tipo Salida / Venta
+      almacenStore.cargarEgresos();
+    } catch (err: any) {
+      setDespachoError(err.message || 'Error al ejecutar despacho físico');
+    } finally {
+      setDespachando(false);
+    }
+  };
 
   // Productos del catálogo filtrados por categoría seleccionada
   const productosDisponibles = createMemo(() => {
@@ -243,14 +288,138 @@ export const EgresosView: Component = () => {
       {/* ─── Header ──────────────────────────────────────────── */}
       <div class="panel-head">
         <p class="panel-eyebrow">Gestión de Almacén & Comercial</p>
-        <h1 class="panel-title">Registro de Egresos</h1>
+        <h1 class="panel-title">Egresos & Despacho Físico (F8)</h1>
         <p class="panel-desc">
-          Registro de salidas de productos y materiales por ventas, mermas, uso en laboratorio, vivero o trueque.
+          Atención física de órdenes de venta pendientes de entrega con deducción FIFO y registro de salidas por uso interno o merma.
         </p>
       </div>
 
-      {/* ─── Formulario Inline (cabecera) ────────────────────── */}
-      <div class="card" style={{ 'margin-bottom': '20px' }}>
+      {/* ─── Barra de Pestañas / Tabs ────────────────────────── */}
+      <div style={{ display: 'flex', gap: '8px', 'margin-bottom': '20px' }}>
+        <button
+          class={`btn ${tabActivo() === 'despachos' ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => setTabActivo('despachos')}
+          style={{ 'font-weight': '600', display: 'flex', 'align-items': 'center', gap: '6px' }}
+        >
+          📦 Despachos Pendientes de Venta
+          <Show when={ventaStore.despachosPendientes().length > 0}>
+            <span
+              style={{
+                background: 'var(--amber, #f59e0b)',
+                color: '#fff',
+                padding: '1px 7px',
+                'border-radius': '10px',
+                'font-size': '11px',
+                'font-weight': '700',
+              }}
+            >
+              {ventaStore.despachosPendientes().length}
+            </span>
+          </Show>
+        </button>
+
+        <button
+          class={`btn ${tabActivo() === 'manual' ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => setTabActivo('manual')}
+          style={{ 'font-weight': '600' }}
+        >
+          📤 Salidas Manuales (Uso Interno / Merma)
+        </button>
+      </div>
+
+      {/* ─── TAB 1: Despachos Pendientes (F8) ────────────────── */}
+      <Show when={tabActivo() === 'despachos'}>
+        <div class="card" style={{ padding: '0', overflow: 'hidden', 'margin-bottom': '20px' }}>
+          <div style={{ padding: '16px', 'border-bottom': '1px solid var(--border-color)', display: 'flex', 'justify-content': 'space-between', 'align-items': 'center' }}>
+            <div>
+              <h3 style={{ margin: '0', 'font-size': '16px', color: 'var(--ink)' }}>
+                Órdenes Pendientes de Salida Física
+              </h3>
+              <p style={{ margin: '2px 0 0', 'font-size': '12px', color: 'var(--ink-soft)' }}>
+                Ventas confirmadas por Comercial listas para preparar y retirar de almacén mediante algoritmo FIFO.
+              </p>
+            </div>
+            <button
+              class="btn btn-ghost"
+              style={{ 'font-size': '12px' }}
+              onClick={() => ventaStore.cargarDespachosPendientes()}
+            >
+              🔄 Actualizar
+            </button>
+          </div>
+
+          <div style={{ 'overflow-x': 'auto' }}>
+            <table class="data-table" style={{ width: '100%', 'border-collapse': 'collapse' }}>
+              <thead>
+                <tr style={{ 'border-bottom': '1px solid var(--border-color)', 'text-align': 'left' }}>
+                  <th style={{ padding: '10px 14px', 'font-size': '12px' }}>Código Despacho</th>
+                  <th style={{ padding: '10px 14px', 'font-size': '12px' }}>Venta Asociada</th>
+                  <th style={{ padding: '10px 14px', 'font-size': '12px' }}>Cliente</th>
+                  <th style={{ padding: '10px 14px', 'font-size': '12px' }}>Fecha</th>
+                  <th style={{ padding: '10px 14px', 'font-size': '12px' }}>Materiales a Despachar</th>
+                  <th style={{ padding: '10px 14px', 'font-size': '12px', 'text-align': 'center' }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                <Show
+                  when={ventaStore.despachosPendientes().length > 0}
+                  fallback={
+                    <tr>
+                      <td colspan="6" style={{ padding: '28px', 'text-align': 'center', color: 'var(--ink-soft)', 'font-size': '13px' }}>
+                        <Show when={ventaStore.loadingDespachos()} fallback="No hay despachos pendientes en este momento. ¡Todo al día!">
+                          Cargando órdenes de despacho...
+                        </Show>
+                      </td>
+                    </tr>
+                  }
+                >
+                  <For each={ventaStore.despachosPendientes()}>
+                    {(d) => (
+                      <tr style={{ 'border-bottom': '1px solid var(--border-soft)' }}>
+                        <td style={{ padding: '10px 14px', 'font-family': 'monospace', 'font-weight': '700', color: 'var(--forest)' }}>
+                          {d.codigo}
+                        </td>
+                        <td style={{ padding: '10px 14px', 'font-family': 'monospace', color: 'var(--ink-soft)' }}>
+                          {d.codigoVenta || '—'}
+                        </td>
+                        <td style={{ padding: '10px 14px', 'font-weight': '600' }}>
+                          {d.clienteNombre || 'Sin cliente registrado'}
+                        </td>
+                        <td style={{ padding: '10px 14px', 'font-size': '12.5px', color: 'var(--ink-soft)' }}>
+                          {d.creadoEn ? d.creadoEn.substring(0, 10) : '—'}
+                        </td>
+                        <td style={{ padding: '10px 14px', 'font-size': '12.5px' }}>
+                          <For each={d.lineas}>
+                            {(l) => (
+                              <div style={{ 'line-height': '1.3' }}>
+                                • <strong>{l.cantidad} {l.unidad}</strong> de {l.nombreProducto}
+                              </div>
+                            )}
+                          </For>
+                        </td>
+                        <td style={{ padding: '10px 14px', 'text-align': 'center' }}>
+                          <button
+                            class="btn btn-primary"
+                            style={{ 'font-size': '12px', padding: '5px 12px' }}
+                            onClick={() => abrirModalDespacho(d)}
+                          >
+                            📦 Despachar (FIFO)
+                          </button>
+                        </td>
+                      </tr>
+                    )}
+                  </For>
+                </Show>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Show>
+
+      {/* ─── TAB 2: Salidas Manuales ─────────────────────────── */}
+      <Show when={tabActivo() === 'manual'}>
+        {/* Formulario Inline (cabecera) */}
+        <div class="card" style={{ 'margin-bottom': '20px' }}>
         <div class="toolbar almacen-form-toolbar">
           <div class="field" style={{ 'min-width': '120px' }}>
             <label>Fecha</label>
@@ -451,6 +620,172 @@ export const EgresosView: Component = () => {
         loading={almacenStore.loadingEgresos()}
         emptyMessage="No se encontraron egresos registrados."
       />
+      </Show>
+
+      {/* ─── Modal: Confirmación de Despacho Físico FIFO (F8) ───── */}
+      <Show when={modalDespachoOpen() && despachoSeleccionadoLocal()}>
+        <div class="modal-backdrop" onClick={() => setModalDespachoOpen(false)}>
+          <div class="modal card" style={{ 'max-width': '650px', width: '90%' }} onClick={(e) => e.stopPropagation()}>
+            <div class="modal-header" style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'border-bottom': '1px solid var(--border-color)', 'padding-bottom': '12px' }}>
+              <div>
+                <h3 style={{ margin: '0', 'font-size': '18px', color: 'var(--ink)' }}>
+                  Despacho Físico: {despachoSeleccionadoLocal()?.codigo}
+                </h3>
+                <span class="pill pill-amber" style={{ 'font-size': '11px', 'margin-top': '4px' }}>
+                  Pendiente de Entrega
+                </span>
+              </div>
+              <button class="btn btn-ghost" onClick={() => setModalDespachoOpen(false)}>✕</button>
+            </div>
+
+            <Show
+              when={despachoExito()}
+              fallback={
+                <form onSubmit={handleConfirmarDespachoFisico}>
+                  <div class="modal-body" style={{ 'margin-top': '16px', display: 'flex', 'flex-direction': 'column', gap: '14px' }}>
+                    <div style={{ display: 'grid', 'grid-template-columns': 'repeat(2, 1fr)', gap: '10px', background: 'var(--panel-bg-soft)', padding: '12px', 'border-radius': '6px', 'font-size': '13px' }}>
+                      <div>
+                        <span style={{ 'font-size': '11px', color: 'var(--ink-soft)', display: 'block' }}>Venta Asociada</span>
+                        <strong style={{ 'font-family': 'monospace' }}>{despachoSeleccionadoLocal()?.codigoVenta || '—'}</strong>
+                      </div>
+                      <div>
+                        <span style={{ 'font-size': '11px', color: 'var(--ink-soft)', display: 'block' }}>Cliente</span>
+                        <strong>{despachoSeleccionadoLocal()?.clienteNombre || 'Sin cliente'}</strong>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 style={{ margin: '0 0 6px 0', 'font-size': '13px', color: 'var(--ink)' }}>
+                        Materiales Solicitados
+                      </h4>
+                      <table style={{ width: '100%', 'border-collapse': 'collapse', 'font-size': '12.5px' }}>
+                        <thead>
+                          <tr style={{ 'border-bottom': '1px solid var(--border-color)', color: 'var(--ink-soft)' }}>
+                            <th style={{ 'text-align': 'left', padding: '6px 0' }}>Producto</th>
+                            <th style={{ 'text-align': 'right', padding: '6px 0' }}>Cantidad Solicitada</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <For each={despachoSeleccionadoLocal()?.lineas}>
+                            {(l) => (
+                              <tr style={{ 'border-bottom': '1px solid var(--border-soft)' }}>
+                                <td style={{ padding: '6px 0', 'font-weight': '600' }}>{l.nombreProducto}</td>
+                                <td style={{ padding: '6px 0', 'text-align': 'right', 'font-family': 'monospace', 'font-weight': '700' }}>
+                                  {l.cantidad} {l.unidad}
+                                </td>
+                              </tr>
+                            )}
+                          </For>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Sugerencia FIFO de lotes */}
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '12px', 'border-radius': '6px' }}>
+                      <div style={{ 'font-weight': '700', 'font-size': '12px', color: '#166534', 'margin-bottom': '6px', display: 'flex', 'align-items': 'center', gap: '6px' }}>
+                        <span>⚡ Algoritmo FIFO de Lotes Activos</span>
+                      </div>
+                      <p style={{ 'font-size': '11.5px', color: '#15803d', margin: '0 0 8px' }}>
+                        El sistema descontará automáticamente el stock físico de los lotes más antiguos disponibles cumpliendo la regla de inventario.
+                      </p>
+
+                      <Show when={ventaStore.despachoSeleccionado()?.sugerenciasFifo}>
+                        <For each={ventaStore.despachoSeleccionado()?.sugerenciasFifo}>
+                          {(sug) => (
+                            <div style={{ 'font-size': '11.5px', 'margin-bottom': '4px', color: '#166534' }}>
+                              • <strong>{sug.nombreProducto}</strong>: {sug.lotesSugeridos.length} lote(s) comprometido(s)
+                            </div>
+                          )}
+                        </For>
+                      </Show>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', 'font-size': '12px', 'font-weight': '600', color: 'var(--ink)', 'margin-bottom': '4px' }}>
+                        Observaciones del Despacho (Opcional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej. Entregado al transportista, precinto #123..."
+                        value={obsDespacho()}
+                        onInput={(e) => setObsDespacho(e.currentTarget.value)}
+                        style={{ width: '100%', padding: '8px 10px', 'font-size': '12.5px' }}
+                      />
+                    </div>
+
+                    <Show when={despachoError()}>
+                      <div style={{ background: 'rgba(231,76,60,0.12)', border: '1px solid var(--rust)', color: 'var(--rust)', padding: '8px 12px', 'border-radius': '6px', 'font-size': '12px' }}>
+                        {despachoError()}
+                      </div>
+                    </Show>
+                  </div>
+
+                  <div class="modal-footer" style={{ 'margin-top': '20px', display: 'flex', 'justify-content': 'flex-end', gap: '8px' }}>
+                    <button
+                      type="button"
+                      class="btn btn-secondary"
+                      onClick={() => setModalDespachoOpen(false)}
+                      disabled={despachando()}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      class="btn btn-primary"
+                      disabled={despachando()}
+                      style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}
+                    >
+                      {despachando() ? 'Procesando Salida...' : '✓ Confirmar Salida Física (FIFO)'}
+                    </button>
+                  </div>
+                </form>
+              }
+            >
+              <div style={{ 'text-align': 'center', padding: '20px 10px' }}>
+                <div style={{ width: '48px', height: '48px', background: '#dcfce7', color: '#16a34a', 'border-radius': '50%', display: 'flex', 'align-items': 'center', 'justify-content': 'center', margin: '0 auto 12px', 'font-size': '24px' }}>
+                  ✓
+                </div>
+                <h3 style={{ margin: '0 0 6px', 'font-size': '18px', color: 'var(--ink)' }}>
+                  ¡Despacho Físico Confirmado!
+                </h3>
+                <p style={{ 'font-size': '12.5px', color: 'var(--ink-soft)', margin: '0 0 16px' }}>
+                  Se ha generado la salida en el kárdex y se ha actualizado el stock de los lotes correspondientes.
+                </p>
+
+                <div style={{ background: 'var(--panel-bg-soft)', padding: '12px', 'border-radius': '6px', 'text-align': 'left', 'font-size': '12.5px', display: 'flex', 'flex-direction': 'column', gap: '6px', 'margin-bottom': '16px' }}>
+                  <div>
+                    <span style={{ color: 'var(--ink-soft)' }}>Despacho: </span>
+                    <strong style={{ 'font-family': 'monospace' }}>{despachoExito()?.codigoDespacho}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--ink-soft)' }}>Movimiento de Inventario: </span>
+                    <strong style={{ 'font-family': 'monospace', color: 'var(--forest)' }}>{despachoExito()?.movimientoId}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--ink-soft)' }}>Fecha Operación: </span>
+                    <span>{despachoExito()?.fecha}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--ink-soft)' }}>Lotes descargados: </span>
+                    <span>{despachoExito()?.lineasDespachadas?.length || 0} línea(s) FIFO</span>
+                  </div>
+                </div>
+
+                <button
+                  class="btn btn-primary"
+                  style={{ width: '100%' }}
+                  onClick={() => {
+                    setModalDespachoOpen(false);
+                    setDespachoExito(null);
+                  }}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </Show>
+          </div>
+        </div>
+      </Show>
     </section>
   );
 };

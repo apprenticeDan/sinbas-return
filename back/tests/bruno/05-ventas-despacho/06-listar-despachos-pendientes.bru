@@ -1,0 +1,20 @@
+meta {
+  name: 06 - Listar ordenes de despacho pendientes
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/despachos/pendientes
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAlmacen}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+  res.body.length: gte 1
+}

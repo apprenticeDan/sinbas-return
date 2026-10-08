@@ -15,6 +15,7 @@
     <Compile Include="LabService.fs" />
     <Compile Include="ClientService.fs" />
     <Compile Include="ProformaService.fs" />
+    <Compile Include="VentaService.fs" />
   </ItemGroup>
 
   <ItemGroup>

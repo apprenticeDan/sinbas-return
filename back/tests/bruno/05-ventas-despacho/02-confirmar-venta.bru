@@ -1,0 +1,35 @@
+meta {
+  name: 02 - Confirmar venta desde proforma vigente
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/proformas/{{proformaF8Id}}/confirmar-venta
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenComercial}}
+}
+
+body:json {
+  {}
+}
+
+assert {
+  res.status: eq 201
+  res.body.venta.id: isString
+  res.body.venta.codigo: isString
+  res.body.venta.estado: eq "Confirmada"
+  res.body.venta.total: eq 750
+  res.body.despacho.id: isString
+  res.body.despacho.codigo: isString
+  res.body.despacho.estado: eq "Pendiente"
+}
+
+vars:post-response {
+  ventaId: res.body.venta.id
+  despachoId: res.body.despacho.id
+}
