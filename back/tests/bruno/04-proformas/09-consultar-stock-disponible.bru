@@ -1,0 +1,22 @@
+meta {
+  name: 09 - Consultar stock disponible de producto para cotizacion
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/inventario/stock-disponible/01917f3a-0003-7000-8000-000000000001
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenComercial}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.productoId: eq "01917f3a-0003-7000-8000-000000000001"
+  res.body.stockDisponible: gt 0
+  res.body.unidad: eq "Kilogramo"
+  res.body.aptoParaVenta: eq true
+}
