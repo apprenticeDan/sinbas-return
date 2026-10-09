@@ -153,9 +153,9 @@ module ProformaEndpoints =
 
         // 5. GET /api/inventario/stock-disponible/{productoId} — Stock disponible para cotización
         //    Endpoint auxiliar consumido por el frontend para validación en vivo
-        app.MapGet("/api/inventario/stock-disponible/{productoId}", Func<string, Threading.Tasks.Task<IResult>>(fun productoIdStr ->
+        app.MapGet("/api/inventario/stock-disponible/{productoId}", Func<string, Threading.Tasks.Task<IResult>>(fun productoId ->
             async {
-                match Guid.TryParse(productoIdStr) with
+                match Guid.TryParse(productoId) with
                 | false, _ -> return Results.BadRequest({| error = "ID de producto inválido" |})
                 | true, pGuid ->
                     let prodId = ProductoId pGuid
@@ -168,7 +168,7 @@ module ProformaEndpoints =
                         let esMayor = unidad = Kilogramo || unidad = Litro
                         let stockDisplay = if esMayor then stockBase / 1000m else stockBase
                         return Results.Ok({|
-                            productoId = productoIdStr
+                            productoId = productoId
                             nombreProducto = Producto.nombreVisible prod
                             stockDisponibleBase = stockBase
                             stockDisponible = stockDisplay
