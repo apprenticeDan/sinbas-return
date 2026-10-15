@@ -244,3 +244,67 @@ module InventoryEndpoints =
             .WithName("RegistrarEgreso")
             .WithTags("Inventario")
         |> ignore
+
+        // ─────────────────────────────────────────────────────────
+        // 5. GET /api/inventario/despacho/candidatos/{productoId}
+        // Lotes candidatos FIFO para despacho (F3 / RN03)
+        // ─────────────────────────────────────────────────────────
+        app.MapGet("/api/inventario/despacho/candidatos/{productoId}", Func<string, Threading.Tasks.Task<IResult>>(fun productoId ->
+            async {
+                let! res =
+                    InventoryService.listarLotesCandidatosDespacho
+                        CatalogRepository.buscarPorId
+                        LoteRepository.listar
+                        LabRepository.obtenerUltimoPorLoteId
+                        productoId
+
+                match res with
+                | Ok dtos -> return Results.Ok(dtos)
+                | Error msg ->
+                    if msg.Contains("no se encontró", StringComparison.OrdinalIgnoreCase) then
+                        return Results.NotFound({| error = msg |})
+                    else
+                        return Results.BadRequest({| error = msg |})
+            } |> Async.StartAsTask
+        ))
+            .RequireAuthorization("RequireInventarioLectura")
+            .WithName("ListarCandidatosDespacho")
+            .WithTags("Inventario")
+        |> ignore
+
+        // ─────────────────────────────────────────────────────────
+        // 6. GET /api/inventario/stock-disponible/{productoId}
+        // Stock disponible para cotización en vivo (F7 / Auxiliar)
+        // ─────────────────────────────────────────────────────────
+        app.MapGet("/api/inventario/stock-disponible/{productoId}", Func<string, Threading.Tasks.Task<IResult>>(fun productoId ->
+            async {
+                match Guid.TryParse(productoId) with
+                | false, _ -> return Results.BadRequest({| error = "ID de producto inválido" |})
+                | true, pGuid ->
+                    let prodId = ProductoId pGuid
+                    let! optProd = CatalogRepository.buscarPorId prodId
+                    match optProd with
+                    | None -> return Results.NotFound({| error = "Producto no encontrado" |})
+                    | Some prod ->
+                        let! lotes = LoteRepository.listar (Some prodId) (Some Activo)
+                        let stockBase = Stock.disponibleParaVenta prodId lotes
+                        let unidad = prod.Base.Presentacion.Unidad
+                        let esMayor = unidad = Kilogramo || unidad = Litro
+                        let stockDisplay = if esMayor then stockBase / 1000m else stockBase
+                        return Results.Ok({|
+                            productoId = productoId
+                            nombreProducto = Producto.nombreVisible prod
+                            stockDisponibleBase = stockBase
+                            stockDisponible = stockDisplay
+                            unidad = UnidadMedida.aTexto unidad
+                            unidadEtiqueta = UnidadMedida.etiqueta unidad
+                            precioOficial = prod.PrecioOficial |> Option.map (fun p -> p.Valor) |> Option.defaultValue 0m
+                            moneda = prod.PrecioOficial |> Option.map (fun p -> p.Moneda) |> Option.defaultValue "BOB"
+                            aptoParaVenta = Producto.esAptoParaVenta prod
+                        |})
+            } |> Async.StartAsTask
+        ))
+            .RequireAuthorization("RequireInventarioLectura")
+            .WithName("ConsultarStockDisponibleProducto")
+            .WithTags("Inventario")
+        |> ignore

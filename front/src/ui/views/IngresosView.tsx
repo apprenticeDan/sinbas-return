@@ -18,6 +18,7 @@ import {
 } from '../../domain/models/Almacen';
 import type { Product } from '../../domain/models/Product';
 import { DataTable, type Column } from '../components/DataTable';
+import { authStore } from '../store/authStore';
 
 export const IngresosView: Component = () => {
   // ─── Form state (inline header) ──────────────────────────────
@@ -71,9 +72,12 @@ export const IngresosView: Component = () => {
     return [{ value: 'Unidad', label: 'u' }];
   });
 
+  const canOperate = createMemo(() => authStore.hasAnyRole(['Administrador', 'Almacen', 'Gerencia']));
+
   const canSubmit = createMemo(() => {
     const cant = Number(formCantidad());
     return (
+      canOperate() &&
       formProductoId() !== '' &&
       formTipo() !== '' &&
       !isNaN(cant) &&
@@ -230,6 +234,14 @@ export const IngresosView: Component = () => {
 
       {/* ─── Formulario Inline (cabecera) ────────────────────── */}
       <div class="card" style={{ 'margin-bottom': '20px' }}>
+        <Show
+          when={canOperate()}
+          fallback={
+            <div style={{ padding: '14px 18px', background: 'var(--surface-sunken)', 'border-radius': '6px', 'font-size': '13px', color: 'var(--ink-soft)' }}>
+              ℹ️ <strong>Modo consulta:</strong> Tu rol actual tiene permiso de lectura del historial de movimientos. El registro físico de ingresos está restringido a personal de Almacén y Gerencia.
+            </div>
+          }
+        >
         <div class="toolbar almacen-form-toolbar">
           <div class="field" style={{ 'min-width': '130px' }}>
             <label>Fecha</label>
@@ -340,6 +352,7 @@ export const IngresosView: Component = () => {
             </svg>
           </button>
         </div>
+        </Show>
 
         {/* Stats sub-bar */}
         <div class="almacen-stats-bar">

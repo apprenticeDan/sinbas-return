@@ -22,7 +22,7 @@ export function LoteFichaTecnicaModal(props: LoteFichaTecnicaModalProps) {
   const [actionLoading, setActionLoading] = createSignal<boolean>(false);
   const [actionError, setActionError] = createSignal<string | null>(null);
 
-  const canManageCuarentena = () => authStore.hasAnyRole(['Gerencia', 'Administrador']);
+  const canManageCuarentena = () => authStore.hasRole('Gerencia');
 
   createEffect(() => {
     if (props.open && props.loteId) {
