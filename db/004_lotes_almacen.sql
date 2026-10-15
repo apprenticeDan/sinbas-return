@@ -19,3 +19,43 @@ create table if not exists lote (
 create index if not exists ix_lote_producto_id on lote(producto_id);
 create index if not exists ix_lote_estado on lote(estado);
 create index if not exists ix_lote_codigo on lote(codigo);
+
+-- Seed de lotes de prueba
+insert into lote (
+    id, codigo, producto_id, procedencia, cantidad_inicial, cantidad_actual,
+    unidad, fecha_ingreso, ubicacion, estado, observaciones
+)
+values (
+    '01917f3a-0004-7000-8000-000000000001',
+    'SWIETMAC-02608-01',
+    '01917f3a-0003-7000-8000-000000000001',
+    'Bosque Chiquitano - Reserva Don Mario',
+    50.00,
+    50.00,
+    'Kilogramo',
+    '2026-08-15',
+    'Almacén Central - Estante A1',
+    'Activo',
+    'Semilla recolectada en temporada alta con buena viabilidad'
+)
+on conflict (id) do nothing;
+
+insert into lote (
+    id, codigo, producto_id, procedencia, cantidad_inicial, cantidad_actual,
+    unidad, fecha_ingreso, ubicacion, estado, observaciones
+)
+values (
+    '01917f3a-0004-7000-8000-000000000002',
+    'HANDIMPE-02608-01',
+    '01917f3a-0003-7000-8000-000000000003',
+    'Vivero Municipal Santa Cruz',
+    2500.00,
+    1800.00,
+    'Gramo',
+    '2026-08-20',
+    'Cámara Fría B2',
+    'Activo',
+    'Semilla limpia procesada en laboratorio'
+)
+on conflict (id) do nothing;
+
