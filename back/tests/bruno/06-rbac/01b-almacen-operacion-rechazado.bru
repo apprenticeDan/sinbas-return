@@ -1,0 +1,34 @@
+meta {
+  name: 01b - RequireAlmacenOperacion rechazado (Laboratorio)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/inventario/ingreso
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenRbacLab}}
+}
+
+body:json {
+  {
+    "productoId": "01917f3a-0003-7000-8000-000000000002",
+    "loteId": "",
+    "descripcion": "Ingreso no autorizado por Lab",
+    "categoria": "Semilla",
+    "tipoIngreso": "Recoleccion",
+    "cantidad": 50,
+    "unidad": "g",
+    "procedencia": "Lab",
+    "observaciones": "Debe rechazar con 403",
+    "fecha": "2026-10-14T10:00:00Z"
+  }
+}
+
+assert {
+  res.status: eq 403
+}

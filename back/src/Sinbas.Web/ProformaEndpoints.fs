@@ -150,37 +150,3 @@ module ProformaEndpoints =
             .WithName("AnularProforma")
             .WithTags("Proformas")
         |> ignore
-
-        // 5. GET /api/inventario/stock-disponible/{productoId} — Stock disponible para cotización
-        //    Endpoint auxiliar consumido por el frontend para validación en vivo
-        app.MapGet("/api/inventario/stock-disponible/{productoId}", Func<string, Threading.Tasks.Task<IResult>>(fun productoId ->
-            async {
-                match Guid.TryParse(productoId) with
-                | false, _ -> return Results.BadRequest({| error = "ID de producto inválido" |})
-                | true, pGuid ->
-                    let prodId = ProductoId pGuid
-                    let! optProd = CatalogRepository.buscarPorId prodId
-                    match optProd with
-                    | None -> return Results.NotFound({| error = "Producto no encontrado" |})
-                    | Some prod ->
-                        let! stockBase = obtenerStockProducto prodId
-                        let unidad = prod.Base.Presentacion.Unidad
-                        let esMayor = unidad = Kilogramo || unidad = Litro
-                        let stockDisplay = if esMayor then stockBase / 1000m else stockBase
-                        return Results.Ok({|
-                            productoId = productoId
-                            nombreProducto = Producto.nombreVisible prod
-                            stockDisponibleBase = stockBase
-                            stockDisponible = stockDisplay
-                            unidad = UnidadMedida.aTexto unidad
-                            unidadEtiqueta = UnidadMedida.etiqueta unidad
-                            precioOficial = prod.PrecioOficial |> Option.map (fun p -> p.Valor) |> Option.defaultValue 0m
-                            moneda = prod.PrecioOficial |> Option.map (fun p -> p.Moneda) |> Option.defaultValue "BOB"
-                            aptoParaVenta = Producto.esAptoParaVenta prod
-                        |})
-            } |> Async.StartAsTask
-        ))
-            .RequireAuthorization()
-            .WithName("StockDisponibleProducto")
-            .WithTags("Inventario")
-        |> ignore

@@ -1,0 +1,27 @@
+meta {
+  name: 04c - RequireSoloGerencia rechazar permitido (Gerencia)
+  type: http
+  seq: 14
+}
+
+put {
+  url: {{baseUrl}}/api/lotes/{{rbacLoteId}}/rechazar
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenRbacGerencia}}
+}
+
+body:json {
+  {
+    "motivo": "Rechazo gerencial formal tras dictamen y revision"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{rbacLoteId}}
+  res.body.estado: eq "Rechazado"
+}

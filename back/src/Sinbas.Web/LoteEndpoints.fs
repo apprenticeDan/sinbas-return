@@ -116,7 +116,7 @@ module LoteEndpoints =
                 | Error msg -> return Results.BadRequest({| error = msg |})
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization()
+            .RequireAuthorization("RequireBloqueoLote")
             .WithName("BloquearLote")
             .WithTags("Lotes")
         |> ignore
@@ -163,7 +163,7 @@ module LoteEndpoints =
                 | Error msg -> return Results.BadRequest({| error = msg |})
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization()
+            .RequireAuthorization("RequireSoloGerencia")
             .WithName("LiberarCuarentenaLote")
             .WithTags("Lotes")
         |> ignore
@@ -186,7 +186,7 @@ module LoteEndpoints =
                 | Error msg -> return Results.BadRequest({| error = msg |})
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization()
+            .RequireAuthorization("RequireSoloGerencia")
             .WithName("RechazarLote")
             .WithTags("Lotes")
         |> ignore
@@ -209,7 +209,7 @@ module LoteEndpoints =
                 | Error msg -> return Results.BadRequest({| error = msg |})
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization()
+            .RequireAuthorization("RequireSoloGerencia")
             .WithName("SolicitarAnalisisLote")
             .WithTags("Lotes")
         |> ignore

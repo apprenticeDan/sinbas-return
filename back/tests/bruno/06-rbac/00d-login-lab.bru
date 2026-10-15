@@ -1,0 +1,27 @@
+meta {
+  name: 00d - Login lab (RBAC)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "nombreUsuarioRaw": "test_lab",
+    "contrasena": "{{testPass}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.token: isString
+}
+
+vars:post-response {
+  tokenRbacLab: res.body.token
+}

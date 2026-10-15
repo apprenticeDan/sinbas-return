@@ -19,7 +19,7 @@ export function LotesView() {
 
 
   const canManageLotes = createMemo(() => authStore.hasAnyRole(['Administrador', 'Almacen', 'Gerencia']));
-  const canBlockLotes = createMemo(() => authStore.hasAnyRole(['Administrador', 'Gerencia', 'Laboratorio', 'Almacen']));
+  const canBlockLotes = createMemo(() => authStore.hasAnyRole(['Laboratorio', 'Gerencia']));
 
   const stats = createMemo(() => {
     const list = loteStore.lotes();
@@ -175,7 +175,7 @@ export function LotesView() {
               }}
               class="btn btn-ghost"
               style={{ padding: '4px 8px', 'font-size': '11.5px', color: 'var(--rust)' }}
-              title="Reportar alerta o bloquear lote (Almacén / Lab / Gerencia)"
+              title="Bloqueo preventivo de lote (Laboratorio / Gerencia)"
             >
               Bloquear
             </button>

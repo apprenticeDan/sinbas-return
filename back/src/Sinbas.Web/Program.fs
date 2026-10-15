@@ -49,6 +49,10 @@ let main args =
         options.AddPolicy("RequireAlmacen", fun policy -> policy.RequireRole("Administrador", "Almacen") |> ignore)
         options.AddPolicy("RequireLaboratorio", fun policy -> policy.RequireRole("Administrador", "Laboratorio") |> ignore)
         options.AddPolicy("RequireComercial", fun policy -> policy.RequireRole("Administrador", "Gerencia", "Comercial") |> ignore)
+        options.AddPolicy("RequireSoloGerencia", fun policy -> policy.RequireRole("Gerencia") |> ignore)
+        options.AddPolicy("RequireAlmacenOperacion", fun policy -> policy.RequireRole("Administrador", "Almacen", "Gerencia") |> ignore)
+        options.AddPolicy("RequireInventarioLectura", fun policy -> policy.RequireRole("Administrador", "Almacen", "Comercial", "Gerencia") |> ignore)
+        options.AddPolicy("RequireBloqueoLote", fun policy -> policy.RequireRole("Laboratorio", "Gerencia") |> ignore)
     ) |> ignore
 
     // Configurar JSON serialization para DTOs

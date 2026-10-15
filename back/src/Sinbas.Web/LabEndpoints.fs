@@ -81,27 +81,3 @@ module LabEndpoints =
             .WithName("GenerarEtiquetaLote")
             .WithTags("Laboratorio")
         |> ignore
-
-        // 4. GET /api/inventario/despacho/candidatos/{productoId} — Lotes candidatos FIFO para despacho (F3 / RN03)
-        app.MapGet("/api/inventario/despacho/candidatos/{productoId}", Func<string, Threading.Tasks.Task<IResult>>(fun productoId ->
-            async {
-                let! res =
-                    InventoryService.listarLotesCandidatosDespacho
-                        CatalogRepository.buscarPorId
-                        LoteRepository.listar
-                        LabRepository.obtenerUltimoPorLoteId
-                        productoId
-
-                match res with
-                | Ok dtos -> return Results.Ok(dtos)
-                | Error msg ->
-                    if msg.Contains("no se encontró", StringComparison.OrdinalIgnoreCase) then
-                        return Results.NotFound({| error = msg |})
-                    else
-                        return Results.BadRequest({| error = msg |})
-            } |> Async.StartAsTask
-        ))
-            .RequireAuthorization()
-            .WithName("ListarCandidatosDespacho")
-            .WithTags("Inventario")
-        |> ignore
