@@ -1,0 +1,27 @@
+meta {
+  name: 03b - RequireBloqueoLote permitido (Laboratorio)
+  type: http
+  seq: 11
+}
+
+put {
+  url: {{baseUrl}}/api/lotes/{{rbacLoteId}}/bloquear
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenRbacLab}}
+}
+
+body:json {
+  {
+    "motivo": "Bloqueo preventivo por sospecha tecnica"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{rbacLoteId}}
+  res.body.estado: eq "Bloqueado"
+}

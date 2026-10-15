@@ -1,0 +1,25 @@
+meta {
+  name: 04a - RequireSoloGerencia rechazar rechazado (Administrador)
+  type: http
+  seq: 12
+}
+
+put {
+  url: {{baseUrl}}/api/lotes/{{rbacLoteId}}/rechazar
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenRbacAdmin}}
+}
+
+body:json {
+  {
+    "motivo": "Admin no puede rechazar definitivamente lote"
+  }
+}
+
+assert {
+  res.status: eq 403
+}

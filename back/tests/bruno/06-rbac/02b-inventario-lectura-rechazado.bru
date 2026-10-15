@@ -1,0 +1,19 @@
+meta {
+  name: 02b - RequireInventarioLectura rechazado (Laboratorio)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/inventario/stock
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenRbacLab}}
+}
+
+assert {
+  res.status: eq 403
+}

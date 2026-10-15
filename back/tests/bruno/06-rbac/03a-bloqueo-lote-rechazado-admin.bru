@@ -1,0 +1,25 @@
+meta {
+  name: 03a - RequireBloqueoLote rechazado (Administrador)
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{baseUrl}}/api/lotes/{{rbacLoteId}}/bloquear
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenRbacAdmin}}
+}
+
+body:json {
+  {
+    "motivo": "Admin intenta bloquear lote pero la politica RequireBloqueoLote lo excluye"
+  }
+}
+
+assert {
+  res.status: eq 403
+}

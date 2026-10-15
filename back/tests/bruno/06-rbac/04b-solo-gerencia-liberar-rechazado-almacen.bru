@@ -1,0 +1,25 @@
+meta {
+  name: 04b - RequireSoloGerencia liberar cuarentena rechazado (Almacen)
+  type: http
+  seq: 13
+}
+
+put {
+  url: {{baseUrl}}/api/lotes/{{rbacLoteId}}/liberar-cuarentena
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenRbacAlmacen}}
+}
+
+body:json {
+  {
+    "justificacion": "Almacen no puede liberar cuarentena"
+  }
+}
+
+assert {
+  res.status: eq 403
+}

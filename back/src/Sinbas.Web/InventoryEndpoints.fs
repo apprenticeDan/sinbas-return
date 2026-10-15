@@ -42,7 +42,6 @@ module InventoryEndpoints =
         // ─────────────────────────────────────────────────────────
         // 1. POST /api/inventario/ingreso
         // Registra recepción física e ingreso de producto/lote a almacén (F4 / MF-04-01).
-        // TODO: RBAC - Restringir a RequireAlmacen / RequireGerencia antes de F08
         // ─────────────────────────────────────────────────────────
         app.MapPost("/api/inventario/ingreso", Func<RegistrarIngresoRequest, HttpContext, Threading.Tasks.Task<IResult>>(fun req ctx ->
             async {
@@ -65,7 +64,7 @@ module InventoryEndpoints =
                 | Error msg -> return Results.BadRequest({| error = msg |})
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization()
+            .RequireAuthorization("RequireAlmacenOperacion")
             .WithName("RegistrarIngreso")
             .WithTags("Inventario")
         |> ignore
@@ -74,7 +73,6 @@ module InventoryEndpoints =
         // 2. GET /api/inventario/movimientos
         // Historial cronológico de movimientos de almacén (F4 / F5 / F8).
         // Soporta filtro opcional ?tipo=Entrada | ?tipo=Salida
-        // TODO: RBAC - Restringir a RequireAlmacen / RequireGerencia / RequireComercial antes de F08
         // ─────────────────────────────────────────────────────────
         app.MapGet("/api/inventario/movimientos", Func<HttpContext, Threading.Tasks.Task<IResult>>(fun ctx ->
             async {
@@ -97,7 +95,7 @@ module InventoryEndpoints =
                 return Results.Ok(dtos)
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization()
+            .RequireAuthorization("RequireInventarioLectura")
             .WithName("ListarMovimientos")
             .WithTags("Inventario")
         |> ignore
@@ -138,7 +136,7 @@ module InventoryEndpoints =
                 return Results.Ok(dtos)
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization()
+            .RequireAuthorization("RequireInventarioLectura")
             .WithName("ConsultarStockConsolidado")
             .WithTags("Inventario")
         |> ignore
@@ -161,7 +159,7 @@ module InventoryEndpoints =
                 | Error msg -> return Results.NotFound({| error = msg |})
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization()
+            .RequireAuthorization("RequireInventarioLectura")
             .WithName("ConsultarStockProducto")
             .WithTags("Inventario")
         |> ignore
@@ -203,7 +201,7 @@ module InventoryEndpoints =
                 return Results.Ok(dtos)
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization()
+            .RequireAuthorization("RequireInventarioLectura")
             .WithName("ConsultarKardexDigital")
             .WithTags("Inventario")
         |> ignore
@@ -213,7 +211,6 @@ module InventoryEndpoints =
         // Registra la salida de stock con resolución FIFO (F8 / MF-08-03).
         // Soporta: Venta, Merma, UsoLabor (MuestraLab), UsoVivero (UsoInterno),
         //          Intercambio (TruequeSalida).
-        // TODO: RBAC - Restringir a RequireAlmacen / RequireGerencia / RequireComercial
         // ─────────────────────────────────────────────────────────
         app.MapPost("/api/inventario/egreso", Func<RegistrarEgresoRequest, HttpContext, Threading.Tasks.Task<IResult>>(fun req ctx ->
             async {
@@ -243,7 +240,7 @@ module InventoryEndpoints =
                     | Error msg -> return Results.BadRequest({| error = msg |})
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization()
+            .RequireAuthorization("RequireAlmacenOperacion")
             .WithName("RegistrarEgreso")
             .WithTags("Inventario")
         |> ignore
