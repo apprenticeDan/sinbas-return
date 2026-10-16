@@ -1,7 +1,8 @@
 import { createSignal } from 'solid-js';
+import { VentaUseCases } from '../../application/usecases/VentaUseCases';
+import type { OrdenVentaDto } from '../../domain/models/Venta';
 import {
   ApiVentaGateway,
-  type OrdenVentaDto,
   type OrdenDespachoDto,
   type OrdenDespachoDetalleDto,
   type VentaConfirmadaDto,
@@ -27,7 +28,7 @@ export const ventaStore = {
     setLoadingVentas(true);
     setError(null);
     try {
-      const data = await ApiVentaGateway.listarVentas(filtros);
+      const data = await VentaUseCases.listarVentas(filtros);
       setVentas(data);
     } catch (err: any) {
       setError(err.message || 'Error al cargar listado de ventas');
@@ -64,7 +65,7 @@ export const ventaStore = {
   async confirmarVenta(proformaId: string, clienteId?: string): Promise<VentaConfirmadaDto> {
     setError(null);
     try {
-      const result = await ApiVentaGateway.confirmarVenta(proformaId, { clienteId });
+      const result = await VentaUseCases.confirmarVenta(proformaId, { clienteId });
       // Añadir la venta a la lista o refrescar
       await ventaStore.cargarVentas();
       return result;
