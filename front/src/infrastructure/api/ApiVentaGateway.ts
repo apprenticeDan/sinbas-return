@@ -4,68 +4,11 @@ import type {
   LineaVentaDto,
   OrdenVentaDto,
   ConfirmarVentaRequest,
+  VentaConfirmadaDto,
 } from '../../domain/models/Venta';
 
 export type * from '../../domain/models/Venta';
-
-export interface LineaDespachoDto {
-  productoId: string;
-  nombreProducto: string;
-  cantidad: number;
-  unidad: string;
-}
-
-export interface OrdenDespachoDto {
-  id: string;
-  codigo: string;
-  ordenVentaId?: string;
-  codigoVenta?: string;
-  origenTipo: string;
-  clienteId?: string;
-  clienteNombre?: string;
-  estado: string; // 'Pendiente' | 'Despachado' | 'Anulado'
-  movimientoId?: string;
-  creadoEn: string;
-  lineas: LineaDespachoDto[];
-}
-
-export interface LineaDespachadaDto {
-  loteId: string;
-  codigoLote: string;
-  cantidadGramos: number;
-  saldoRestanteGramos: number;
-}
-
-export interface SugerenciaLoteDto {
-  productoId: string;
-  nombreProducto: string;
-  cantidadRequerida: number;
-  unidad: string;
-  lotesSugeridos: LineaDespachadaDto[];
-}
-
-export interface OrdenDespachoDetalleDto extends OrdenDespachoDto {
-  sugerenciasFifo?: SugerenciaLoteDto[];
-}
-
-export interface VentaConfirmadaDto {
-  venta: OrdenVentaDto;
-  despacho: OrdenDespachoDto;
-}
-
-export interface DespachoConfirmadoDto {
-  despachoId: string;
-  codigoDespacho: string;
-  movimientoId: string;
-  fecha: string;
-  lineasDespachadas: LineaDespachadaDto[];
-  mensaje: string;
-}
-
-
-export interface ConfirmarDespachoRequest {
-  observaciones?: string;
-}
+export type * from '../../domain/models/Despacho';
 
 export const ApiVentaGateway = {
   async confirmarVenta(proformaId: string, req: ConfirmarVentaRequest): Promise<VentaConfirmadaDto> {
@@ -87,20 +30,5 @@ export const ApiVentaGateway = {
 
   async obtenerVentaPorId(id: string): Promise<OrdenVentaDto> {
     return httpClient<OrdenVentaDto>(`/ventas/${id}`);
-  },
-
-  async listarDespachosPendientes(): Promise<OrdenDespachoDto[]> {
-    return httpClient<OrdenDespachoDto[]>('/despachos/pendientes');
-  },
-
-  async obtenerDespachoPorId(id: string): Promise<OrdenDespachoDetalleDto> {
-    return httpClient<OrdenDespachoDetalleDto>(`/despachos/${id}`);
-  },
-
-  async confirmarDespacho(id: string, req?: ConfirmarDespachoRequest): Promise<DespachoConfirmadoDto> {
-    return httpClient<DespachoConfirmadoDto>(`/despachos/${id}/confirmar`, {
-      method: 'POST',
-      body: JSON.stringify(req || {}),
-    });
   },
 };

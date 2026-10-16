@@ -1,13 +1,15 @@
 import { createSignal } from 'solid-js';
 import { VentaUseCases } from '../../application/usecases/VentaUseCases';
-import type { OrdenVentaDto } from '../../domain/models/Venta';
-import {
-  ApiVentaGateway,
-  type OrdenDespachoDto,
-  type OrdenDespachoDetalleDto,
-  type VentaConfirmadaDto,
-  type DespachoConfirmadoDto,
-} from '../../infrastructure/api/ApiVentaGateway';
+import { DespachoUseCases } from '../../application/usecases/DespachoUseCases';
+import type {
+  OrdenVentaDto,
+  VentaConfirmadaDto,
+} from '../../domain/models/Venta';
+import type {
+  OrdenDespachoDto,
+  OrdenDespachoDetalleDto,
+  DespachoConfirmadoDto,
+} from '../../domain/models/Despacho';
 
 const [ventas, setVentas] = createSignal<OrdenVentaDto[]>([]);
 const [despachosPendientes, setDespachosPendientes] = createSignal<OrdenDespachoDto[]>([]);
@@ -41,7 +43,7 @@ export const ventaStore = {
     setLoadingDespachos(true);
     setError(null);
     try {
-      const data = await ApiVentaGateway.listarDespachosPendientes();
+      const data = await DespachoUseCases.listarDespachosPendientes();
       setDespachosPendientes(data);
     } catch (err: any) {
       setError(err.message || 'Error al cargar despachos pendientes');
@@ -53,7 +55,7 @@ export const ventaStore = {
   async cargarDespachoDetalle(id: string): Promise<OrdenDespachoDetalleDto | null> {
     setError(null);
     try {
-      const data = await ApiVentaGateway.obtenerDespachoPorId(id);
+      const data = await DespachoUseCases.obtenerDespachoPorId(id);
       setDespachoSeleccionado(data);
       return data;
     } catch (err: any) {
@@ -78,7 +80,7 @@ export const ventaStore = {
   async confirmarDespacho(id: string, observaciones?: string): Promise<DespachoConfirmadoDto> {
     setError(null);
     try {
-      const result = await ApiVentaGateway.confirmarDespacho(id, { observaciones });
+      const result = await DespachoUseCases.confirmarDespacho(id, { observaciones });
       // Remover de despachos pendientes y recargar
       await ventaStore.cargarDespachosPendientes();
       await ventaStore.cargarVentas();
