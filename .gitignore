@@ -216,3 +216,12 @@ docs.zip
 
 *.txt  
 **/ejemplo_infra_contenedor/
+
+# ============================================================
+#  PYTHON (entornos virtuales y cache)
+# ============================================================
+.venv/
+**/.venv/
+venv/
+__pycache__/
+*.pyc
