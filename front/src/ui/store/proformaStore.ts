@@ -3,14 +3,15 @@
  */
 
 import { createSignal } from 'solid-js';
-import {
-  ApiProformaGateway,
-  type ProformaDto,
-  type CrearProformaRequest,
-  type StockDisponibleDto,
-} from '../../infrastructure/api/ApiProformaGateway';
-import { ApiClientGateway, type ClienteDto } from '../../infrastructure/api/ApiClientGateway';
+import { ProformaUseCases } from '../../application/usecases/ProformaUseCases';
+import { ClientUseCases } from '../../application/usecases/ClientUseCases';
 import { CatalogUseCases } from '../../application/usecases/CatalogUseCases';
+import type {
+  ProformaDto,
+  CrearProformaRequest,
+  StockDisponibleDto,
+} from '../../domain/models/Proforma';
+import type { ClienteDto } from '../../domain/models/Client';
 import type { Product } from '../../domain/models/Product';
 
 // ─── Signals ──────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ async function cargarProformas() {
   setLoadingProformas(true);
   setErrorProformas(null);
   try {
-    const list = await ApiProformaGateway.listarProformas();
+    const list = await ProformaUseCases.listarProformas();
     setProformas(list);
   } catch (err: any) {
     setErrorProformas(err.message || 'Error al cargar las proformas');
@@ -65,7 +66,7 @@ async function cargarProformas() {
 async function cargarAuxiliares() {
   try {
     const [clientes, productos] = await Promise.all([
-      ApiClientGateway.listarClientes(),
+      ClientUseCases.listarClientes(),
       CatalogUseCases.fetchCatalog(),
     ]);
     setClientesCache(clientes.filter((c: ClienteDto) => c.estado === 'Activo'));
@@ -84,7 +85,7 @@ async function consultarStock(productoId: string): Promise<StockDisponibleDto | 
   if (current[productoId]) return current[productoId];
 
   try {
-    const stockInfo = await ApiProformaGateway.obtenerStockDisponible(productoId);
+    const stockInfo = await ProformaUseCases.obtenerStockDisponible(productoId);
     setStockCache((prev) => ({ ...prev, [productoId]: stockInfo }));
     return stockInfo;
   } catch (err) {
@@ -95,7 +96,7 @@ async function consultarStock(productoId: string): Promise<StockDisponibleDto | 
 
 async function crearProforma(req: CrearProformaRequest): Promise<{ ok: boolean; data?: ProformaDto; error?: string }> {
   try {
-    const nueva = await ApiProformaGateway.crearProforma(req);
+    const nueva = await ProformaUseCases.crearProforma(req);
     setProformas((prev) => [nueva, ...prev]);
     return { ok: true, data: nueva };
   } catch (err: any) {
@@ -105,7 +106,7 @@ async function crearProforma(req: CrearProformaRequest): Promise<{ ok: boolean; 
 
 async function anularProforma(id: string, motivo: string): Promise<{ ok: boolean; data?: ProformaDto; error?: string }> {
   try {
-    const anulada = await ApiProformaGateway.anularProforma(id, { motivo });
+    const anulada = await ProformaUseCases.anularProforma(id, { motivo });
     setProformas((prev) => prev.map((p) => (p.id === id ? anulada : p)));
     if (selectedProforma()?.id === id) {
       setSelectedProforma(anulada);
