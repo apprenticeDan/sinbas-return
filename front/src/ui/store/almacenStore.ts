@@ -18,7 +18,8 @@ import type {
 } from '../../domain/models/Almacen';
 import { InventoryUseCases } from '../../application/usecases/InventoryUseCases';
 import { CatalogUseCases } from '../../application/usecases/CatalogUseCases';
-import { ApiClientGateway, type ClienteDto } from '../../infrastructure/api/ApiClientGateway';
+import { clienteStore } from './clienteStore';
+import type { ClienteDto } from '../../domain/models/Client';
 import type { Product } from '../../domain/models/Product';
 
 // ─── Signals ──────────────────────────────────────────────────────
@@ -96,15 +97,15 @@ async function asegurarCatalogoCargado(): Promise<Product[]> {
 
 /** Carga los clientes registrados si no están en cache */
 async function asegurarClientesCargados(): Promise<ClienteDto[]> {
-  let clis = clientesCache();
+  let clis = clienteStore.clientes();
   if (clis.length === 0) {
     try {
-      clis = await ApiClientGateway.listarClientes();
-      setClientesCache(clis);
+      clis = await clienteStore.loadClientes();
     } catch (err) {
       console.warn('[almacenStore] No se pudo cargar clientes:', err);
     }
   }
+  setClientesCache(clis);
   return clis;
 }
 
@@ -257,6 +258,8 @@ interface RegistrarEgresoParams {
   cantidad: number;
   unidad: string;
   consignatario?: string;
+  departamento?: string;
+  solicitante?: string;
   costoAdicional?: number;
   observaciones?: string;
 }
@@ -264,16 +267,16 @@ interface RegistrarEgresoParams {
 async function registrarEgreso(item: RegistrarEgresoParams) {
   setLoadingEgresos(true);
   try {
-    const isUsoInterno = item.tipo === 'UsoLabor' || item.tipo === 'UsoVivero';
+    const isVenta = item.tipo === 'Venta';
     const payload: RegistrarEgresoPayload = {
       productoId: item.productoId,
       descripcion: item.descripcion,
       tipoEgreso: item.tipo,
       cantidad: item.cantidad,
       unidad: item.unidad || 'Kilogramo',
-      contraparteNombre: !isUsoInterno ? item.consignatario : undefined,
-      departamento: isUsoInterno ? (item.consignatario || 'Vivero/Laboratorio') : undefined,
-      solicitante: isUsoInterno ? 'Responsable de área' : undefined,
+      contraparteNombre: isVenta ? item.consignatario : undefined,
+      departamento: !isVenta ? (item.departamento || item.consignatario || undefined) : undefined,
+      solicitante: !isVenta ? (item.solicitante || undefined) : undefined,
       observaciones: item.observaciones,
       fecha: item.fecha.replace(/\//g, '-'),
     };
