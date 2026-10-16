@@ -147,10 +147,4 @@ export const CATEGORIAS: { value: CategoriaAlmacen; label: string; abbr: string 
   { value: 'Insumo', label: 'Insumos', abbr: 'Ins' },
 ];
 
-/** Consignatarios sugeridos para egresos (extensible con F6 Clientes) */
-export const CONSIGNATARIOS_MOCK = [
-  'Cliente 1',
-  'Encargado 1',
-  'Auxiliar',
-  'Uso interno',
-];
+

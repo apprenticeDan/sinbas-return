@@ -15,14 +15,14 @@
 import { Component, createSignal, For, Show, createMemo, onMount } from 'solid-js';
 import { almacenStore } from '../store/almacenStore';
 import { ventaStore } from '../store/ventaStore';
+import { clienteStore } from '../store/clienteStore';
 import type {
   OrdenDespachoDto,
   DespachoConfirmadoDto,
-} from '../../infrastructure/api/ApiVentaGateway';
+} from '../../domain/models/Despacho';
 import {
   CATEGORIAS,
   TIPOS_EGRESO,
-  CONSIGNATARIOS_MOCK,
   type CategoriaAlmacen,
   type TipoEgreso,
 } from '../../domain/models/Almacen';
@@ -50,6 +50,8 @@ export const EgresosView: Component = () => {
   const [formProductoId, setFormProductoId] = createSignal('');
   const [formTipo, setFormTipo] = createSignal<TipoEgreso | ''>('');
   const [formConsignatario, setFormConsignatario] = createSignal('');
+  const [formDepartamento, setFormDepartamento] = createSignal('');
+  const [formSolicitante, setFormSolicitante] = createSignal('');
   const [formCantidad, setFormCantidad] = createSignal<string>('');
   const [formUnidad, setFormUnidad] = createSignal<string>('Kilogramo');
   const [formCostoAdic, setFormCostoAdic] = createSignal<string>('');
@@ -59,7 +61,7 @@ export const EgresosView: Component = () => {
   onMount(async () => {
     await Promise.all([
       almacenStore.asegurarCatalogoCargado(),
-      almacenStore.asegurarClientesCargados(),
+      clienteStore.loadClientes(),
       ventaStore.cargarDespachosPendientes(),
     ]);
     almacenStore.cargarEgresos();
@@ -128,13 +130,17 @@ export const EgresosView: Component = () => {
     return [{ value: 'Unidad', label: 'u' }];
   });
 
-  // Clientes reales registrados + valores predeterminados para departamentos internos
-  const opcionesConsignatario = createMemo(() => {
-    const clientes = almacenStore.clientesCache();
-    const nombresClientes = clientes.map((c) =>
-      c.nit ? `${c.nombreVisible} (NIT: ${c.nit})` : c.nombreVisible
-    );
-    return Array.from(new Set([...nombresClientes, ...CONSIGNATARIOS_MOCK]));
+  // Clientes reales registrados en clienteStore (nombre/razón social + NIT/CI) para tipo Venta
+  const opcionesCliente = createMemo(() => {
+    return clienteStore.clientes().map((c) => {
+      const doc = c.nit
+        ? `NIT: ${c.nit}`
+        : c.persona?.ciFormateado
+        ? `CI: ${c.persona.ciFormateado}`
+        : '';
+      const nombre = c.razonSocial || c.nombreVisible;
+      return doc ? `${nombre} (${doc})` : nombre;
+    });
   });
 
   const canSubmit = createMemo(() => {
@@ -173,13 +179,17 @@ export const EgresosView: Component = () => {
         tipo: formTipo() as TipoEgreso,
         cantidad: cant,
         unidad: formUnidad() || prod.unidadManejo || 'Kilogramo',
-        consignatario: formConsignatario(),
+        consignatario: formTipo() === 'Venta' ? formConsignatario().trim() : undefined,
+        departamento: formTipo() !== 'Venta' ? formDepartamento().trim() : undefined,
+        solicitante: formTipo() !== 'Venta' ? formSolicitante().trim() : undefined,
         costoAdicional: formCostoAdic() ? Number(formCostoAdic()) : undefined,
       });
       // Reset parcial
       setFormProductoId('');
       setFormTipo('');
       setFormConsignatario('');
+      setFormDepartamento('');
+      setFormSolicitante('');
       setFormCantidad('');
       setFormCostoAdic('');
     } catch (err: any) {
@@ -447,32 +457,6 @@ export const EgresosView: Component = () => {
             />
           </div>
 
-          {/* Botón Solicitudes Egreso según Wireframe */}
-          <div class="field" style={{ 'width': 'auto' }}>
-            <label>&nbsp;</label>
-            <button
-              class="btn btn-ghost"
-              style={{
-                'font-size': '12px',
-                padding: '8px 12px',
-                'white-space': 'nowrap',
-                opacity: '0.85',
-                cursor: 'not-allowed',
-              }}
-              disabled
-              title="Las operaciones de almacén generalmente se disparan en atención comercial. Vista de solicitudes en desarrollo (Próximamente)."
-            >
-              📋 Solicitudes Egreso
-              <span style={{
-                'font-size': '10px',
-                background: 'var(--amber-tint)',
-                color: 'var(--amber)',
-                padding: '2px 5px',
-                'border-radius': '4px',
-                'margin-left': '4px'
-              }}>Próximamente</span>
-            </button>
-          </div>
 
           <div class="field" style={{ 'min-width': '120px' }}>
             <label>Categoría</label>
@@ -527,22 +511,47 @@ export const EgresosView: Component = () => {
             </select>
           </div>
 
-          {/* EXTENSIBILITY (F6 / F9): Selector multivariable (nombre/apellido/nit/tel/email) para clientes y depto/solicitante para uso interno */}
-          <div class="field" style={{ 'min-width': '140px', flex: '1' }}>
-            <label>Consignatario / Destino</label>
-            <input
-              type="text"
-              list="consignatarios-list"
-              placeholder="Buscar cliente o escribir..."
-              value={formConsignatario()}
-              onInput={(e) => setFormConsignatario(e.currentTarget.value)}
-            />
-            <datalist id="consignatarios-list">
-              <For each={opcionesConsignatario()}>
-                {(c) => <option value={c} />}
-              </For>
-            </datalist>
-          </div>
+          <Show
+            when={formTipo() === 'Venta'}
+            fallback={
+              <>
+                <div class="field" style={{ 'min-width': '140px', flex: '1' }}>
+                  <label>Departamento / Área</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Laboratorio, Vivero..."
+                    value={formDepartamento()}
+                    onInput={(e) => setFormDepartamento(e.currentTarget.value)}
+                  />
+                </div>
+                <div class="field" style={{ 'min-width': '140px', flex: '1' }}>
+                  <label>Solicitante</label>
+                  <input
+                    type="text"
+                    placeholder="Nombre del solicitante..."
+                    value={formSolicitante()}
+                    onInput={(e) => setFormSolicitante(e.currentTarget.value)}
+                  />
+                </div>
+              </>
+            }
+          >
+            <div class="field" style={{ 'min-width': '180px', flex: '1' }}>
+              <label>Cliente (Destinatario)</label>
+              <input
+                type="text"
+                list="clientes-egreso-list"
+                placeholder="Buscar cliente (nombre o NIT/CI)..."
+                value={formConsignatario()}
+                onInput={(e) => setFormConsignatario(e.currentTarget.value)}
+              />
+              <datalist id="clientes-egreso-list">
+                <For each={opcionesCliente()}>
+                  {(c) => <option value={c} />}
+                </For>
+              </datalist>
+            </div>
+          </Show>
 
           <div class="field" style={{ 'min-width': '75px', 'max-width': '95px' }}>
             <label>Cantidad</label>
