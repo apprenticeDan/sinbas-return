@@ -1,3 +1,5 @@
+import type { OrdenDespachoDto } from './Despacho';
+
 export interface LineaVentaDto {
   productoId: string;
   nombreProducto: string;
@@ -27,4 +29,9 @@ export interface OrdenVentaDto {
 
 export interface ConfirmarVentaRequest {
   clienteId?: string;
+}
+
+export interface VentaConfirmadaDto {
+  venta: OrdenVentaDto;
+  despacho: OrdenDespachoDto;
 }

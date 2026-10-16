@@ -1,7 +1,8 @@
-import { ApiVentaGateway, type VentaConfirmadaDto } from '../../infrastructure/api/ApiVentaGateway';
+import { ApiVentaGateway } from '../../infrastructure/api/ApiVentaGateway';
 import type {
   OrdenVentaDto,
   ConfirmarVentaRequest,
+  VentaConfirmadaDto,
 } from '../../domain/models/Venta';
 
 export const VentaUseCases = {
