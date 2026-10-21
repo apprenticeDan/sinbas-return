@@ -37,6 +37,7 @@ type Lote =
       Procedencia: string option
       CantidadInicial: Cantidad
       CantidadActual: Cantidad
+      CantidadReservada: Cantidad
       FechaIngreso: DateOnly
       Ubicacion: string option
       Estado: EstadoLote
@@ -66,10 +67,86 @@ module Lote =
                   Procedencia = procedencia
                   CantidadInicial = cantidadInicial
                   CantidadActual = cantidadInicial
+                  CantidadReservada = Cantidad.cero cantidadInicial.Unidad
                   FechaIngreso = fechaIngreso
                   Ubicacion = ubicacion
                   Estado = Activo
                   Observaciones = observaciones }
+
+    /// Stock disponible del lote en su unidad base (Físico - Reservado) (OBS-03)
+    let stockDisponibleBase (lote: Lote) : decimal =
+        if lote.Estado = Activo then
+            let fisicoBase = Cantidad.aUnidadBase lote.CantidadActual
+            let reservadoBase = Cantidad.aUnidadBase lote.CantidadReservada
+            max 0m (fisicoBase - reservadoBase)
+        else
+            0m
+
+    /// Reserva stock formal sobre el lote para una venta confirmada (OBS-03)
+    let reservar (cantidadAReservar: Cantidad) (lote: Lote) : Result<Lote, DomainError> =
+        if cantidadAReservar.Valor <= 0m then
+            Error (CantidadInvalida "La cantidad a reservar debe ser mayor a cero")
+        else
+            let dispBase = stockDisponibleBase lote
+            let reqBase = Cantidad.aUnidadBase cantidadAReservar
+            if reqBase > dispBase then
+                Error (
+                    StockInsuficiente (
+                        sprintf "Stock disponible insuficiente para reservar en lote '%s'. Disponible: %.2f, Solicitado: %.2f"
+                            (CodigoLote.valor lote.Codigo) dispBase reqBase
+                    )
+                )
+            else
+                let targetUnit = lote.CantidadReservada.Unidad
+                let uBase = UnidadMedida.unidadBase targetUnit
+                let nuevaReservaBase = (Cantidad.aUnidadBase lote.CantidadReservada) + reqBase
+                match UnidadMedida.convertir uBase targetUnit nuevaReservaBase with
+                | Error err -> Error err
+                | Ok valEnUnidad ->
+                    match Cantidad.reconstruir valEnUnidad targetUnit with
+                    | Error err -> Error err
+                    | Ok nuevaReservada ->
+                        Ok { lote with CantidadReservada = nuevaReservada }
+
+    /// Descuenta simultáneamente el stock físico y la reserva al ejecutar despacho físico en almacén (OBS-03)
+    let despacharReserva (cantidadADespachar: Cantidad) (lote: Lote) : Result<Lote, DomainError> =
+        if cantidadADespachar.Valor <= 0m then
+            Error (CantidadInvalida "La cantidad a despachar debe ser mayor a cero")
+        else
+            let reqBase = Cantidad.aUnidadBase cantidadADespachar
+            let saldoBase = Cantidad.aUnidadBase lote.CantidadActual
+            let reservadaBase = Cantidad.aUnidadBase lote.CantidadReservada
+            let nuevoSaldoBase = max 0m (saldoBase - reqBase)
+            let nuevaReservaBase = max 0m (reservadaBase - reqBase)
+
+            let targetUnit = lote.CantidadActual.Unidad
+            let uBase = UnidadMedida.unidadBase targetUnit
+            match UnidadMedida.convertir uBase targetUnit nuevoSaldoBase, UnidadMedida.convertir uBase targetUnit nuevaReservaBase with
+            | Ok valSaldo, Ok valReserva ->
+                match Cantidad.reconstruir valSaldo targetUnit, Cantidad.reconstruir valReserva targetUnit with
+                | Ok nuevaCantActual, Ok nuevaCantReservada ->
+                    let nuevoEstado = if nuevoSaldoBase <= 0m then Agotado else lote.Estado
+                    Ok { lote with CantidadActual = nuevaCantActual; CantidadReservada = nuevaCantReservada; Estado = nuevoEstado }
+                | Error err, _ | _, Error err -> Error err
+            | Error err, _ | _, Error err -> Error err
+
+    /// Libera stock reservado cuando una orden de venta es anulada antes de su despacho
+    let liberarReserva (cantidadALiberar: Cantidad) (lote: Lote) : Result<Lote, DomainError> =
+        if cantidadALiberar.Valor <= 0m then
+            Error (CantidadInvalida "La cantidad a liberar debe ser mayor a cero")
+        else
+            let libBase = Cantidad.aUnidadBase cantidadALiberar
+            let reservadaBase = Cantidad.aUnidadBase lote.CantidadReservada
+            let nuevaReservaBase = max 0m (reservadaBase - libBase)
+            let targetUnit = lote.CantidadReservada.Unidad
+            let uBase = UnidadMedida.unidadBase targetUnit
+            match UnidadMedida.convertir uBase targetUnit nuevaReservaBase with
+            | Error err -> Error err
+            | Ok valReserva ->
+                match Cantidad.reconstruir valReserva targetUnit with
+                | Error err -> Error err
+                | Ok nuevaCantReservada ->
+                    Ok { lote with CantidadReservada = nuevaCantReservada }
 
     /// Actualiza el saldo proyectado del lote (en unidad base) y reevalúa su estado si llega a cero,
     /// preservando la unidad física declarada en el lote.

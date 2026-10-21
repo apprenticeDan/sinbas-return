@@ -13,6 +13,7 @@ type LoteRow =
       procedencia: string
       cantidad_inicial: decimal
       cantidad_actual: decimal
+      cantidad_reservada: decimal
       unidad: string
       fecha_ingreso: DateOnly
       ubicacion: string
@@ -69,12 +70,17 @@ module LoteRepository =
                     ValorCrudo = Some (string row.cantidad_actual)
                     ErrorDominio = err }
         | Ok cantActual ->
+        let cantReservada =
+            match Cantidad.reconstruir row.cantidad_reservada unidad with
+            | Ok c -> c
+            | Error _ -> Cantidad.cero unidad
         Ok { Id = LoteId row.id
              Codigo = codigo
              ProductoId = ProductoId row.producto_id
              Procedencia = Option.ofObj row.procedencia
              CantidadInicial = cantInicial
              CantidadActual  = cantActual
+             CantidadReservada = cantReservada
              FechaIngreso = row.fecha_ingreso
              Ubicacion = Option.ofObj row.ubicacion
              Estado = estado
@@ -92,6 +98,7 @@ module LoteRepository =
           procedencia = Option.toObj lote.Procedencia
           cantidad_inicial = lote.CantidadInicial.Valor
           cantidad_actual = lote.CantidadActual.Valor
+          cantidad_reservada = lote.CantidadReservada.Valor
           unidad = desmapearUnidad lote.CantidadInicial.Unidad
           fecha_ingreso = lote.FechaIngreso
           ubicacion = Option.toObj lote.Ubicacion

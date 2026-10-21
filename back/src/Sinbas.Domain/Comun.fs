@@ -328,6 +328,9 @@ module Cantidad =
         else
             Ok { _Valor = valor; _Unidad = unidad }
 
+    /// Retorna una cantidad de valor cero con la unidad especificada
+    let cero (unidad: UnidadMedida) : Cantidad = { _Valor = 0m; _Unidad = unidad }
+
     // ── Operaciones ──────────────────────────────────────────────────────────
 
     let enGramos (c: Cantidad) : decimal =

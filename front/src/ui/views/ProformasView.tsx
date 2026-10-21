@@ -10,12 +10,14 @@
  * - Vista de impresión con @media print
  */
 
-import { Component, createSignal, For, Show, createMemo, onMount } from 'solid-js';
+import { Component, createSignal, For, Index, Show, createMemo, onMount } from 'solid-js';
 import { proformaStore } from '../store/proformaStore';
 import { ventaStore } from '../store/ventaStore';
+import { clienteStore } from '../store/clienteStore';
 import type { ProformaDto, CrearProformaRequest, LineaCotizadaRequest, StockDisponibleDto } from '../../infrastructure/api/ApiProformaGateway';
 import type { VentaConfirmadaDto } from '../../infrastructure/api/ApiVentaGateway';
 import type { Product } from '../../domain/models/Product';
+import type { CrearClienteNaturalPayload } from '../../domain/models/Client';
 
 interface LineaForm {
   id: string; // id temporal para key
@@ -41,6 +43,16 @@ export const ProformasView: Component = () => {
   const [confirmarVentaSubmitting, setConfirmarVentaSubmitting] = createSignal(false);
   const [confirmarVentaError, setConfirmarVentaError] = createSignal<string | null>(null);
   const [confirmarVentaExito, setConfirmarVentaExito] = createSignal<VentaConfirmadaDto | null>(null);
+
+  // ─── Alta Rápida de Cliente (OBS-05) ────────────────────────
+  const [altaRapidaOpen, setAltaRapidaOpen] = createSignal(false);
+  const [altaRapidaNombres, setAltaRapidaNombres] = createSignal('');
+  const [altaRapidaApPaterno, setAltaRapidaApPaterno] = createSignal('');
+  const [altaRapidaApMaterno, setAltaRapidaApMaterno] = createSignal('');
+  const [altaRapidaCi, setAltaRapidaCi] = createSignal('');
+  const [altaRapidaTelefono, setAltaRapidaTelefono] = createSignal('');
+  const [altaRapidaSubmitting, setAltaRapidaSubmitting] = createSignal(false);
+  const [altaRapidaError, setAltaRapidaError] = createSignal<string | null>(null);
 
   // ─── Form State para Nueva Proforma ───────────────────────────
   const [clienteTipo, setClienteTipo] = createSignal<'registrado' | 'libre'>('registrado');
@@ -589,17 +601,19 @@ export const ProformasView: Component = () => {
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 text-sm">
-                      <For each={lineas()}>
+                      {/* OBS-01: Se usa <Index> en lugar de <For> para evitar destrucción/recreación
+                           del DOM al actualizar propiedades de una línea (pérdida de foco en inputs) */}
+                      <Index each={lineas()}>
                         {(linea) => {
                           const prodsFiltrados = createMemo(() => {
-                            const cat = linea.categoria;
+                            const cat = linea().categoria;
                             const all = proformaStore.productosCache();
                             if (!cat) return all;
                             return all.filter((p) => p.categoria === cat);
                           });
 
-                          const subtotal = () => (linea.cantidad * linea.precioUnitario).toFixed(2);
-                          const sinStock = () => linea.productoId && linea.cantidad > linea.stockDisp;
+                          const subtotal = () => (linea().cantidad * linea().precioUnitario).toFixed(2);
+                          const sinStock = () => linea().productoId && linea().cantidad > linea().stockDisp;
 
                           return (
                             <tr class={`hover:bg-gray-50 transition-colors ${sinStock() ? 'bg-red-50/50' : ''}`}>
@@ -607,9 +621,9 @@ export const ProformasView: Component = () => {
                               <td class="p-2">
                                 <select
                                   class="input-field text-xs w-full p-1"
-                                  value={linea.categoria}
+                                  value={linea().categoria}
                                   onChange={(e) => {
-                                    actualizarLinea(linea.id, { categoria: e.currentTarget.value, productoId: '', precioUnitario: 0, stockDisp: 0 });
+                                    actualizarLinea(linea().id, { categoria: e.currentTarget.value, productoId: '', precioUnitario: 0, stockDisp: 0 });
                                   }}
                                 >
                                   <option value="">Todas</option>
@@ -623,8 +637,8 @@ export const ProformasView: Component = () => {
                               <td class="p-2">
                                 <select
                                   class="input-field text-xs w-full p-1 font-medium"
-                                  value={linea.productoId}
-                                  onChange={(e) => onProductoChange(linea.id, e.currentTarget.value)}
+                                  value={linea().productoId}
+                                  onChange={(e) => onProductoChange(linea().id, e.currentTarget.value)}
                                 >
                                   <option value="">-- Seleccionar Producto --</option>
                                   <For each={prodsFiltrados()}>
@@ -639,10 +653,10 @@ export const ProformasView: Component = () => {
 
                               {/* Stock Disponible */}
                               <td class="p-2 text-center text-xs">
-                                <Show when={linea.stockLoading} fallback={
-                                  <Show when={linea.productoId} fallback={<span class="text-gray-400">-</span>}>
+                                <Show when={linea().stockLoading} fallback={
+                                  <Show when={linea().productoId} fallback={<span class="text-gray-400">-</span>}>
                                     <span class={`px-1.5 py-0.5 rounded text-xs font-bold ${sinStock() ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-800'}`}>
-                                      {linea.stockDisp} {linea.unidad}
+                                      {linea().stockDisp} {linea().unidad}
                                     </span>
                                   </Show>
                                 }>
@@ -652,24 +666,24 @@ export const ProformasView: Component = () => {
 
                               {/* Precio Oficial Congelado (RN13) */}
                               <td class="p-2 text-right font-mono text-xs text-gray-700">
-                                {linea.precioUnitario > 0 ? `${linea.precioUnitario.toFixed(2)}` : '-'}
+                                {linea().precioUnitario > 0 ? `${linea().precioUnitario.toFixed(2)}` : '-'}
                               </td>
 
-                              {/* Cantidad */}
+                              {/* Cantidad (OBS-01: input estable sin pérdida de foco) */}
                               <td class="p-2">
                                 <input
                                   type="number"
                                   step="0.01"
                                   min="0.01"
                                   class="input-field text-xs w-full p-1 text-right"
-                                  value={linea.cantidad}
-                                  onInput={(e) => actualizarLinea(linea.id, { cantidad: parseFloat(e.currentTarget.value) || 0 })}
+                                  value={linea().cantidad}
+                                  onInput={(e) => actualizarLinea(linea().id, { cantidad: parseFloat(e.currentTarget.value) || 0 })}
                                 />
                               </td>
 
                               {/* Unidad */}
                               <td class="p-2 text-xs text-gray-500">
-                                {linea.unidad}
+                                {linea().unidad}
                               </td>
 
                               {/* Subtotal */}
@@ -682,7 +696,7 @@ export const ProformasView: Component = () => {
                                 <button
                                   type="button"
                                   class="text-gray-400 hover:text-red-600 font-bold text-sm"
-                                  onClick={() => eliminarLinea(linea.id)}
+                                  onClick={() => eliminarLinea(linea().id)}
                                   title="Eliminar línea"
                                 >
                                   ✕
@@ -691,7 +705,7 @@ export const ProformasView: Component = () => {
                             </tr>
                           );
                         }}
-                      </For>
+                      </Index>
                     </tbody>
                   </table>
                 </div>
@@ -994,6 +1008,140 @@ export const ProformasView: Component = () => {
                                 )}
                               </For>
                             </select>
+
+                            {/* OBS-05: Alta rápida de cliente desde el flujo de confirmación */}
+                            <div class="mt-3">
+                              <button
+                                type="button"
+                                class="text-xs text-blue-600 hover:text-blue-800 underline font-medium flex items-center gap-1"
+                                onClick={() => {
+                                  setAltaRapidaOpen(!altaRapidaOpen());
+                                  setAltaRapidaError(null);
+                                }}
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5">
+                                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                  <circle cx="9" cy="7" r="4" />
+                                  <line x1="19" y1="8" x2="19" y2="14" />
+                                  <line x1="16" y1="11" x2="22" y2="11" />
+                                </svg>
+                                {altaRapidaOpen() ? 'Ocultar formulario' : '¿Cliente nuevo? Registrar aquí'}
+                              </button>
+
+                              <Show when={altaRapidaOpen()}>
+                                <div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                  <h4 class="text-xs font-bold text-blue-800 mb-2">Registro Rápido de Cliente (Persona Natural)</h4>
+
+                                  <Show when={altaRapidaError()}>
+                                    <div class="p-2 bg-red-50 text-red-700 text-[11px] rounded border border-red-200 mb-2">
+                                      {altaRapidaError()}
+                                    </div>
+                                  </Show>
+
+                                  <div class="grid grid-cols-2 gap-2 mb-2">
+                                    <div>
+                                      <label class="block text-[11px] font-semibold text-gray-600 mb-0.5">Nombres *</label>
+                                      <input
+                                        type="text"
+                                        class="input-field text-xs w-full p-1"
+                                        value={altaRapidaNombres()}
+                                        onInput={(e) => setAltaRapidaNombres(e.currentTarget.value)}
+                                        placeholder="Ej: Juan Carlos"
+                                        required
+                                      />
+                                    </div>
+                                    <div>
+                                      <label class="block text-[11px] font-semibold text-gray-600 mb-0.5">CI / Documento *</label>
+                                      <input
+                                        type="text"
+                                        class="input-field text-xs w-full p-1"
+                                        value={altaRapidaCi()}
+                                        onInput={(e) => setAltaRapidaCi(e.currentTarget.value)}
+                                        placeholder="Ej: 1234567"
+                                        required
+                                      />
+                                    </div>
+                                    <div>
+                                      <label class="block text-[11px] font-semibold text-gray-600 mb-0.5">Apellido Paterno</label>
+                                      <input
+                                        type="text"
+                                        class="input-field text-xs w-full p-1"
+                                        value={altaRapidaApPaterno()}
+                                        onInput={(e) => setAltaRapidaApPaterno(e.currentTarget.value)}
+                                        placeholder="Ej: Flores"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label class="block text-[11px] font-semibold text-gray-600 mb-0.5">Apellido Materno</label>
+                                      <input
+                                        type="text"
+                                        class="input-field text-xs w-full p-1"
+                                        value={altaRapidaApMaterno()}
+                                        onInput={(e) => setAltaRapidaApMaterno(e.currentTarget.value)}
+                                        placeholder="Ej: Quispe"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div class="mb-2">
+                                    <label class="block text-[11px] font-semibold text-gray-600 mb-0.5">Teléfono (opcional)</label>
+                                    <input
+                                      type="text"
+                                      class="input-field text-xs w-full p-1"
+                                      value={altaRapidaTelefono()}
+                                      onInput={(e) => setAltaRapidaTelefono(e.currentTarget.value)}
+                                      placeholder="Ej: 77712345"
+                                    />
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    class="btn text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold w-full flex items-center justify-center gap-1.5"
+                                    disabled={altaRapidaSubmitting()}
+                                    onClick={async () => {
+                                      const nombres = altaRapidaNombres().trim();
+                                      const ci = altaRapidaCi().trim();
+                                      if (!nombres || !ci) {
+                                        setAltaRapidaError('Nombres y CI son obligatorios.');
+                                        return;
+                                      }
+                                      setAltaRapidaSubmitting(true);
+                                      setAltaRapidaError(null);
+                                      try {
+                                        const payload: CrearClienteNaturalPayload = {
+                                          nombres,
+                                          apellidoPaterno: altaRapidaApPaterno().trim() || undefined,
+                                          apellidoMaterno: altaRapidaApMaterno().trim() || undefined,
+                                          ciNumero: ci,
+                                          telefono: altaRapidaTelefono().trim() || undefined,
+                                        };
+                                        const creado = await clienteStore.crearClienteNatural(payload);
+                                        if (creado) {
+                                          // Actualizar el cache de clientes del proformaStore para que aparezca en el select
+                                          await proformaStore.cargarAuxiliares();
+                                          // Seleccionar automáticamente el cliente recién creado
+                                          setConfirmarVentaClienteId(creado.id);
+                                          // Limpiar y cerrar el formulario
+                                          setAltaRapidaNombres('');
+                                          setAltaRapidaApPaterno('');
+                                          setAltaRapidaApMaterno('');
+                                          setAltaRapidaCi('');
+                                          setAltaRapidaTelefono('');
+                                          setAltaRapidaOpen(false);
+                                        } else {
+                                          setAltaRapidaError(clienteStore.error() || 'Error al registrar el cliente.');
+                                        }
+                                      } catch (err: any) {
+                                        setAltaRapidaError(err.message || 'Error inesperado al registrar el cliente.');
+                                      } finally {
+                                        setAltaRapidaSubmitting(false);
+                                      }
+                                    }}
+                                  >
+                                    {altaRapidaSubmitting() ? 'Registrando...' : '+ Registrar Cliente y Seleccionar'}
+                                  </button>
+                                </div>
+                              </Show>
+                            </div>
                           </div>
                         </Show>
 

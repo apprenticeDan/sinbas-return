@@ -18,7 +18,7 @@ create table if not exists proforma (
     anulado_por         uuid references usuario(id) on delete set null,
     anulado_en          timestamp with time zone,
     observaciones       text,
-    leyenda             text not null default 'Disponibilidad sujeta a cambios - La proforma no reserva stock'
+    leyenda             text not null default 'Precios y existencias referenciales sujetos a variación al momento de confirmación'
 );
 
 create index if not exists ix_proforma_estado on proforma(estado);
