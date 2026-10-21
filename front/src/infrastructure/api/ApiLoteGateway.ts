@@ -6,6 +6,8 @@ import {
   LiberarCuarentenaPayload,
   RechazarLotePayload,
   SolicitarNuevoAnalisisPayload,
+  DesbloquearLotePayload,
+  ArchivarLotePayload,
 } from '../../domain/models/Lote';
 
 export interface AnalisisResumenDto {
@@ -81,6 +83,20 @@ export const ApiLoteGateway = {
     return httpClient<LoteItem>(`/lotes/${id}/solicitar-analisis`, {
       method: 'PUT',
       body: JSON.stringify(payload),
+    });
+  },
+
+  async desbloquearLote(id: string, payload: DesbloquearLotePayload): Promise<LoteItem> {
+    return httpClient<LoteItem>(`/lotes/${id}/desbloquear`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async archivarLote(id: string, payload?: ArchivarLotePayload): Promise<LoteItem> {
+    return httpClient<LoteItem>(`/lotes/${id}/archivar`, {
+      method: 'PUT',
+      body: JSON.stringify(payload || {}),
     });
   },
 

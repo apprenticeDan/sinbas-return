@@ -1,5 +1,11 @@
 import { createSignal } from 'solid-js';
-import { LoteItem, CreateLotePayload, BloquearLotePayload } from '../../domain/models/Lote';
+import {
+  LoteItem,
+  CreateLotePayload,
+  BloquearLotePayload,
+  DesbloquearLotePayload,
+  ArchivarLotePayload,
+} from '../../domain/models/Lote';
 import { ApiLoteGateway } from '../../infrastructure/api/ApiLoteGateway';
 
 const [lotes, setLotes] = createSignal<LoteItem[]>([]);
@@ -50,6 +56,18 @@ export const loteStore = {
     setLotes((prev) => prev.map((l) => (l.id === id ? actualizado : l)));
     setBlockModalOpen(false);
     setSelectedLote(null);
+    return actualizado;
+  },
+
+  async desbloquearLote(id: string, payload: DesbloquearLotePayload) {
+    const actualizado = await ApiLoteGateway.desbloquearLote(id, payload);
+    setLotes((prev) => prev.map((l) => (l.id === id ? actualizado : l)));
+    return actualizado;
+  },
+
+  async archivarLote(id: string, payload?: ArchivarLotePayload) {
+    const actualizado = await ApiLoteGateway.archivarLote(id, payload);
+    setLotes((prev) => prev.map((l) => (l.id === id ? actualizado : l)));
     return actualizado;
   },
 

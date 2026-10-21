@@ -214,3 +214,45 @@ module LoteEndpoints =
             .WithTags("Lotes")
         |> ignore
 
+        // 8. PUT /api/lotes/{id}/desbloquear - Levantar bloqueo preventivo de lote
+        app.MapPut("/api/lotes/{id}/desbloquear", Func<string, DesbloquearLoteRequest, Threading.Tasks.Task<IResult>>(fun id req ->
+            async {
+                let! res =
+                    LoteService.desbloquearLote
+                        LoteRepository.obtenerPorId
+                        CatalogRepository.buscarPorId
+                        LoteRepository.actualizarStockYEstado
+                        id
+                        req.Justificacion
+
+                match res with
+                | Ok dto -> return Results.Ok(dto)
+                | Error msg -> return Results.BadRequest({| error = msg |})
+            } |> Async.StartAsTask
+        ))
+            .RequireAuthorization("RequireBloqueoLote")
+            .WithName("DesbloquearLote")
+            .WithTags("Lotes")
+        |> ignore
+
+        // 9. PUT /api/lotes/{id}/archivar - Archivar lote agotado, rechazado o muestra testigo
+        app.MapPut("/api/lotes/{id}/archivar", Func<string, ArchivarLoteRequest, Threading.Tasks.Task<IResult>>(fun id req ->
+            async {
+                let! res =
+                    LoteService.archivarLote
+                        LoteRepository.obtenerPorId
+                        CatalogRepository.buscarPorId
+                        LoteRepository.actualizarStockYEstado
+                        id
+                        req.Justificacion
+
+                match res with
+                | Ok dto -> return Results.Ok(dto)
+                | Error msg -> return Results.BadRequest({| error = msg |})
+            } |> Async.StartAsTask
+        ))
+            .RequireAuthorization("RequireSoloGerencia")
+            .WithName("ArchivarLote")
+            .WithTags("Lotes")
+        |> ignore
+
