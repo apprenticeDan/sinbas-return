@@ -39,3 +39,12 @@ export interface RechazarLotePayload {
 export interface SolicitarNuevoAnalisisPayload {
   instruccion: string;
 }
+
+export interface DesbloquearLotePayload {
+  justificacion: string;
+}
+
+export interface ArchivarLotePayload {
+  justificacion?: string;
+}
+

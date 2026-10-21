@@ -34,6 +34,14 @@ type BloquearLoteRequest =
     { Motivo: string }
 
 [<CLIMutable>]
+type DesbloquearLoteRequest =
+    { Justificacion: string }
+
+[<CLIMutable>]
+type ArchivarLoteRequest =
+    { Justificacion: string option }
+
+[<CLIMutable>]
 type LiberarCuarentenaRequest =
     { Justificacion: string }
 
@@ -232,11 +240,15 @@ module LoteService =
                 match optLote with
                 | None -> return Error "Lote no encontrado"
                 | Some lote ->
-                    let loteBloqueado = Lote.bloquear motivo lote
-                    do! actualizarLote loteBloqueado
-                    let! optProd = obtenerProducto lote.ProductoId
-                    let nomProd = optProd |> Option.map Producto.nombreVisible |> Option.defaultValue "Producto Desconocido"
-                    return Ok(aLoteDto nomProd loteBloqueado)
+                    match Lote.bloquear motivo lote with
+                    | Error (ValorRequerido msg) -> return Error msg
+                    | Error (OperacionInvalida msg) -> return Error msg
+                    | Error err -> return Error (sprintf "Error al bloquear lote: %A" err)
+                    | Ok loteBloqueado ->
+                        do! actualizarLote loteBloqueado
+                        let! optProd = obtenerProducto lote.ProductoId
+                        let nomProd = optProd |> Option.map Producto.nombreVisible |> Option.defaultValue "Producto Desconocido"
+                        return Ok(aLoteDto nomProd loteBloqueado)
         }
 
     /// Consultar ficha técnica completa de un lote (RF14 / CU-14 / F-LAB-06)
@@ -412,4 +424,61 @@ module LoteService =
                         let nomProd = optProd |> Option.map Producto.nombreVisible |> Option.defaultValue "Producto Desconocido"
                         return Ok (aLoteDto nomProd loteActualizado)
         }
+
+    /// Desbloquear un lote levantando la retención preventiva (OBS-12)
+    let desbloquearLote
+        (obtenerLote: LoteId -> Async<Lote option>)
+        (obtenerProducto: ProductoId -> Async<Producto option>)
+        (actualizarLote: Lote -> Async<unit>)
+        (loteIdStr: string)
+        (justificacion: string)
+        : Async<Result<LoteDto, string>> =
+        async {
+            match Guid.TryParse(loteIdStr) with
+            | false, _ -> return Error "ID de lote inválido"
+            | true, gId ->
+                let loteId = LoteId gId
+                let! optLote = obtenerLote loteId
+                match optLote with
+                | None -> return Error "Lote no encontrado"
+                | Some lote ->
+                    match Lote.desbloquear justificacion lote with
+                    | Error (ValorRequerido msg) -> return Error msg
+                    | Error (OperacionInvalida msg) -> return Error msg
+                    | Error err -> return Error (sprintf "Error al desbloquear lote: %A" err)
+                    | Ok loteDesbloqueado ->
+                        do! actualizarLote loteDesbloqueado
+                        let! optProd = obtenerProducto lote.ProductoId
+                        let nomProd = optProd |> Option.map Producto.nombreVisible |> Option.defaultValue "Producto Desconocido"
+                        return Ok (aLoteDto nomProd loteDesbloqueado)
+        }
+
+    /// Archivar un lote para cierre histórico o muestra testigo (OBS-12)
+    let archivarLote
+        (obtenerLote: LoteId -> Async<Lote option>)
+        (obtenerProducto: ProductoId -> Async<Producto option>)
+        (actualizarLote: Lote -> Async<unit>)
+        (loteIdStr: string)
+        (justificacionOpt: string option)
+        : Async<Result<LoteDto, string>> =
+        async {
+            match Guid.TryParse(loteIdStr) with
+            | false, _ -> return Error "ID de lote inválido"
+            | true, gId ->
+                let loteId = LoteId gId
+                let! optLote = obtenerLote loteId
+                match optLote with
+                | None -> return Error "Lote no encontrado"
+                | Some lote ->
+                    match Lote.archivar justificacionOpt lote with
+                    | Error (ValorRequerido msg) -> return Error msg
+                    | Error (OperacionInvalida msg) -> return Error msg
+                    | Error err -> return Error (sprintf "Error al archivar lote: %A" err)
+                    | Ok loteArchivado ->
+                        do! actualizarLote loteArchivado
+                        let! optProd = obtenerProducto lote.ProductoId
+                        let nomProd = optProd |> Option.map Producto.nombreVisible |> Option.defaultValue "Producto Desconocido"
+                        return Ok (aLoteDto nomProd loteArchivado)
+        }
+
 

@@ -80,7 +80,7 @@ let ``Lote.actualizarSaldo actualiza saldo y transiciona bidireccionalmente entr
 [<Fact>]
 let ``Bloqueo de lote acumula observaciones de justificacion inmutablemente`` () =
     let lote = crearLoteValido ()
-    let bloqueado = Lote.bloquear "Alerta de plaga por muestra de laboratorio" lote
+    let bloqueado = unwrap (Lote.bloquear "Alerta de plaga por muestra de laboratorio" lote)
 
     Assert.Equal(Bloqueado, bloqueado.Estado)
     Assert.False(Lote.estaActivo bloqueado)
@@ -151,3 +151,140 @@ let ``EstadoLote.desdeTexto rechaza valores desconocidos o nulos y nunca inventa
     | Error (ValorRequerido _) -> () // Éxito: el dominio rechaza
     | Ok estado -> failwithf "FALLO DE SEGURIDAD: EstadoLote.desdeTexto fabricó el estado %A para entrada '%s'" estado input
     | Error otroError -> failwithf "Retornó error no esperado: %A" otroError
+
+// ─────────────────────────────────────────────────────────────
+// Tests OBS-12: Máquina de Estados de Lote y Validaciones de Precondición
+// ─────────────────────────────────────────────────────────────
+
+[<Fact>]
+let ``OBS-12: Lote.crearEnCuarentena inicia lote en estado EnCuarentena`` () =
+    let codigo = unwrap (CodigoLote.generar "Swietenia" "macrophylla" (DateOnly(2026, 8, 15)) 1)
+    let cant = unwrap (Cantidad.reconstruir 30m Kilogramo)
+    let lote = unwrap (Lote.crearEnCuarentena loteId codigo prodId (Some "Origen") cant (DateOnly(2026, 8, 15)) None None)
+
+    Assert.Equal(EnCuarentena, lote.Estado)
+    Assert.False(Lote.estaActivo lote)
+    Assert.False(EstadoLote.esVendible lote.Estado)
+
+[<Fact>]
+let ``OBS-12: EstadoLote.esVendible solo es verdadero para Activo`` () =
+    Assert.True(EstadoLote.esVendible Activo)
+    Assert.False(EstadoLote.esVendible EnCuarentena)
+    Assert.False(EstadoLote.esVendible Agotado)
+    Assert.False(EstadoLote.esVendible Bloqueado)
+    Assert.False(EstadoLote.esVendible Rechazado)
+    Assert.False(EstadoLote.esVendible Archivado)
+
+[<Fact>]
+let ``OBS-12: EstadoLote.puedeTransicionar valida el grafo de estados correctamente`` () =
+    // Transiciones válidas
+    Assert.True(EstadoLote.puedeTransicionar EnCuarentena Activo)
+    Assert.True(EstadoLote.puedeTransicionar EnCuarentena Rechazado)
+    Assert.True(EstadoLote.puedeTransicionar EnCuarentena Bloqueado)
+    Assert.True(EstadoLote.puedeTransicionar Activo Bloqueado)
+    Assert.True(EstadoLote.puedeTransicionar Activo Agotado)
+    Assert.True(EstadoLote.puedeTransicionar Activo EnCuarentena)
+    Assert.True(EstadoLote.puedeTransicionar Activo Archivado)
+    Assert.True(EstadoLote.puedeTransicionar Bloqueado Activo)
+    Assert.True(EstadoLote.puedeTransicionar Bloqueado Rechazado)
+    Assert.True(EstadoLote.puedeTransicionar Rechazado Archivado)
+    Assert.True(EstadoLote.puedeTransicionar Agotado Activo)
+    Assert.True(EstadoLote.puedeTransicionar Agotado Archivado)
+
+    // Transiciones ilegales
+    Assert.False(EstadoLote.puedeTransicionar Rechazado Activo)
+    Assert.False(EstadoLote.puedeTransicionar Rechazado Bloqueado)
+    Assert.False(EstadoLote.puedeTransicionar Archivado EnCuarentena)
+    Assert.False(EstadoLote.puedeTransicionar Archivado Bloqueado)
+
+[<Fact>]
+let ``OBS-12: Lote.bloquear rechaza motivos vacios y doble bloqueo`` () =
+    let lote = crearLoteValido ()
+
+    // Motivo vacío
+    match Lote.bloquear "   " lote with
+    | Error (ValorRequerido msg) -> Assert.Contains("motivo", msg)
+    | res -> failwithf "Debió rechazar motivo vacío: %A" res
+
+    // Bloqueo exitoso
+    let bloqueado = unwrap (Lote.bloquear "Sospecha de hongos" lote)
+    Assert.Equal(Bloqueado, bloqueado.Estado)
+
+    // Intento de re-bloqueo
+    match Lote.bloquear "Otro motivo" bloqueado with
+    | Error (OperacionInvalida msg) -> Assert.Contains("ya se encuentra en estado Bloqueado", msg)
+    | res -> failwithf "Debió impedir doble bloqueo: %A" res
+
+[<Fact>]
+let ``OBS-12: Lote.bloquear impide bloquear lotes rechazados o archivados`` () =
+    let lote = crearLoteValido ()
+    let gerente = EmpleadoId (Guid.NewGuid())
+    let loteCuarentena = Lote.aplicarDictamenLaboratorio (DictamenCalidad.Observado "Falla") lote
+    let rechazado = unwrap (Lote.rechazarDefinitivamente "Descarte definitivo" gerente loteCuarentena)
+    let archivado = unwrap (Lote.archivar None rechazado)
+
+    match Lote.bloquear "Alerta" rechazado with
+    | Error (OperacionInvalida msg) -> Assert.Contains("rechazado definitivamente", msg)
+    | res -> failwithf "Debió impedir bloquear lote rechazado: %A" res
+
+    match Lote.bloquear "Alerta" archivado with
+    | Error (OperacionInvalida msg) -> Assert.Contains("archivado", msg)
+    | res -> failwithf "Debió impedir bloquear lote archivado: %A" res
+
+[<Fact>]
+let ``OBS-12: Lote.desbloquear reactiva a Activo si hay saldo o Agotado si saldo es cero`` () =
+    let lote = crearLoteValido ()
+    let bloqueadoConSaldo = unwrap (Lote.bloquear "Verificación técnica" lote)
+
+    // Desbloqueo de lote con saldo -> pasa a Activo
+    let desbloqueado = unwrap (Lote.desbloquear "Análisis fitosanitario limpio" bloqueadoConSaldo)
+    Assert.Equal(Activo, desbloqueado.Estado)
+    Assert.True(Lote.estaActivo desbloqueado)
+    Assert.Contains("[DESBLOQUEADO]: Análisis fitosanitario limpio", desbloqueado.Observaciones.Value)
+
+    // Desbloqueo de lote sin saldo -> pasa a Agotado
+    let loteSinSaldo = unwrap (Lote.actualizarSaldo 0m lote)
+    let bloqueadoSinSaldo = unwrap (Lote.bloquear "Revisión física" loteSinSaldo)
+    let desbloqueadoAgotado = unwrap (Lote.desbloquear "Conteo conforme" bloqueadoSinSaldo)
+    Assert.Equal(Agotado, desbloqueadoAgotado.Estado)
+
+    // Error si se intenta desbloquear un lote que no estaba bloqueado
+    match Lote.desbloquear "Intento inválido" lote with
+    | Error (OperacionInvalida msg) -> Assert.Contains("Solo un lote en estado 'Bloqueado'", msg)
+    | res -> failwithf "Debió rechazar desbloqueo de lote no bloqueado: %A" res
+
+[<Fact>]
+let ``OBS-12: Lote.archivar permite archivar lotes agotados o rechazados`` () =
+    let lote = crearLoteValido ()
+    let gerente = EmpleadoId (Guid.NewGuid())
+    let loteCuarentena = Lote.aplicarDictamenLaboratorio (DictamenCalidad.Observado "Falla") lote
+    let rechazado = unwrap (Lote.rechazarDefinitivamente "Descarte final" gerente loteCuarentena)
+
+    // Archivar lote rechazado
+    let archivadoRechazado = unwrap (Lote.archivar (Some "Cierre de expediente") rechazado)
+    Assert.Equal(Archivado, archivadoRechazado.Estado)
+    Assert.Contains("[ARCHIVADO]: Cierre de expediente", archivadoRechazado.Observaciones.Value)
+
+    // Archivar lote agotado
+    let agotado = unwrap (Lote.actualizarSaldo 0m lote)
+    let archivadoAgotado = unwrap (Lote.archivar None agotado)
+    Assert.Equal(Archivado, archivadoAgotado.Estado)
+
+    // Rechaza archivar lote en cuarentena o bloqueado
+    match Lote.archivar None loteCuarentena with
+    | Error (OperacionInvalida msg) -> Assert.Contains("EnCuarentena", msg)
+    | res -> failwithf "Debió impedir archivar lote en cuarentena: %A" res
+
+[<Fact>]
+let ``OBS-12: Lote.archivar exige justificacion formal si el lote esta Activo con saldo`` () =
+    let lote = crearLoteValido ()
+
+    // Sin justificación en lote activo con saldo
+    match Lote.archivar None lote with
+    | Error (OperacionInvalida msg) -> Assert.Contains("justificación formal", msg)
+    | res -> failwithf "Debió exigir justificación para archivar lote activo: %A" res
+
+    // Con justificación formal (ej. muestra testigo)
+    let archivadoTestigo = unwrap (Lote.archivar (Some "Muestra testigo permanente de colección biológica") lote)
+    Assert.Equal(Archivado, archivadoTestigo.Estado)
+    Assert.Contains("ARCHIVADO (Muestra Testigo)", archivadoTestigo.Observaciones.Value)
