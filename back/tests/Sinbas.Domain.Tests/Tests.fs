@@ -24,6 +24,7 @@ let makeLote (loteGuid: Guid) (prodGuid: Guid) (idNum: int) fecha estado =
       Procedencia = Some "Bosque de Prueba"
       CantidadInicial = cant
       CantidadActual = cant
+      CantidadReservada = Cantidad.cero Gramo
       FechaIngreso = fecha
       Ubicacion = None
       Estado = estado

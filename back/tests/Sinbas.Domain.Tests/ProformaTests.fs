@@ -44,7 +44,7 @@ let ``// RF-07 | CU-10 - Crear proforma valida asigna estado Vigente, leyenda le
         Assert.Equal(pid, p.Id)
         Assert.Equal(EstadoProforma.Vigente, p.Estado)
         Assert.Equal(600.00m, p.Total)
-        Assert.Equal("Disponibilidad sujeta a cambios - La proforma no reserva stock", p.Leyenda)
+        Assert.Equal("Precios y existencias referenciales sujetos a variación al momento de confirmación", p.Leyenda)
         Assert.Equal(Some "Vivero El Pinar", p.ClienteNombreLibre)
         Assert.Equal(Some (DateOnly(2026, 10, 14)), p.FechaVencimiento) // 7 días por defecto
         Assert.Equal("BOB", p.Moneda)
@@ -109,8 +109,8 @@ let ``// RF-07 | RN04 - Proyectar estado determina vencimiento segun fecha actua
     Assert.Equal(EstadoProforma.Vigente, Proforma.proyectarEstado (DateOnly(2026, 10, 7)) p)
     Assert.Equal(EstadoProforma.Vigente, Proforma.proyectarEstado (DateOnly(2026, 10, 8)) p)
 
-    // Después de la fecha de vencimiento: Vencida
-    Assert.Equal(EstadoProforma.Vencida, Proforma.proyectarEstado (DateOnly(2026, 10, 9)) p)
+    // Después de la fecha de vencimiento: sigue Vigente (OBS-04: cotización referencial "sin compromiso")
+    Assert.Equal(EstadoProforma.Vigente, Proforma.proyectarEstado (DateOnly(2026, 10, 9)) p)
 
 [<Fact>]
 let ``// RF-07 | CU-10 - Anular proforma vigente registra motivo y responsable`` () =

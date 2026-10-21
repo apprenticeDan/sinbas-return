@@ -9,12 +9,15 @@ create table if not exists lote (
     procedencia         text,
     cantidad_inicial    numeric(12,2) not null,
     cantidad_actual     numeric(12,2) not null,
+    cantidad_reservada  numeric(12,2) not null default 0.00,
     unidad              text not null,
     fecha_ingreso       date not null default current_date,
     ubicacion           text,
     estado              text not null default 'Activo',
     observaciones       text
 );
+
+alter table lote add column if not exists cantidad_reservada numeric(12,2) not null default 0.00;
 
 create index if not exists ix_lote_producto_id on lote(producto_id);
 create index if not exists ix_lote_estado on lote(estado);

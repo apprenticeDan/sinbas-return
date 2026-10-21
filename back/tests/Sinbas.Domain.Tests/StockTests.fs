@@ -16,6 +16,7 @@ let private crearLote prodId codigoStr estado cantInicialGramos fechaIngreso =
       Procedencia = None
       CantidadInicial = unwrap (Cantidad.reconstruir cantInicialGramos Gramo)
       CantidadActual = unwrap (Cantidad.reconstruir cantInicialGramos Gramo)
+      CantidadReservada = Cantidad.cero Gramo
       FechaIngreso = fechaIngreso
       Ubicacion = None
       Estado = estado

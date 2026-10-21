@@ -60,17 +60,19 @@ let ``// RF-08 | CU-11 - Confirmar venta desde proforma vigente genera OrdenVent
         failwithf "Se esperaba Ok, se obtuvo: %A" err
 
 [<Fact>]
-let ``// RF-08 | RN14 - Rechaza confirmacion si la proforma esta vencida por fecha proyectada`` () =
+let ``// RF-08 | RN14 - OBS-04: Proforma vencida por fecha ya NO bloquea confirmacion (cotización sin compromiso)`` () =
     let p = proformaVigente ()
     let hoy = DateOnly(2026, 10, 20) // Posterior al vencimiento (14 de octubre)
     let ordenId = OrdenId (Guid.NewGuid())
     let codVenta = CodigoVenta.reconstruir "OV-202610-0002"
 
+    // OBS-04: Ahora la confirmación debe tener éxito (cotización referencial "sin compromiso")
     match OrdenVenta.crearDesdeProforma hoy ordenId codVenta p clienteId empleadoRespId with
-    | Error (OperacionInvalida msg) ->
-        Assert.Contains("venció", msg)
-    | res ->
-        failwithf "Se esperaba Error OperacionInvalida por vencimiento, se obtuvo: %A" res
+    | Ok (ordenVenta, proformaConvertida) ->
+        Assert.Equal(EstadoVenta.Confirmada, ordenVenta.Estado)
+        Assert.Equal(EstadoProforma.Convertida, proformaConvertida.Estado)
+    | Error err ->
+        failwithf "Se esperaba Ok (OBS-04: sin bloqueo por fecha), se obtuvo: %A" err
 
 [<Fact>]
 let ``// RF-08 | RN14 - Rechaza confirmacion si la proforma ya esta Convertida o Anulada`` () =

@@ -81,20 +81,14 @@ module OrdenVenta =
         (responsableId: EmpleadoId)
         : Result<OrdenVenta * Proforma, DomainError> =
 
-        // 1. Validar estado de la proforma
+        // 1. Validar estado de la proforma (OBS-04: desacoplada vigencia estricta por fecha fija)
         match proforma.Estado with
         | EstadoProforma.Anulada ->
             Error (OperacionInvalida "No se puede confirmar una proforma que ya fue anulada")
         | EstadoProforma.Convertida ->
             Error (OperacionInvalida "La proforma ya fue convertida a orden de venta previamente")
-        | EstadoProforma.Vencida ->
-            Error (OperacionInvalida "La proforma se encuentra vencida")
+        | EstadoProforma.Vencida
         | EstadoProforma.Vigente ->
-            // Verificar si proyectada a hoy ya venció
-            match proforma.FechaVencimiento with
-            | Some fv when hoy > fv ->
-                Error (OperacionInvalida (sprintf "La proforma venció el %s y no puede confirmarse" (fv.ToString("yyyy-MM-dd"))))
-            | _ ->
 
             // 2. Validar que tenga líneas
             if List.isEmpty proforma.Lineas then

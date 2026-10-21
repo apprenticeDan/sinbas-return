@@ -229,12 +229,15 @@ create table if not exists lote (
     procedencia         text,
     cantidad_inicial    numeric(12,2) not null,
     cantidad_actual     numeric(12,2) not null,
+    cantidad_reservada  numeric(12,2) not null default 0.00,
     unidad              text not null,
     fecha_ingreso       date not null default current_date,
     ubicacion           text,
     estado              text not null default 'Activo',
     observaciones       text
 );
+
+alter table lote add column if not exists cantidad_reservada numeric(12,2) not null default 0.00;
 
 create index if not exists ix_lote_producto_id on lote(producto_id);
 create index if not exists ix_lote_estado on lote(estado);
@@ -418,7 +421,7 @@ create table if not exists proforma (
     anulado_por         uuid references usuario(id) on delete set null,
     anulado_en          timestamp with time zone,
     observaciones       text,
-    leyenda             text not null default 'Disponibilidad sujeta a cambios - La proforma no reserva stock'
+    leyenda             text not null default 'Precios y existencias referenciales sujetos a variación al momento de confirmación'
 );
 
 create index if not exists ix_proforma_estado on proforma(estado);

@@ -2,10 +2,24 @@ namespace Sinbas.Domain
 
 module Stock =
 
-    /// Stock disponible de un lote según su saldo actual proyectado en su unidad base
-    let stockLote (lote: Lote) : decimal =
+    /// Stock físico total de un lote en unidad base
+    let stockFisicoLote (lote: Lote) : decimal =
         if lote.Estado = Activo then
             Cantidad.aUnidadBase lote.CantidadActual
+        else
+            0m
+
+    /// Stock reservado de un lote en unidad base
+    let stockReservadoLote (lote: Lote) : decimal =
+        if lote.Estado = Activo then
+            Cantidad.aUnidadBase lote.CantidadReservada
+        else
+            0m
+
+    /// Stock disponible de un lote: Stock Físico - Stock Reservado (OBS-03)
+    let stockLote (lote: Lote) : decimal =
+        if lote.Estado = Activo then
+            max 0m (stockFisicoLote lote - stockReservadoLote lote)
         else
             0m
 
@@ -18,21 +32,34 @@ module Stock =
             |> List.filter (fun l -> l.Referencia = loteId)
             |> List.sumBy (fun l -> signo * Cantidad.aUnidadBase l.Cantidad))
 
-    /// Stock total de un producto sumando el saldo de todos sus lotes activos en unidad base
-    let stockProducto (productoId: ProductoId) (lotes: Lote list) : decimal =
+    /// Stock físico total de un producto sumando el saldo de todos sus lotes activos en unidad base
+    let stockFisicoProducto (productoId: ProductoId) (lotes: Lote list) : decimal =
         lotes
         |> List.filter (fun l -> l.ProductoId = productoId && Lote.estaActivo l)
-        |> List.sumBy (fun l -> Cantidad.aUnidadBase l.CantidadActual)
+        |> List.sumBy stockFisicoLote
 
-    /// Stock disponible para venta (lotes únicamente en estado Activo)
+    /// Stock reservado total de un producto en lotes activos
+    let stockReservadoProducto (productoId: ProductoId) (lotes: Lote list) : decimal =
+        lotes
+        |> List.filter (fun l -> l.ProductoId = productoId && Lote.estaActivo l)
+        |> List.sumBy stockReservadoLote
+
+    /// Stock disponible de un producto formalizado (OBS-03):
+    /// Stock Disponible = Stock Físico en Depósito - Stock Reservado en Ventas Confirmadas
+    let stockProducto (productoId: ProductoId) (lotes: Lote list) : decimal =
+        let fisico = stockFisicoProducto productoId lotes
+        let reservado = stockReservadoProducto productoId lotes
+        max 0m (fisico - reservado)
+
+    /// Stock disponible para venta (lotes únicamente en estado Activo deduciendo reservas)
     let disponibleParaVenta (productoId: ProductoId) (lotes: Lote list) : decimal =
         stockProducto productoId lotes
 
-    /// Obtiene lotes activos ordenados por FechaIngreso (FIFO) que poseen stock mayor a cero
+    /// Obtiene lotes activos ordenados por FechaIngreso (FIFO) que poseen stock disponible mayor a cero
     let lotesDisponibles (productoId: ProductoId) (lotes: Lote list) : (Lote * decimal) list =
         lotes
         |> List.filter (fun l -> l.ProductoId = productoId && Lote.estaActivo l)
-        |> List.map (fun l -> l, Cantidad.aUnidadBase l.CantidadActual)
+        |> List.map (fun l -> l, stockLote l)
         |> List.filter (fun (_, stock) -> stock > 0m)
         |> List.sortBy (fun (l, _) -> l.FechaIngreso)
 
@@ -150,7 +177,7 @@ module Stock =
         productos
         |> List.map (fun prod ->
             let prodId = prod.Base.Id
-            let totalG = stockProducto prodId lotes
+            let totalG = stockFisicoProducto prodId lotes
             let dispVentaG = disponibleParaVenta prodId lotes
             let alerta = evaluarAlertaStock dispVentaG umbralMinimoDefaultGramos
             let lotesDisp = lotesDisponibles prodId lotes

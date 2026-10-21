@@ -38,10 +38,10 @@ module EstadoProforma =
 
 [<AutoOpen>]
 module ProformaConstantes =
-    /// Leyenda legal obligatoria (MF-07-02 / RN05)
+    /// Leyenda legal formal referencial (MF-07-02 / RN05 / OBS-04)
     [<Literal>]
     let LeyendaNoReserva =
-        "Disponibilidad sujeta a cambios - La proforma no reserva stock"
+        "Precios y existencias referenciales sujetos a variación al momento de confirmación"
 
 /// Entidad Proforma completa
 type Proforma =
@@ -164,15 +164,13 @@ module Proforma =
              AnuladoEn = None
              Observaciones = obsLimpia }
 
-    /// Proyecta el estado de vencimiento sin mutar base de datos (inmutabilidad funcional pura)
-    let proyectarEstado (hoy: DateOnly) (p: Proforma) : EstadoProforma =
+    /// Proyecta el estado de la proforma (OBS-04: elimina el estado Vencida como bloqueo automático por fecha fija;
+    /// la cotización se mantiene referencial 'sin compromiso' mientras no sea Anulada o Convertida)
+    let proyectarEstado (_hoy: DateOnly) (p: Proforma) : EstadoProforma =
         match p.Estado with
         | EstadoProforma.Anulada -> EstadoProforma.Anulada
         | EstadoProforma.Convertida -> EstadoProforma.Convertida
-        | _ ->
-            match p.FechaVencimiento with
-            | Some fv when hoy > fv -> EstadoProforma.Vencida
-            | _ -> p.Estado
+        | _ -> EstadoProforma.Vigente
 
     /// Anula una proforma exigiendo motivo y responsable
     let anular (motivo: string) (anuladoPor: UsuarioId) (p: Proforma) : Result<Proforma, DomainError> =
