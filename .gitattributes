@@ -1,0 +1,19 @@
+# Por defecto, texto normalizado a LF en el repo y en el checkout
+* text=auto eol=lf
+
+# Scripts de Windows necesitan CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Scripts de shell y contenedores siempre LF
+*.sh text eol=lf
+Containerfile* text eol=lf
+Dockerfile* text eol=lf
+
+# Binarios
+*.png binary
+*.jpg binary
+*.zip binary
+*.dll binary
+*.exe binary
