@@ -64,6 +64,7 @@ module InventoryRepository =
             | DonacionRecibida donante -> ("Entrada", motivoStr, Nullable(), donante)
             | Devolucion (ClienteId cliId) -> ("Entrada", motivoStr, Nullable cliId, null)
             | TruequeEntrada (TruequeId truId) -> ("Entrada", motivoStr, Nullable truId, null)
+            | DevolucionAnulacion (OrdenId oId) -> ("Entrada", motivoStr, Nullable oId, null)
         | Salida motivoEgreso ->
             let motivoStr = MotivoEgreso.aTexto motivoEgreso
             match motivoEgreso with

@@ -32,7 +32,7 @@ let ``Stock de un lote acumula entradas y salidas correctamente`` () =
         { Id = MovimientoId (Identidad.nuevo ())
           Fecha = DateTime.UtcNow
           Responsable = empleadoId
-          Tipo = Salida (UsoInterno "Pruebas de viabilidad")
+          Tipo = Salida (UsoInterno (DestinoUso.Otro "Pruebas de viabilidad", "Personal Interno"))
           OrdenOrigen = None
           Lineas = [ { Referencia = loteId; Cantidad = unwrap (Cantidad.reconstruir 300m Gramo) } ]
           Observaciones = None }

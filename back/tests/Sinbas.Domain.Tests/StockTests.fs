@@ -56,8 +56,8 @@ let ``MF-05-01: Proyección pura calcula stock acumulado por lote y producto con
     let movs =
         [ crearMovEntrada lote1.Id 5000m (ahora.AddDays(-10.0)) empId
           crearMovEntrada lote2.Id 3000m (ahora.AddDays(-8.0)) empId
-          crearMovSalida lote1.Id 1500m (ahora.AddDays(-5.0)) empId (UsoInterno "Laboratorio")
-          crearMovSalida lote2.Id 500m (ahora.AddDays(-2.0)) empId (UsoInterno "Vivero") ]
+          crearMovSalida lote1.Id 1500m (ahora.AddDays(-5.0)) empId (UsoInterno (DestinoUso.Laboratorio, "Lab"))
+          crearMovSalida lote2.Id 500m (ahora.AddDays(-2.0)) empId (UsoInterno (DestinoUso.Vivero, "Vivero")) ]
 
     // 1. Verificación por Kardex/Movimientos acumulados
     let stockL1 = Stock.cantidadLote lote1.Id movs
@@ -110,7 +110,7 @@ let ``MF-05-02: Kardex calcula el saldo resultante cronológico paso a paso tras
 
     // Movimientos en desorden temporal para verificar que se ordenen cronológicamente
     let mov1 = crearMovEntrada lote1.Id 1000m (baseFecha.AddDays(0.0)) empId
-    let mov2 = crearMovSalida lote1.Id 200m (baseFecha.AddDays(2.0)) empId (UsoInterno "Pruebas")
+    let mov2 = crearMovSalida lote1.Id 200m (baseFecha.AddDays(2.0)) empId (UsoInterno (DestinoUso.Otro "Pruebas", "Almacén"))
     let mov3 = crearMovEntrada lote1.Id 500m (baseFecha.AddDays(1.0)) empId
     let mov4 = crearMovSalida lote1.Id 400m (baseFecha.AddDays(3.0)) empId (Venta (ClienteId (Identidad.nuevo ())))
 
