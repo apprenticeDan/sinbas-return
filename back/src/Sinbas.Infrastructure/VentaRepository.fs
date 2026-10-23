@@ -153,13 +153,15 @@ module VentaRepository =
              Estado = estado
              CreadoEn = row.creado_en }
 
-    /// Inserción atómica transaccional de Confirmación de Venta (RNF05)
+    /// Inserción atómica transaccional de Confirmación de Venta (RNF05 / OBS-03)
     /// 1. Convierte Proforma a 'Convertida' de manera optimista (WHERE id=@id AND estado='Vigente')
     /// 2. Inserta orden_venta y linea_orden_venta
     /// 3. Inserta orden_despacho y linea_despacho
+    /// 4. Reserva formal de stock: incrementa cantidad_reservada en los lotes afectados (OBS-03)
     let confirmarVentaTx
         (ordenVenta: OrdenVenta)
         (ordenDespacho: OrdenDespacho)
+        (reservasLotes: (LoteId * decimal) list)
         : Async<Result<unit, string>> =
         async {
             use conn = DbConnection.crear ()
@@ -261,6 +263,18 @@ module VentaRepository =
                         unidad = UnidadMedida.aTexto linea.Cantidad.Unidad
                     |}
                     do! conn.ExecuteAsync(sqlLineaDespacho, paramsLinea, tx) |> Async.AwaitTask |> Async.Ignore
+
+                // 6. Reservar stock formal sobre lotes afectados (OBS-03)
+                // Incrementa cantidad_reservada atómicamente para cada lote resuelto por FIFO.
+                // La cantidad está en unidad base (gramos/mililitros).
+                let sqlReservarLote = """
+                    UPDATE lote
+                    SET cantidad_reservada = cantidad_reservada + @cantidadReserva
+                    WHERE id = @loteId AND estado = 'Activo'
+                """
+                for (loteId, cantidadReservaBase) in reservasLotes do
+                    let (LoteId lid) = loteId
+                    do! conn.ExecuteAsync(sqlReservarLote, {| loteId = lid; cantidadReserva = cantidadReservaBase |}, tx) |> Async.AwaitTask |> Async.Ignore
 
                 tx.Commit()
                 return Ok ()
@@ -445,16 +459,17 @@ module VentaRepository =
                         None)
         }
 
-    /// Confirmación física de salida de inventario (Almacén - RN12 / FIFO / RNF05)
+    /// Confirmación física de salida de inventario (Almacén - RN12 / FIFO / RNF05 / OBS-03)
     /// Ejecuta atómicamente:
     /// 1. Cierra la orden de despacho a 'Despachado' asociando el movimiento_id
     /// 2. Cierra la orden de venta a 'Despachada'
     /// 3. Inserta el movimiento de inventario (Salida / Venta) y sus lineas_movimiento
-    /// 4. Descuenta el saldo de los lotes afectados
+    /// 4. Descuenta el saldo de los lotes afectados y libera la reserva (OBS-03)
     let confirmarDespachoFisicoTx
         (despachoId: OrdenId)
         (movimiento: MovimientoInventario)
         (lotesActualizados: (LoteId * decimal) list)
+        (deduccionesReserva: (LoteId * decimal) list)
         (contraparteNombre: string option)
         : Async<Result<unit, string>> =
         async {
@@ -518,16 +533,24 @@ module VentaRepository =
                     |}
                     do! conn.ExecuteAsync(sqlInsertLineaMov, paramsLineaMov, tx) |> Async.AwaitTask |> Async.Ignore
 
-                // 4. Actualizar stock de lotes
+                // 4. Actualizar stock de lotes: descontar cantidad_actual y liberar cantidad_reservada (OBS-03)
+                // Construir mapa de deducciones de reserva para lookup rápido
+                let reservaMap =
+                    deduccionesReserva
+                    |> List.map (fun (lid, cant) -> lid, cant)
+                    |> Map.ofList
+
                 let sqlUpdateLote = """
                     UPDATE lote
                     SET cantidad_actual = @nuevoSaldo,
+                        cantidad_reservada = GREATEST(0, cantidad_reservada - @deduccionReserva),
                         estado = CASE WHEN @nuevoSaldo <= 0 THEN 'Agotado' ELSE estado END
                     WHERE id = @lId
                 """
                 for (loteId, nuevoSaldo) in lotesActualizados do
                     let (LoteId lid) = loteId
-                    do! conn.ExecuteAsync(sqlUpdateLote, {| lId = lid; nuevoSaldo = nuevoSaldo |}, tx) |> Async.AwaitTask |> Async.Ignore
+                    let deduccion = reservaMap |> Map.tryFind loteId |> Option.defaultValue 0m
+                    do! conn.ExecuteAsync(sqlUpdateLote, {| lId = lid; nuevoSaldo = nuevoSaldo; deduccionReserva = deduccion |}, tx) |> Async.AwaitTask |> Async.Ignore
 
                 // 5. Actualizar orden_despacho (ahora movimiento_id ya existe en la tabla)
                 let sqlUpdateDespacho = """

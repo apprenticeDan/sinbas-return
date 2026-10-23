@@ -5,7 +5,8 @@ module Fifo =
     /// Resuelve la asignación de lotes para una cantidad requerida usando FIFO (First In, First Out).
     /// Retorna una lista de LineaMovimiento (asocia LoteId y Cantidad consumida de cada lote).
     /// Desacoplado de la lista histórica de movimientos: consulta directamente el saldo de lotes activos.
-    let resolverFIFO
+    let private resolverGenerico
+        (obtenerLotes: ProductoId -> Lote list -> (Lote * decimal) list)
         (productoId: ProductoId)
         (cantidadRequerida: Cantidad)
         (lotes: Lote list)
@@ -13,7 +14,7 @@ module Fifo =
         if cantidadRequerida.Valor <= 0m then
             Error (CantidadInvalida (sprintf "La cantidad requerida debe ser mayor a cero, recibido: %M" cantidadRequerida.Valor))
         else
-            let disponibles = Stock.lotesDisponibles productoId lotes
+            let disponibles = obtenerLotes productoId lotes
             let totalDisponibleBase = disponibles |> List.sumBy snd
             let reqBase = Cantidad.aUnidadBase cantidadRequerida
 
@@ -47,3 +48,12 @@ module Fifo =
                                 consumir (restante - aTomarBase) tail (linea :: acc)
 
             consumir reqBase disponibles []
+
+    /// Resuelve la asignación de lotes para una cantidad requerida usando FIFO comercial (deduciendo reservas).
+    /// Retorna una lista de LineaMovimiento (asocia LoteId y Cantidad consumida de cada lote).
+    let resolverFIFO (productoId: ProductoId) (cantidadRequerida: Cantidad) (lotes: Lote list) =
+        resolverGenerico Stock.lotesDisponibles productoId cantidadRequerida lotes
+
+    /// Resuelve la asignación de lotes para despacho físico en almacén usando FIFO sobre el stock físico real (OBS-03).
+    let resolverFIFODespacho (productoId: ProductoId) (cantidadRequerida: Cantidad) (lotes: Lote list) =
+        resolverGenerico Stock.lotesFisicosParaDespacho productoId cantidadRequerida lotes

@@ -1,0 +1,26 @@
+meta {
+  name: 02b - Verificar que stock disponible disminuye por reserva formal post-confirmacion
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/inventario/stock/01917f3a-0003-7000-8000-000000000001
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenComercial}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.stockTotalGramos: isNumber
+  res.body.stockDisponibleVentaGramos: isNumber
+}
+
+tests {
+  test("stock disponible es menor al stock fisico por la reserva formal", function() {
+    expect(res.body.stockDisponibleVentaGramos).to.be.below(res.body.stockTotalGramos);
+  });
+}
