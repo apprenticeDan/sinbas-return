@@ -195,3 +195,73 @@ let ``// RF-08 | CU-11 - Anulacion de OrdenVenta en estado Confirmada registra m
             Assert.Equal(ahora, an.Fecha)
         | _ -> failwith "Se esperaba estado Anulada"
     | Error e -> failwithf "%A" e
+
+// ─────────────────────────────────────────────────────────────
+// Tests OBS-03: Reserva formal de stock en confirmación de venta y liberación en despacho
+// ─────────────────────────────────────────────────────────────
+
+[<Fact>]
+let ``// OBS-03: Reserva formal reduce stock disponible para ventas posteriores pero stock fisico permanece`` () =
+    let pId = ProductoId (Guid.NewGuid())
+    let lId = LoteId (Guid.NewGuid())
+    let cod = unwrap (CodigoLote.generar "Cedrela" "odorata" (DateOnly(2026, 10, 1)) 1)
+    let cantInicial = cantReconst 100m Kilogramo
+    let lote = unwrap (Lote.crear lId cod pId None cantInicial (DateOnly(2026, 10, 1)) None None)
+
+    // Inicialmente disponible = 100 kg (100000 g)
+    Assert.Equal(100000m, Stock.disponibleParaVenta pId [ lote ])
+    Assert.Equal(100000m, Stock.stockFisicoProducto pId [ lote ])
+
+    // Se reserva 40 kg para una venta confirmada
+    let aReservar = cantReconst 40m Kilogramo
+    let loteReservado = unwrap (Lote.reservar aReservar lote)
+
+    // Stock disponible se reduce a 60 kg (60000 g), físico sigue en 100 kg
+    Assert.Equal(60000m, Stock.disponibleParaVenta pId [ loteReservado ])
+    Assert.Equal(100000m, Stock.stockFisicoProducto pId [ loteReservado ])
+
+[<Fact>]
+let ``// OBS-03: Despacho fisico consume stock fisico y libera la reserva asociada`` () =
+    let pId = ProductoId (Guid.NewGuid())
+    let lId = LoteId (Guid.NewGuid())
+    let cod = unwrap (CodigoLote.generar "Cedrela" "odorata" (DateOnly(2026, 10, 1)) 1)
+    let cantInicial = cantReconst 100m Kilogramo
+    let lote = unwrap (Lote.crear lId cod pId None cantInicial (DateOnly(2026, 10, 1)) None None)
+
+    // Reservar 40 kg
+    let loteReservado = unwrap (Lote.reservar (cantReconst 40m Kilogramo) lote)
+
+    // Despachar los 40 kg en almacén
+    let loteDespachado = unwrap (Lote.despacharReserva (cantReconst 40m Kilogramo) loteReservado)
+
+    // Stock físico ahora es 60 kg (60000 g), reserva liberada (0 g), disponible = 60 kg (60000 g)
+    Assert.Equal(60000m, Stock.stockFisicoProducto pId [ loteDespachado ])
+    Assert.Equal(60000m, Stock.disponibleParaVenta pId [ loteDespachado ])
+    Assert.Equal(0m, Cantidad.aUnidadBase loteDespachado.CantidadReservada)
+    Assert.Equal(60m, Cantidad.valor loteDespachado.CantidadActual)
+
+[<Fact>]
+let ``// OBS-03: Fifo.resolverFIFODespacho permite despachar lotes totalmente reservados mientras que Fifo.resolverFIFO bloquea nueva venta por stock insuficiente`` () =
+    let pId = ProductoId (Guid.NewGuid())
+    let lId = LoteId (Guid.NewGuid())
+    let cod = unwrap (CodigoLote.generar "Cedrela" "odorata" (DateOnly(2026, 10, 1)) 1)
+    let cantInicial = cantReconst 50m Kilogramo
+    let lote = unwrap (Lote.crear lId cod pId None cantInicial (DateOnly(2026, 10, 1)) None None)
+
+    // Lote con 50 kg se reserva al 100% (50 kg) por venta previa
+    let loteTotalmenteReservado = unwrap (Lote.reservar (cantReconst 50m Kilogramo) lote)
+
+    // 1. Una nueva proforma/venta intentando reservar 10 kg debe fallar (stock insuficiente disponible = 0)
+    let reqNuevaVenta = cantReconst 10m Kilogramo
+    match Fifo.resolverFIFO pId reqNuevaVenta [ loteTotalmenteReservado ] with
+    | Error (StockInsuficiente msg) -> Assert.Contains("insuficiente", msg.ToLowerInvariant())
+    | res -> failwithf "Se esperaba fallo por stock disponible agotado en resolverFIFO, se obtuvo: %A" res
+
+    // 2. El despacho físico en almacén para la venta de 50 kg SÍ debe resolverse exitosamente porque el stock físico está en almacén
+    let reqDespacho = cantReconst 50m Kilogramo
+    match Fifo.resolverFIFODespacho pId reqDespacho [ loteTotalmenteReservado ] with
+    | Ok lineas ->
+        Assert.Single(lineas) |> ignore
+        Assert.Equal(lId, lineas.[0].Referencia)
+        Assert.Equal(50m, Cantidad.valor lineas.[0].Cantidad)
+    | Error err -> failwithf "Se esperaba éxito en resolverFIFODespacho, se obtuvo: %A" err

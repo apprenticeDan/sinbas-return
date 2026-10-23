@@ -434,7 +434,7 @@ module InventoryService =
                     let! lotes = listarLotesPorProducto (Some prodId) None
                     let! movimientos = listarTodosMovimientos ()
 
-                    let stockTotalGramos = Stock.stockProducto prodId lotes
+                    let stockTotalGramos = Stock.stockFisicoProducto prodId lotes
                     let stockVentaGramos = Stock.disponibleParaVenta prodId lotes
 
                     let lotesDtos =

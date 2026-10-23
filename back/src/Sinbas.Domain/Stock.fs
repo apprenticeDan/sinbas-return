@@ -63,6 +63,14 @@ module Stock =
         |> List.filter (fun (_, stock) -> stock > 0m)
         |> List.sortBy (fun (l, _) -> l.FechaIngreso)
 
+    /// Obtiene lotes activos ordenados por FechaIngreso (FIFO) con saldo físico mayor a cero (para ejecución física de despacho en almacén)
+    let lotesFisicosParaDespacho (productoId: ProductoId) (lotes: Lote list) : (Lote * decimal) list =
+        lotes
+        |> List.filter (fun l -> l.ProductoId = productoId && Lote.estaActivo l)
+        |> List.map (fun l -> l, stockFisicoLote l)
+        |> List.filter (fun (_, stock) -> stock > 0m)
+        |> List.sortBy (fun (l, _) -> l.FechaIngreso)
+
     /// Valida si el stock disponible cubre la cantidad requerida, considerando unidades compatibles
     let validarDisponibilidad (disponible: Cantidad) (requerida: Cantidad) : Result<unit, DomainError> =
         if not (Cantidad.sonCompatibles disponible requerida) then
