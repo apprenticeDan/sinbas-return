@@ -378,10 +378,11 @@ module InventoryService =
                             | Entrada (DonacionRecibida d) -> sprintf "Donación (%s)" d
                             | Entrada (Devolucion _) -> "Devolución"
                             | Entrada (TruequeEntrada _) -> "Trueque"
+                            | Entrada (DevolucionAnulacion (OrdenId oId)) -> sprintf "Devolución por Anulación (Orden %s)" (oId.ToString("D"))
                             | Salida (Venta _) -> "Venta"
                             | Salida (MuestraLab _) -> "Muestra Lab"
                             | Salida (Merma c) -> sprintf "Merma (%s)" c
-                            | Salida (UsoInterno u) -> sprintf "Uso Interno (%s)" u
+                            | Salida (UsoInterno (d, s)) -> sprintf "Uso Interno [%s] (%s)" (DestinoUso.aTexto d) s
                             | Salida (DonacionEnviada d) -> sprintf "Donación (%s)" d
                             | Salida (TruequeSalida _) -> "Trueque"
 
@@ -620,12 +621,13 @@ module InventoryService =
                             | TruequeEntrada _ -> "Trueque / Intercambio"
                             | DonacionRecibida don -> sprintf "Donación: %s" don
                             | Devolucion _ -> "Devolución"
+                            | DevolucionAnulacion (OrdenId oId) -> sprintf "Devolución Anulación: %s" (oId.ToString("D"))
                         | Salida m ->
                             match m with
                             | Venta _ -> "Venta"
                             | Merma causa -> sprintf "Merma: %s" causa
                             | MuestraLab _ -> "Muestra Lab"
-                            | UsoInterno desc -> sprintf "Uso Interno: %s" desc
+                            | UsoInterno (d, s) -> sprintf "Uso Interno [%s]: %s" (DestinoUso.aTexto d) s
                             | DonacionEnviada dest -> sprintf "Donación: %s" dest
                             | TruequeSalida _ -> "Trueque / Intercambio"
 
@@ -748,18 +750,21 @@ module InventoryService =
                                 | "UsoLabor" | "MuestraLab" ->
                                     MuestraLab (LaboratorioId (Guid.Parse("01917f3a-0008-7000-8000-000000000001")))
                                 | "UsoVivero" | "UsoInterno" ->
-                                    // EXTENSIBILITY(F9): Departamento y Solicitante se persistirán en columnas dedicadas
-                                    let partes = [
-                                        if not (String.IsNullOrWhiteSpace req.Departamento) then sprintf "[Depto: %s]" req.Departamento
-                                        if not (String.IsNullOrWhiteSpace req.Solicitante) then sprintf "[Solicitante: %s]" req.Solicitante
-                                        if not (String.IsNullOrWhiteSpace req.Observaciones) then req.Observaciones
-                                    ]
-                                    let desc = if List.isEmpty partes then "Uso Interno" else String.concat " " partes
-                                    UsoInterno desc
+                                    let destino =
+                                        if not (String.IsNullOrWhiteSpace req.Departamento) then
+                                            DestinoUso.desdeTexto req.Departamento
+                                        elif req.TipoEgreso = "UsoVivero" then
+                                            DestinoUso.Vivero
+                                        else
+                                            DestinoUso.Otro "General"
+                                    let solicitante = if String.IsNullOrWhiteSpace req.Solicitante then "Personal Interno" else req.Solicitante.Trim()
+                                    UsoInterno (destino, solicitante)
                                 | "Intercambio" | "Trueque" ->
                                     TruequeSalida (TruequeId (Guid.Parse("01917f3a-0007-7000-8000-000000000001")))
                                 | _ ->
-                                    UsoInterno (if String.IsNullOrWhiteSpace req.TipoEgreso then "Salida General" else req.TipoEgreso)
+                                    let dest = DestinoUso.desdeTexto req.TipoEgreso
+                                    let sol = if String.IsNullOrWhiteSpace req.Solicitante then "General" else req.Solicitante.Trim()
+                                    UsoInterno (dest, sol)
 
                             let nuevoMovId = MovimientoId (Identidad.nuevo ())
                             let obsMovOpt = if String.IsNullOrWhiteSpace req.Observaciones then None else Some req.Observaciones
