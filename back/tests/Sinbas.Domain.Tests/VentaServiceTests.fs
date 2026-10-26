@@ -234,3 +234,89 @@ let ``confirmarDespachoFisico descuenta reserva y stock fisico enviando Cantidad
         Assert.Equal(loteId, lid)
         Assert.Equal(Gramo, c.Unidad)
         Assert.Equal(2000m, c.Valor)
+
+[<Fact>]
+let ``confirmarVenta OBS-04: proforma con FechaVencimiento en el pasado no bloquea y retorna Ok`` () =
+    let prodId = ProductoId (Guid.NewGuid())
+    let loteId = LoteId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let proformaId = ProformaId (Guid.NewGuid())
+    let responsableId = UsuarioId (Guid.NewGuid())
+    let prod = mkProducto prodId true
+    let lote = mkLote loteId prodId 5000m 0m Gramo
+    let ayer = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1))
+    let proforma =
+        { mkProforma proformaId clienteId responsableId
+            [ { ProductoId = prodId
+                Cantidad = cantReconst 1m Kilogramo
+                PrecioUnitario = 100m } ]
+          with FechaVencimiento = Some ayer
+               Estado = EstadoProforma.Vigente }
+    let cliente = mkCliente clienteId
+
+    let mutable llamadoTx = false
+    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
+        async { llamadoTx <- true; return Ok () }
+
+    let res =
+        VentaService.confirmarVenta
+            (fun _ -> async { return Some proforma })
+            (fun _ -> async { return Some cliente })
+            (fun _ -> async { return Some prod })
+            (fun _ _ -> async { return [ lote ] })
+            mockTx
+            (fun _ -> "Producto")
+            (fun _ -> "Cliente")
+            (let (UsuarioId g) = responsableId in g)
+            (let (ProformaId g) = proformaId in g.ToString())
+            { ClienteId = None }
+        |> Async.RunSynchronously
+
+    match res with
+    | Error (msg, code) -> failwithf "No debió fallar por fecha de vencimiento: %s (code=%d)" msg code
+    | Ok ventaConfirmada ->
+        Assert.True(llamadoTx, "confirmarVentaTx debió ejecutarse")
+        Assert.Equal("OV-", ventaConfirmada.Venta.Codigo.Substring(0, 3))
+
+[<Fact>]
+let ``confirmarVenta OBS-04: proforma con Estado Vencida no bloquea y retorna Ok`` () =
+    let prodId = ProductoId (Guid.NewGuid())
+    let loteId = LoteId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let proformaId = ProformaId (Guid.NewGuid())
+    let responsableId = UsuarioId (Guid.NewGuid())
+    let prod = mkProducto prodId true
+    let lote = mkLote loteId prodId 5000m 0m Gramo
+    let ayer = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-5))
+    let proforma =
+        { mkProforma proformaId clienteId responsableId
+            [ { ProductoId = prodId
+                Cantidad = cantReconst 1m Kilogramo
+                PrecioUnitario = 100m } ]
+          with FechaVencimiento = Some ayer
+               Estado = EstadoProforma.Vencida }
+    let cliente = mkCliente clienteId
+
+    let mutable llamadoTx = false
+    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
+        async { llamadoTx <- true; return Ok () }
+
+    let res =
+        VentaService.confirmarVenta
+            (fun _ -> async { return Some proforma })
+            (fun _ -> async { return Some cliente })
+            (fun _ -> async { return Some prod })
+            (fun _ _ -> async { return [ lote ] })
+            mockTx
+            (fun _ -> "Producto")
+            (fun _ -> "Cliente")
+            (let (UsuarioId g) = responsableId in g)
+            (let (ProformaId g) = proformaId in g.ToString())
+            { ClienteId = None }
+        |> Async.RunSynchronously
+
+    match res with
+    | Error (msg, code) -> failwithf "No debió fallar con estado Vencida: %s (code=%d)" msg code
+    | Ok ventaConfirmada ->
+        Assert.True(llamadoTx, "confirmarVentaTx debió ejecutarse")
+        Assert.Equal("OV-", ventaConfirmada.Venta.Codigo.Substring(0, 3))

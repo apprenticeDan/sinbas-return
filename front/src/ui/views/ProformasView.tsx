@@ -85,10 +85,8 @@ export const ProformasView: Component = () => {
     setObservaciones('');
     setFormError(null);
 
-    // Fecha de vencimiento por defecto: hoy + 7 días
-    const hoy = new Date();
-    hoy.setDate(hoy.getDate() + 7);
-    setFechaVencimiento(hoy.toISOString().split('T')[0]);
+    // Fecha de vencimiento referencial: default vacío (opcional)
+    setFechaVencimiento('');
 
     // Iniciar con 1 línea vacía
     setLineas([crearLineaVacia()]);
@@ -550,7 +548,7 @@ export const ProformasView: Component = () => {
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                   <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Fecha de Vencimiento (Opcional)</label>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Fecha de referencia (opcional)</label>
                     <input
                       type="date"
                       class="input-field text-sm w-full"
