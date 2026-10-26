@@ -213,6 +213,39 @@ module VentaEndpoints =
         |> ignore
 
         // ─────────────────────────────────────────────────────────
+        // 3b. PUT /api/ventas/{id}/anular (RequireComercial)
+        // Anula la orden de venta y libera reservas de stock (RN04)
+        // ─────────────────────────────────────────────────────────
+        app.MapPut("/api/ventas/{id}/anular", Func<HttpContext, string, AnularVentaRequest, Threading.Tasks.Task<IResult>>(fun ctx id req ->
+            async {
+                let! responsableId = resolverEmpleadoId ctx
+                let nombreProdResolver = crearNombreProductoResolver ()
+                let nombreCliResolver = crearNombreClienteResolver ()
+                let motivo = if isNull (box req) then "" else defaultArg (Option.ofObj req.Motivo) ""
+
+                let! res =
+                    VentaService.anularVenta
+                        VentaRepository.obtenerVentaPorId
+                        VentaRepository.anularVentaTx
+                        nombreProdResolver
+                        nombreCliResolver
+                        responsableId
+                        id
+                        motivo
+
+                match res with
+                | Ok dto -> return Results.Ok(dto)
+                | Error (msg, 404) -> return Results.NotFound({| error = msg |})
+                | Error (msg, 409) -> return Results.Conflict({| error = msg |})
+                | Error (msg, _)   -> return Results.BadRequest({| error = msg |})
+            } |> Async.StartAsTask
+        ))
+            .RequireAuthorization("RequireComercial")
+            .WithName("AnularVenta")
+            .WithTags("Ventas")
+        |> ignore
+
+        // ─────────────────────────────────────────────────────────
         // 4. GET /api/despachos/pendientes (RequireAlmacen)
         // Lista de órdenes de despacho pendientes para Almacén
         // ─────────────────────────────────────────────────────────
@@ -272,7 +305,7 @@ module VentaEndpoints =
 
         // ─────────────────────────────────────────────────────────
         // 6. POST /api/despachos/{id}/confirmar (RequireAlmacen)
-        // Ejecución física de salida de inventario y cierre de orden con FIFO (RN12 / RNF05)
+        // Ejecución física de salida de inventario y cierre de orden con reserva_stock (RN12 / RNF05 / Fase 4)
         // ─────────────────────────────────────────────────────────
         app.MapPost("/api/despachos/{id}/confirmar", Func<HttpContext, string, ConfirmarDespachoRequest, Threading.Tasks.Task<IResult>>(fun ctx id req ->
             async {
@@ -282,8 +315,6 @@ module VentaEndpoints =
                 let! res =
                     VentaService.confirmarDespachoFisico
                         VentaRepository.obtenerDespachoPorId
-                        LoteRepository.listar
-                        ClientRepository.obtenerPorId
                         VentaRepository.confirmarDespachoFisicoTx
                         responsableId
                         id

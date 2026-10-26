@@ -67,3 +67,11 @@ ALTER TABLE linea_movimiento
 ALTER TABLE linea_movimiento
     ADD CONSTRAINT chk_linea_movimiento_cantidad_positiva
         CHECK (cantidad > 0);
+
+-- ─────────────────────────────────────────────────────────────
+-- Fase 1+2: integridad de reservas de stock (recuperado — no se
+-- había persistido en el script original de la fase)
+-- ─────────────────────────────────────────────────────────────
+ALTER TABLE lote DROP CONSTRAINT IF EXISTS chk_cantidad_reservada_range;
+ALTER TABLE lote ADD CONSTRAINT chk_cantidad_reservada_range
+  CHECK (cantidad_reservada >= 0 AND cantidad_reservada <= cantidad_actual);

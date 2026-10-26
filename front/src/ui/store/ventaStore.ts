@@ -91,6 +91,18 @@ export const ventaStore = {
     }
   },
 
+  async anularVenta(id: string, motivo: string): Promise<OrdenVentaDto> {
+    setError(null);
+    try {
+      const result = await VentaUseCases.anularVenta(id, motivo);
+      await ventaStore.cargarVentas();
+      return result;
+    } catch (err: any) {
+      setError(err.message || 'Error al anular la orden de venta');
+      throw err;
+    }
+  },
+
   limpiarSeleccion() {
     setDespachoSeleccionado(null);
   },

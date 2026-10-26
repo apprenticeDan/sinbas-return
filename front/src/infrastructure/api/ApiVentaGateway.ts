@@ -31,4 +31,11 @@ export const ApiVentaGateway = {
   async obtenerVentaPorId(id: string): Promise<OrdenVentaDto> {
     return httpClient<OrdenVentaDto>(`/ventas/${id}`);
   },
+
+  async anularVenta(id: string, motivo: string): Promise<OrdenVentaDto> {
+    return httpClient<OrdenVentaDto>(`/ventas/${id}/anular`, {
+      method: 'PUT',
+      body: JSON.stringify({ motivo }),
+    });
+  },
 };
