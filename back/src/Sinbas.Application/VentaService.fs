@@ -232,21 +232,12 @@ module VentaService =
 
                     let hoy = DateOnly.FromDateTime(DateTime.UtcNow)
 
-                    // 2. Validar estado de la proforma (RN14)
-                    match proforma.Estado with
-                    | EstadoProforma.Anulada ->
+                    // 2. Validar estado de la proforma (RN14 + OBS-04: no bloquea por fecha)
+                    if proforma.Estado = EstadoProforma.Anulada then
                         return Error ("No se puede confirmar una proforma que ha sido anulada.", 409)
-                    | EstadoProforma.Convertida ->
+                    elif proforma.Estado = EstadoProforma.Convertida then
                         return Error ("La proforma ya fue convertida a orden de venta previamente.", 409)
-                    | EstadoProforma.Vencida ->
-                        return Error ("La proforma se encuentra vencida y no puede convertirse a venta.", 409)
-                    | EstadoProforma.Vigente ->
-
-                    // Verificar proyección de fecha de vencimiento a hoy
-                    match proforma.FechaVencimiento with
-                    | Some fv when hoy > fv ->
-                        return Error (sprintf "La proforma venció el %s y no puede convertirse a venta." (fv.ToString("yyyy-MM-dd")), 409)
-                    | _ ->
+                    else
 
                     // 3. Resolver y validar ClienteId obligatorio (D4)
                     let! clienteIdFinal =
