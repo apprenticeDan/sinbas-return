@@ -177,6 +177,7 @@ module Lote =
                         Ok { lote with CantidadReservada = nuevaReservada }
 
     /// Descuenta simultáneamente el stock físico y la reserva al ejecutar despacho físico en almacén (OBS-03)
+    /// Precondiciones estrictas: lote Activo, stock físico suficiente, reserva previa suficiente.
     let despacharReserva (cantidadADespachar: Cantidad) (lote: Lote) : Result<Lote, DomainError> =
         if cantidadADespachar.Valor <= 0m then
             Error (CantidadInvalida "La cantidad a despachar debe ser mayor a cero")
@@ -184,22 +185,33 @@ module Lote =
             let reqBase = Cantidad.aUnidadBase cantidadADespachar
             let saldoBase = Cantidad.aUnidadBase lote.CantidadActual
             let reservadaBase = Cantidad.aUnidadBase lote.CantidadReservada
-            let nuevoSaldoBase = max 0m (saldoBase - reqBase)
-            let nuevaReservaBase = max 0m (reservadaBase - reqBase)
 
-            let targetUnit = lote.CantidadActual.Unidad
-            let uBase = UnidadMedida.unidadBase targetUnit
-            match UnidadMedida.convertir uBase targetUnit nuevoSaldoBase, UnidadMedida.convertir uBase targetUnit nuevaReservaBase with
-            | Ok valSaldo, Ok valReserva ->
-                match Cantidad.reconstruir valSaldo targetUnit, Cantidad.reconstruir valReserva targetUnit with
-                | Ok nuevaCantActual, Ok nuevaCantReservada ->
-                    let nuevoEstado =
-                        match lote.Estado with
-                        | Activo when nuevoSaldoBase <= 0m -> Agotado
-                        | otro -> otro
-                    Ok { lote with CantidadActual = nuevaCantActual; CantidadReservada = nuevaCantReservada; Estado = nuevoEstado }
+            if lote.Estado <> Activo then
+                Error (OperacionInvalida (sprintf "Solo se puede despachar de un lote Activo (estado actual: %A)" lote.Estado))
+            elif reqBase > saldoBase then
+                Error (StockInsuficiente (
+                    sprintf "Stock físico insuficiente en lote '%s'. Físico: %.2f, Solicitado: %.2f"
+                        (CodigoLote.valor lote.Codigo) saldoBase reqBase))
+            elif reqBase > reservadaBase then
+                Error (OperacionInvalida (
+                    sprintf "Reserva insuficiente en lote '%s'. Reservada: %.2f, Solicitado: %.2f. El despacho requiere reserva previa."
+                        (CodigoLote.valor lote.Codigo) reservadaBase reqBase))
+            else
+                let nuevoSaldoBase = saldoBase - reqBase
+                let nuevaReservaBase = reservadaBase - reqBase
+                let targetUnit = lote.CantidadActual.Unidad
+                let uBase = UnidadMedida.unidadBase targetUnit
+                match UnidadMedida.convertir uBase targetUnit nuevoSaldoBase, UnidadMedida.convertir uBase targetUnit nuevaReservaBase with
+                | Ok valSaldo, Ok valReserva ->
+                    match Cantidad.reconstruir valSaldo targetUnit, Cantidad.reconstruir valReserva targetUnit with
+                    | Ok nuevaCantActual, Ok nuevaCantReservada ->
+                        let nuevoEstado =
+                            match lote.Estado with
+                            | Activo when nuevoSaldoBase <= 0m -> Agotado
+                            | otro -> otro
+                        Ok { lote with CantidadActual = nuevaCantActual; CantidadReservada = nuevaCantReservada; Estado = nuevoEstado }
+                    | Error err, _ | _, Error err -> Error err
                 | Error err, _ | _, Error err -> Error err
-            | Error err, _ | _, Error err -> Error err
 
     /// Libera stock reservado cuando una orden de venta es anulada antes de su despacho
     let liberarReserva (cantidadALiberar: Cantidad) (lote: Lote) : Result<Lote, DomainError> =
