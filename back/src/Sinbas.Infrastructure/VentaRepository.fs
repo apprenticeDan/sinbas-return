@@ -242,10 +242,10 @@ module VentaRepository =
                     estado = EstadoVenta.aTexto ordenVenta.Estado
                     creado_en = ordenVenta.CreadoEn
                 |}
-                let! insVenta = conn.ExecuteAsync(sqlCabVenta, paramsCabVenta, tx) |> Async.AwaitTask
-                if insVenta <> 1 then
+                let! affectedVenta = conn.ExecuteAsync(sqlCabVenta, paramsCabVenta, tx) |> Async.AwaitTask
+                if affectedVenta <> 1 then
                     tx.Rollback()
-                    return Error (sprintf "No se pudo insertar orden_venta (rows=%d)" insVenta)
+                    return Error (sprintf "No se pudo insertar orden_venta (affectedRows=%d)" affectedVenta)
                 else
 
                 // 4. Insertar líneas de OrdenVenta
@@ -277,7 +277,7 @@ module VentaRepository =
                     |> Option.map (fun (ClienteId id) -> box id)
                     |> Option.defaultValue (box DBNull.Value)
 
-                let! insDesp =
+                let! affectedDesp =
                     conn.ExecuteAsync(sqlCabDespacho, {|
                         id = odId
                         codigo = CodigoDespacho.valor ordenDespacho.Codigo
@@ -289,9 +289,9 @@ module VentaRepository =
                         creado_en = ordenDespacho.CreadoEn
                     |}, tx)
                     |> Async.AwaitTask
-                if insDesp <> 1 then
+                if affectedDesp <> 1 then
                     tx.Rollback()
-                    return Error (sprintf "No se pudo insertar orden_despacho (rows=%d)" insDesp)
+                    return Error (sprintf "No se pudo insertar orden_despacho (affectedRows=%d)" affectedDesp)
                 else
 
                 // 6. Insertar líneas de OrdenDespacho
@@ -324,8 +324,11 @@ module VentaRepository =
                 match persistRes with
                 | Error msg -> tx.Rollback(); return Error msg
                 | Ok () ->
-                    tx.Commit()
-                    return Ok ()
+                    match! ReservaStockRepository.insertarBatch conn tx ordenVenta.Id reservasLotes with
+                    | Error msg -> tx.Rollback(); return Error msg
+                    | Ok () ->
+                        tx.Commit()
+                        return Ok ()
             with ex ->
                 tx.Rollback()
                 eprintfn "[VentaRepository.confirmarVentaTx] Error: %s" ex.Message
@@ -507,18 +510,13 @@ module VentaRepository =
                         None)
         }
 
-    /// Confirmación física de salida de inventario (Almacén - RN12 / FIFO / RNF05 / OBS-03)
-    /// Ejecuta atómicamente:
-    /// 1. Lock orden_despacho + lotes afectados con FOR UPDATE
-    /// 2. Aplica Lote.despacharReserva (descuento físico + liberación de reserva por dominio)
-    /// 3. Inserta el movimiento de inventario (Salida / Venta) y sus lineas_movimiento
-    /// 4. Cierra orden de despacho y orden de venta
+    /// Confirmación física de salida de inventario (Almacén - RN12 / RNF05 / OBS-03 / Fase 4)
+    /// Consume atómicamente las reservas activas registradas en reserva_stock para la venta.
     let confirmarDespachoFisicoTx
         (despachoId: OrdenId)
         (movimiento: MovimientoInventario)
-        (deducciones: (LoteId * Cantidad) list)
         (contraparteNombre: string option)
-        : Async<Result<unit, string>> =
+        : Async<Result<LineaMovimientoDto list, string>> =
         async {
             use conn = DbConnection.crear ()
             conn.Open()
@@ -532,87 +530,260 @@ module VentaRepository =
                 let sqlCheckDesp = "SELECT * FROM orden_despacho WHERE id = @did FOR UPDATE"
                 let! despRows = conn.QueryAsync<OrdenDespachoRow>(sqlCheckDesp, {| did = did |}, tx) |> Async.AwaitTask
                 match despRows |> Seq.tryHead with
-                | None -> tx.Rollback(); return Error "Orden de despacho no encontrada"
+                | None ->
+                    tx.Rollback()
+                    return Error "Orden de despacho no encontrada"
                 | Some despRow when despRow.estado <> "Pendiente" ->
                     tx.Rollback()
                     return Error (sprintf "La orden de despacho no está Pendiente (estado actual: '%s')" despRow.estado)
                 | Some despRow ->
 
-                // 2. Lock lotes y despachar con dominio
-                let loteIds = deducciones |> List.map fst
+                let origenTipoNorm =
+                    if isNull despRow.origen_tipo then ""
+                    else despRow.origen_tipo.Trim().ToLowerInvariant()
+
+                match origenTipoNorm with
+                | "deventa" | "venta" ->
+                    if not despRow.orden_venta_id.HasValue then
+                        tx.Rollback()
+                        return Error (sprintf "Orden de despacho %s de tipo Venta no tiene orden_venta_id" (did.ToString()))
+                    else
+                        let ovId = OrdenId despRow.orden_venta_id.Value
+
+                        // 2. Obtener reservas activas
+                        let! reservasRes = ReservaStockRepository.listarActivasPorVenta conn tx ovId
+                        match reservasRes with
+                        | Error msg ->
+                            tx.Rollback()
+                            return Error msg
+                        | Ok [] ->
+                            tx.Rollback()
+                            return Error (sprintf "No hay reservas activas para la orden %s" (despRow.orden_venta_id.Value.ToString()))
+                        | Ok reservas ->
+
+                        // 3. Lock lotes y despachar reserva con dominio
+                        let loteIds = reservas |> List.map fst
+                        let! lotesLockedRes = LoteRepository.obtenerMultiplesPorIdParaActualizacion conn tx loteIds
+                        match lotesLockedRes with
+                        | Error msg ->
+                            tx.Rollback()
+                            return Error msg
+                        | Ok lotesLocked ->
+
+                        let lotesPorId = lotesLocked |> List.map (fun l -> (l.Id, l)) |> Map.ofList
+
+                        let rec despacharTodo = function
+                            | [] -> Ok []
+                            | ((loteId, cantidad) :: rest) ->
+                                match Map.tryFind loteId lotesPorId with
+                                | None ->
+                                    Error (sprintf "Lote %A no encontrado tras lock" loteId)
+                                | Some lf ->
+                                    match Lote.despacharReserva cantidad lf with
+                                    | Error err ->
+                                        Error (sprintf "Despacho falló en lote '%s': %s"
+                                                (CodigoLote.valor lf.Codigo) (errorToString err))
+                                    | Ok ld ->
+                                        match despacharTodo rest with
+                                        | Error e -> Error e
+                                        | Ok acc -> Ok (ld :: acc)
+
+                        match despacharTodo reservas with
+                        | Error msg ->
+                            tx.Rollback()
+                            return Error msg
+                        | Ok lotesDespachados ->
+
+                        // 4. Persistir lotes actualizados (con affectedRows check)
+                        let rec persistirLotes = function
+                            | [] -> async { return Ok () }
+                            | lote :: rest ->
+                                async {
+                                    let! r = LoteRepository.actualizarStockYEstadoTx conn tx lote
+                                    match r with
+                                    | Ok () -> return! persistirLotes rest
+                                    | Error msg -> return Error msg
+                                }
+                        let! persistRes = persistirLotes lotesDespachados
+                        match persistRes with
+                        | Error msg ->
+                            tx.Rollback()
+                            return Error msg
+                        | Ok () ->
+
+                        // 5. Marcar reservas como despachadas
+                        let! marcarDespRes = ReservaStockRepository.marcarDespachada conn tx ovId movimiento.Id
+                        match marcarDespRes with
+                        | Error msg ->
+                            tx.Rollback()
+                            return Error msg
+                        | Ok () ->
+
+                        // 6. Insertar movimiento_inventario
+                        let sqlInsertMov = """
+                            INSERT INTO movimiento_inventario (id, fecha, responsable_id, tipo, motivo, orden_origen_id, contraparte_ref, contraparte_nombre, observaciones)
+                            VALUES (@id, @fecha, @responsable_id, @tipo, @motivo, @orden_origen_id, @contraparte_ref, @contraparte_nombre, @observaciones)
+                        """
+                        let cRefGuid =
+                            match movimiento.Tipo with
+                            | Salida (Venta (ClienteId cid)) -> box cid
+                            | _ -> box DBNull.Value
+
+                        let! affectedMov =
+                            conn.ExecuteAsync(sqlInsertMov, {|
+                                id = mId
+                                fecha = movimiento.Fecha
+                                responsable_id = eId
+                                tipo = "Salida"
+                                motivo = "Venta"
+                                orden_origen_id = box did
+                                contraparte_ref = cRefGuid
+                                contraparte_nombre = contraparteNombre |> Option.defaultValue null
+                                observaciones = movimiento.Observaciones |> Option.defaultValue null
+                            |}, tx)
+                            |> Async.AwaitTask
+                        if affectedMov <> 1 then
+                            tx.Rollback()
+                            return Error (sprintf "No se pudo insertar movimiento_inventario (affectedRows=%d)" affectedMov)
+                        else
+
+                        // 7. Insertar líneas de movimiento usando las reservas consumidas
+                        let sqlInsertLineaMov = """
+                            INSERT INTO linea_movimiento (id, movimiento_id, lote_id, cantidad, unidad, observaciones)
+                            VALUES (@id, @movimiento_id, @lote_id, @cantidad, @unidad, @observaciones)
+                        """
+                        for (LoteId lId, cant) in reservas do
+                            do! conn.ExecuteAsync(sqlInsertLineaMov, {|
+                                    id = Identidad.nuevo ()
+                                    movimiento_id = mId
+                                    lote_id = lId
+                                    cantidad = cant.Valor
+                                    unidad = UnidadMedida.aTexto cant.Unidad
+                                    observaciones = null
+                                |}, tx)
+                                |> Async.AwaitTask |> Async.Ignore
+
+                        // 8. Construir líneas DTO para retorno
+                        let lineasDto: LineaMovimientoDto list =
+                            reservas
+                            |> List.map (fun (lId, cant) ->
+                                let (LoteId gId) = lId
+                                let codigoStr =
+                                    lotesPorId
+                                    |> Map.tryFind lId
+                                    |> Option.map (fun l -> CodigoLote.valor l.Codigo)
+                                    |> Option.defaultValue ""
+                                { LoteId = gId.ToString()
+                                  CodigoLote = codigoStr
+                                  Cantidad = cant.Valor
+                                  Unidad = UnidadMedida.aTexto cant.Unidad })
+
+                        // 9. Actualizar orden_despacho
+                        let sqlUpdateDespacho = """
+                            UPDATE orden_despacho
+                            SET estado = 'Despachado', movimiento_id = @mId
+                            WHERE id = @did AND estado = 'Pendiente'
+                        """
+                        let! affectedDesp = conn.ExecuteAsync(sqlUpdateDespacho, {| did = did; mId = mId |}, tx) |> Async.AwaitTask
+                        if affectedDesp <> 1 then
+                            tx.Rollback()
+                            return Error (sprintf "UPDATE orden_despacho affectedRows=%d (esperado 1)" affectedDesp)
+                        else
+
+                        // 10. Actualizar orden_venta
+                        let! affectedVenta =
+                            conn.ExecuteAsync(
+                                "UPDATE orden_venta SET estado = 'Despachada' WHERE id = @ovId",
+                                {| ovId = despRow.orden_venta_id.Value |}, tx)
+                            |> Async.AwaitTask
+                        if affectedVenta <> 1 then
+                            tx.Rollback()
+                            return Error (sprintf "UPDATE orden_venta affectedRows=%d (esperado 1)" affectedVenta)
+                        else
+                            tx.Commit()
+                            return Ok lineasDto
+
+                | _ ->
+                    // TODO FASE-6: usar reserva_stock cuando uso interno reserve.
+                    tx.Rollback()
+                    return Error (sprintf "Despacho para origen_tipo '%s' no implementado con reserva_stock (pendiente Fase 6)" despRow.origen_tipo)
+            with ex ->
+                tx.Rollback()
+                eprintfn "[VentaRepository.confirmarDespachoFisicoTx] Error: %s" ex.Message
+                return Error ex.Message
+        }
+
+    /// Anulación de orden de venta con liberación transaccional de reservas (Fase 4 / RN04)
+    let anularVentaTx
+        (ventaId: OrdenId)
+        (motivo: string)
+        (anuladoPor: EmpleadoId)
+        : Async<Result<unit, string>> =
+        async {
+            use conn = DbConnection.crear ()
+            conn.Open()
+            use tx = conn.BeginTransaction()
+            try
+                let (OrdenId vid) = ventaId
+                let (EmpleadoId uId) = anuladoPor
+
+                // 1. Lock orden_venta y verificar estado
+                let sqlVenta = "SELECT * FROM orden_venta WHERE id = @vid FOR UPDATE"
+                let! vRows = conn.QueryAsync<OrdenVentaRow>(sqlVenta, {| vid = vid |}, tx) |> Async.AwaitTask
+                match vRows |> Seq.tryHead with
+                | None ->
+                    tx.Rollback()
+                    return Error (sprintf "Orden de venta %s no encontrada" (vid.ToString()))
+                | Some vRow when vRow.estado <> "Confirmada" ->
+                    tx.Rollback()
+                    return Error (sprintf "La orden de venta no está en estado Confirmada (estado actual: '%s')" vRow.estado)
+                | Some _ ->
+
+                // 2. Listar reservas activas
+                let! reservasRes = ReservaStockRepository.listarActivasPorVenta conn tx ventaId
+                match reservasRes with
+                | Error msg ->
+                    tx.Rollback()
+                    return Error msg
+                | Ok [] ->
+                    tx.Rollback()
+                    return Error "La venta no tiene reservas activas; posible inconsistencia. Contactar soporte."
+                | Ok reservas ->
+
+                // 3. Lock lotes y liberar reserva con dominio
+                let loteIds = reservas |> List.map fst
                 let! lotesLockedRes = LoteRepository.obtenerMultiplesPorIdParaActualizacion conn tx loteIds
                 match lotesLockedRes with
-                | Error msg -> tx.Rollback(); return Error msg
+                | Error msg ->
+                    tx.Rollback()
+                    return Error msg
                 | Ok lotesLocked ->
 
                 let lotesPorId = lotesLocked |> List.map (fun l -> (l.Id, l)) |> Map.ofList
 
-                let rec despacharTodo = function
+                let rec liberarTodo = function
                     | [] -> Ok []
                     | ((loteId, cantidad) :: rest) ->
                         match Map.tryFind loteId lotesPorId with
                         | None ->
                             Error (sprintf "Lote %A no encontrado tras lock" loteId)
                         | Some lf ->
-                            match Lote.despacharReserva cantidad lf with
+                            match Lote.liberarReserva cantidad lf with
                             | Error err ->
-                                Error (sprintf "Despacho falló en lote '%s': %s"
+                                Error (sprintf "Liberación de reserva falló en lote '%s': %s"
                                         (CodigoLote.valor lf.Codigo) (errorToString err))
-                            | Ok ld ->
-                                match despacharTodo rest with
+                            | Ok lr ->
+                                match liberarTodo rest with
                                 | Error e -> Error e
-                                | Ok acc -> Ok (ld :: acc)
+                                | Ok acc -> Ok (lr :: acc)
 
-                match despacharTodo deducciones with
-                | Error msg -> tx.Rollback(); return Error msg
-                | Ok lotesDespachados ->
-
-                // 3. Insertar movimiento_inventario
-                let sqlInsertMov = """
-                    INSERT INTO movimiento_inventario (id, fecha, responsable_id, tipo, motivo, orden_origen_id, contraparte_ref, contraparte_nombre, observaciones)
-                    VALUES (@id, @fecha, @responsable_id, @tipo, @motivo, @orden_origen_id, @contraparte_ref, @contraparte_nombre, @observaciones)
-                """
-                let cRefGuid =
-                    match movimiento.Tipo with
-                    | Salida (Venta (ClienteId cid)) -> box cid
-                    | _ -> box DBNull.Value
-
-                let! insMov =
-                    conn.ExecuteAsync(sqlInsertMov, {|
-                        id = mId
-                        fecha = movimiento.Fecha
-                        responsable_id = eId
-                        tipo = "Salida"
-                        motivo = "Venta"
-                        orden_origen_id = box did
-                        contraparte_ref = cRefGuid
-                        contraparte_nombre = contraparteNombre |> Option.defaultValue null
-                        observaciones = movimiento.Observaciones |> Option.defaultValue null
-                    |}, tx)
-                    |> Async.AwaitTask
-                if insMov <> 1 then
+                match liberarTodo reservas with
+                | Error msg ->
                     tx.Rollback()
-                    return Error (sprintf "No se pudo insertar movimiento_inventario (rows=%d)" insMov)
-                else
+                    return Error msg
+                | Ok lotesLiberados ->
 
-                // 4. Insertar líneas de movimiento
-                let sqlInsertLineaMov = """
-                    INSERT INTO linea_movimiento (id, movimiento_id, lote_id, cantidad, unidad, observaciones)
-                    VALUES (@id, @movimiento_id, @lote_id, @cantidad, @unidad, @observaciones)
-                """
-                for linea in movimiento.Lineas do
-                    let (LoteId lId) = linea.Referencia
-                    do! conn.ExecuteAsync(sqlInsertLineaMov, {|
-                            id = Identidad.nuevo ()
-                            movimiento_id = mId
-                            lote_id = lId
-                            cantidad = linea.Cantidad.Valor
-                            unidad = UnidadMedida.aTexto linea.Cantidad.Unidad
-                            observaciones = null
-                        |}, tx)
-                        |> Async.AwaitTask |> Async.Ignore
-
-                // 5. Persistir lotes (decremento físico + reserva por dominio)
+                // 4. Persistir lotes actualizados (con affectedRows check)
                 let rec persistirLotes = function
                     | [] -> async { return Ok () }
                     | lote :: rest ->
@@ -622,33 +793,53 @@ module VentaRepository =
                             | Ok () -> return! persistirLotes rest
                             | Error msg -> return Error msg
                         }
-                let! persistRes = persistirLotes lotesDespachados
+                let! persistRes = persistirLotes lotesLiberados
                 match persistRes with
-                | Error msg -> tx.Rollback(); return Error msg
+                | Error msg ->
+                    tx.Rollback()
+                    return Error msg
                 | Ok () ->
 
-                // 6. Actualizar orden_despacho
-                let sqlUpdateDespacho = """
-                    UPDATE orden_despacho
-                    SET estado = 'Despachado', movimiento_id = @mId
-                    WHERE id = @did AND estado = 'Pendiente'
-                """
-                let! updDesp = conn.ExecuteAsync(sqlUpdateDespacho, {| did = did; mId = mId |}, tx) |> Async.AwaitTask
-                if updDesp <> 1 then
+                // 5. Marcar reservas como liberadas
+                let! marcarRes = ReservaStockRepository.marcarLiberada conn tx ventaId
+                match marcarRes with
+                | Error msg ->
                     tx.Rollback()
-                    return Error (sprintf "UPDATE orden_despacho afectó %d filas" updDesp)
+                    return Error msg
+                | Ok () ->
+
+                // 6. UPDATE orden_venta
+                let sqlUpdVenta = """
+                    UPDATE orden_venta
+                    SET estado = 'Anulada',
+                        anulacion_motivo = @m,
+                        anulado_por = @u,
+                        anulado_en = NOW()
+                    WHERE id = @vid
+                """
+                let! affectedVenta = conn.ExecuteAsync(sqlUpdVenta, {| vid = vid; m = motivo; u = uId |}, tx) |> Async.AwaitTask
+                if affectedVenta <> 1 then
+                    tx.Rollback()
+                    return Error (sprintf "UPDATE orden_venta afectó %d filas (affectedRows=%d, esperado 1)" affectedVenta affectedVenta)
                 else
 
-                // 7. Actualizar orden_venta (si aplica)
-                if despRow.orden_venta_id.HasValue then
-                    let! updVenta =
-                        conn.ExecuteAsync(
-                            "UPDATE orden_venta SET estado = 'Despachada' WHERE id = @ovId",
-                            {| ovId = despRow.orden_venta_id.Value |}, tx)
-                        |> Async.AwaitTask
-                    if updVenta <> 1 then
+                // 7. UPDATE orden_despacho (si existe orden de despacho para la venta)
+                let sqlCheckDesp = "SELECT count(1) FROM orden_despacho WHERE orden_venta_id = @vid"
+                let! totalDesp = conn.ExecuteScalarAsync<int>(sqlCheckDesp, {| vid = vid |}, tx) |> Async.AwaitTask
+
+                if totalDesp > 0 then
+                    let sqlUpdDesp = """
+                        UPDATE orden_despacho
+                        SET estado = 'Anulada',
+                            anulacion_motivo = @m,
+                            anulado_por = @u,
+                            anulado_en = NOW()
+                        WHERE orden_venta_id = @vid AND estado = 'Pendiente'
+                    """
+                    let! affectedDesp = conn.ExecuteAsync(sqlUpdDesp, {| vid = vid; m = motivo; u = uId |}, tx) |> Async.AwaitTask
+                    if affectedDesp <> 1 then
                         tx.Rollback()
-                        return Error (sprintf "UPDATE orden_venta afectó %d filas" updVenta)
+                        return Error (sprintf "UPDATE orden_despacho afectó %d filas (affectedRows=%d, esperado 1)" affectedDesp affectedDesp)
                     else
                         tx.Commit()
                         return Ok ()
@@ -657,6 +848,6 @@ module VentaRepository =
                     return Ok ()
             with ex ->
                 tx.Rollback()
-                eprintfn "[VentaRepository.confirmarDespachoFisicoTx] Error: %s" ex.Message
+                eprintfn "[VentaRepository.anularVentaTx] Error: %s" ex.Message
                 return Error ex.Message
         }

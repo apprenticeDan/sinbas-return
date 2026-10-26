@@ -7,10 +7,42 @@ export const VentasView: Component = () => {
   const [filtroBusqueda, setFiltroBusqueda] = createSignal('');
   const [ventaDetalle, setVentaDetalle] = createSignal<OrdenVentaDto | null>(null);
   const [modalDetalleOpen, setModalDetalleOpen] = createSignal(false);
+  const [modalAnularOpen, setModalAnularOpen] = createSignal(false);
+  const [ventaAAnular, setVentaAAnular] = createSignal<OrdenVentaDto | null>(null);
+  const [motivoAnulacion, setMotivoAnulacion] = createSignal('');
+  const [errorAnulacion, setErrorAnulacion] = createSignal<string | null>(null);
+  const [loadingAnulacion, setLoadingAnulacion] = createSignal(false);
+  const [toastExito, setToastExito] = createSignal<string | null>(null);
 
   onMount(async () => {
     await ventaStore.cargarVentas();
   });
+
+  const abrirModalAnular = (venta: OrdenVentaDto) => {
+    setVentaAAnular(venta);
+    setMotivoAnulacion('');
+    setErrorAnulacion(null);
+    setModalAnularOpen(true);
+  };
+
+  const ejecutarAnulacion = async () => {
+    const v = ventaAAnular();
+    const motivo = motivoAnulacion().trim();
+    if (!v || motivo.length < 3) return;
+
+    setLoadingAnulacion(true);
+    setErrorAnulacion(null);
+    try {
+      await ventaStore.anularVenta(v.id, motivo);
+      setModalAnularOpen(false);
+      setToastExito(`Orden de venta ${v.codigo} anulada exitosamente.`);
+      setTimeout(() => setToastExito(null), 5000);
+    } catch (err: any) {
+      setErrorAnulacion(err.message || 'Error al anular la orden de venta');
+    } finally {
+      setLoadingAnulacion(false);
+    }
+  };
 
   const ventasFiltradas = createMemo(() => {
     const estado = filtroEstado().trim();
@@ -67,6 +99,13 @@ export const VentasView: Component = () => {
           </p>
         </div>
       </div>
+
+      {/* ─── Toast / Banner de Éxito ─── */}
+      <Show when={toastExito()}>
+        <div class="banner banner-success" style={{ 'margin-bottom': '16px' }}>
+          ✅ {toastExito()}
+        </div>
+      </Show>
 
       {/* ─── KPIs Resumen ─── */}
       <div style={{ display: 'grid', 'grid-template-columns': 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', 'margin-bottom': '20px' }}>
@@ -201,13 +240,24 @@ export const VentasView: Component = () => {
                         <span class={estadoBadgeClass(venta.estado)}>{venta.estado}</span>
                       </td>
                       <td style={{ padding: '12px 16px', 'text-align': 'center' }}>
-                        <button
-                          class="btn btn-ghost"
-                          style={{ 'font-size': '12px', padding: '4px 10px' }}
-                          onClick={() => verDetalle(venta)}
-                        >
-                          👁️ Ver Detalle
-                        </button>
+                        <div style={{ display: 'flex', gap: '6px', 'justify-content': 'center', 'align-items': 'center' }}>
+                          <button
+                            class="btn btn-ghost"
+                            style={{ 'font-size': '12px', padding: '4px 10px' }}
+                            onClick={() => verDetalle(venta)}
+                          >
+                            👁️ Ver Detalle
+                          </button>
+                          <Show when={venta.estado === 'Confirmada'}>
+                            <button
+                              class="btn btn-danger"
+                              style={{ 'font-size': '12px', padding: '4px 10px' }}
+                              onClick={() => abrirModalAnular(venta)}
+                            >
+                              🚫 Anular
+                            </button>
+                          </Show>
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -302,6 +352,61 @@ export const VentasView: Component = () => {
             <div class="modal-footer" style={{ 'margin-top': '20px', display: 'flex', 'justify-content': 'flex-end' }}>
               <button class="btn btn-secondary" onClick={() => setModalDetalleOpen(false)}>
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* ─── Modal de Anulación de Venta ─── */}
+      <Show when={modalAnularOpen() && ventaAAnular()}>
+        <div class="modal-backdrop" onClick={() => !loadingAnulacion() && setModalAnularOpen(false)}>
+          <div class="modal card" style={{ 'max-width': '520px', width: '90%' }} onClick={(e) => e.stopPropagation()}>
+            <div class="modal-header" style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'border-bottom': '1px solid var(--border-color)', 'padding-bottom': '12px' }}>
+              <h3 style={{ margin: '0', 'font-size': '18px', color: 'var(--rust, #c0392b)' }}>
+                Anular Orden de Venta: {ventaAAnular()?.codigo}
+              </h3>
+              <button class="btn btn-ghost" disabled={loadingAnulacion()} onClick={() => setModalAnularOpen(false)}>✕</button>
+            </div>
+
+            <div class="modal-body" style={{ 'margin-top': '16px', display: 'flex', 'flex-direction': 'column', gap: '12px' }}>
+              <p style={{ 'font-size': '13px', color: 'var(--ink-soft)', margin: '0' }}>
+                Esta acción cancelará la orden de venta y <strong>liberará las reservas de stock</strong> comprometidas en los lotes asociados.
+              </p>
+
+              <Show when={errorAnulacion()}>
+                <div class="banner banner-error" style={{ 'font-size': '13px' }}>
+                  {errorAnulacion()}
+                </div>
+              </Show>
+
+              <label style={{ 'font-size': '12.5px', 'font-weight': '600', color: 'var(--ink)' }}>
+                Motivo de anulación (mínimo 3 caracteres):
+              </label>
+              <textarea
+                rows={4}
+                placeholder="Indique el motivo por el cual se anula la venta..."
+                value={motivoAnulacion()}
+                onInput={(e) => setMotivoAnulacion(e.currentTarget.value)}
+                style={{ width: '100%', padding: '8px', 'box-sizing': 'border-box', 'font-family': 'inherit', resize: 'vertical' }}
+                disabled={loadingAnulacion()}
+              />
+            </div>
+
+            <div class="modal-footer" style={{ 'margin-top': '20px', display: 'flex', 'justify-content': 'flex-end', gap: '8px' }}>
+              <button
+                class="btn btn-secondary"
+                disabled={loadingAnulacion()}
+                onClick={() => setModalAnularOpen(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                class="btn btn-danger"
+                disabled={loadingAnulacion() || motivoAnulacion().trim().length < 3}
+                onClick={ejecutarAnulacion}
+              >
+                {loadingAnulacion() ? 'Anulando...' : 'Confirmar anulación'}
               </button>
             </div>
           </div>

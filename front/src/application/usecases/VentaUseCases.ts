@@ -17,4 +17,8 @@ export const VentaUseCases = {
   async obtenerVentaPorId(id: string): Promise<OrdenVentaDto> {
     return ApiVentaGateway.obtenerVentaPorId(id);
   },
+
+  async anularVenta(id: string, motivo: string): Promise<OrdenVentaDto> {
+    return ApiVentaGateway.anularVenta(id, motivo);
+  },
 };

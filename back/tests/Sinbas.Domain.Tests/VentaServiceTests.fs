@@ -199,8 +199,6 @@ let ``confirmarDespachoFisico descuenta reserva y stock fisico enviando Cantidad
     let despachoId = OrdenId (Guid.NewGuid())
     let clienteId = ClienteId (Guid.NewGuid())
     let responsableId = Guid.NewGuid()
-    let lote = mkLote loteId prodId 10000m 2000m Gramo
-    let cliente = mkCliente clienteId
 
     let ordenDespacho : OrdenDespacho =
         { Id = despachoId
@@ -211,15 +209,18 @@ let ``confirmarDespachoFisico descuenta reserva y stock fisico enviando Cantidad
           Estado = EstadoDespacho.Pendiente
           CreadoEn = DateTime.UtcNow }
 
-    let mutable capturadoDeducciones : (LoteId * Cantidad) list = []
-    let mockDespachoTx (_: OrdenId) (_: MovimientoInventario) (deducciones: (LoteId * Cantidad) list) (_: string option) =
-        async { capturadoDeducciones <- deducciones; return Ok () }
+    let mockLinea : LineaMovimientoDto =
+        { LoteId = (let (LoteId g) = loteId in g.ToString())
+          CodigoLote = "SWIETMAC-02608-01"
+          Cantidad = 2000m
+          Unidad = "Gramo" }
+
+    let mockDespachoTx (_: OrdenId) (_: MovimientoInventario) (_: string option) =
+        async { return Ok [ mockLinea ] }
 
     let res =
         VentaService.confirmarDespachoFisico
             (fun _ -> async { return Some ordenDespacho })
-            (fun _ _ -> async { return [ lote ] })
-            (fun _ -> async { return Some cliente })
             mockDespachoTx
             responsableId
             (let (OrdenId g) = despachoId in g.ToString())
@@ -229,11 +230,11 @@ let ``confirmarDespachoFisico descuenta reserva y stock fisico enviando Cantidad
     match res with
     | Error (msg, _) -> failwith msg
     | Ok dto ->
-        Assert.Single(capturadoDeducciones) |> ignore
-        let (lid, c) = capturadoDeducciones.Head
-        Assert.Equal(loteId, lid)
-        Assert.Equal(Gramo, c.Unidad)
-        Assert.Equal(2000m, c.Valor)
+        Assert.Single(dto.LineasDespachadas) |> ignore
+        let linea = dto.LineasDespachadas.Head
+        Assert.Equal("SWIETMAC-02608-01", linea.CodigoLote)
+        Assert.Equal("Gramo", linea.Unidad)
+        Assert.Equal(2000m, linea.Cantidad)
 
 [<Fact>]
 let ``confirmarVenta OBS-04: proforma con FechaVencimiento en el pasado no bloquea y retorna Ok`` () =
@@ -320,3 +321,251 @@ let ``confirmarVenta OBS-04: proforma con Estado Vencida no bloquea y retorna Ok
     | Ok ventaConfirmada ->
         Assert.True(llamadoTx, "confirmarVentaTx debió ejecutarse")
         Assert.Equal("OV-", ventaConfirmada.Venta.Codigo.Substring(0, 3))
+
+// ── Tests Fase 4: Reserva de stock, despacho y anulación ──
+
+[<Fact>]
+let ``confirmarVenta inserts reservas with preserved unit`` () =
+    let prodId = ProductoId (Guid.NewGuid())
+    let loteId = LoteId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let proformaId = ProformaId (Guid.NewGuid())
+    let responsableId = UsuarioId (Guid.NewGuid())
+    let prod = mkProducto prodId true
+    let lote = mkLote loteId prodId 5000m 0m Gramo
+    let proforma = mkProforma proformaId clienteId responsableId
+                        [ { ProductoId = prodId
+                            Cantidad = cantReconst 1m Kilogramo
+                            PrecioUnitario = 100m } ]
+    let cliente = mkCliente clienteId
+
+    let mutable capturado : (LoteId * Cantidad) list = []
+    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (reservas: (LoteId * Cantidad) list) =
+        async { capturado <- reservas; return Ok () }
+
+    let res =
+        VentaService.confirmarVenta
+            (fun _ -> async { return Some proforma })
+            (fun _ -> async { return Some cliente })
+            (fun _ -> async { return Some prod })
+            (fun _ _ -> async { return [ lote ] })
+            mockTx
+            (fun _ -> "Producto")
+            (fun _ -> "Cliente")
+            (let (UsuarioId g) = responsableId in g)
+            (let (ProformaId g) = proformaId in g.ToString())
+            { ClienteId = None }
+        |> Async.RunSynchronously
+
+    match res with
+    | Error (msg, _) -> failwith msg
+    | Ok _ ->
+        Assert.Single(capturado) |> ignore
+        let (lid, c) = capturado.Head
+        Assert.Equal(loteId, lid)
+        Assert.Equal(Gramo, c.Unidad)
+        Assert.Equal(1000m, c.Valor)
+
+[<Fact>]
+let ``confirmarDespachoFisico fails 409 if no active reservations`` () =
+    let despachoId = OrdenId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let responsableId = Guid.NewGuid()
+    let ordenDespacho : OrdenDespacho =
+        { Id = despachoId
+          Codigo = CodigoDespacho.reconstruir "DSP-202610-0002"
+          Origen = OrigenDespacho.DeVenta (OrdenId (Guid.NewGuid()))
+          ClienteId = Some clienteId
+          Lineas = []
+          Estado = EstadoDespacho.Pendiente
+          CreadoEn = DateTime.UtcNow }
+
+    let mockDespachoTx (_: OrdenId) (_: MovimientoInventario) (_: string option) =
+        async { return Error "No hay reservas activas para la orden" }
+
+    let res =
+        VentaService.confirmarDespachoFisico
+            (fun _ -> async { return Some ordenDespacho })
+            mockDespachoTx
+            responsableId
+            (let (OrdenId g) = despachoId in g.ToString())
+            { Observaciones = None }
+        |> Async.RunSynchronously
+
+    match res with
+    | Ok _ -> failwith "Debió fallar con 409"
+    | Error (msg, code) ->
+        Assert.Equal(409, code)
+        Assert.Contains("reservas", msg)
+
+[<Fact>]
+let ``confirmarDespachoFisico returns lines from repo`` () =
+    let despachoId = OrdenId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let responsableId = Guid.NewGuid()
+    let ordenDespacho : OrdenDespacho =
+        { Id = despachoId
+          Codigo = CodigoDespacho.reconstruir "DSP-202610-0003"
+          Origen = OrigenDespacho.DeVenta (OrdenId (Guid.NewGuid()))
+          ClienteId = Some clienteId
+          Lineas = []
+          Estado = EstadoDespacho.Pendiente
+          CreadoEn = DateTime.UtcNow }
+
+    let line1 : LineaMovimientoDto =
+        { LoteId = Guid.NewGuid().ToString()
+          CodigoLote = "LOTE-001"
+          Cantidad = 500m
+          Unidad = "Gramo" }
+    let line2 : LineaMovimientoDto =
+        { LoteId = Guid.NewGuid().ToString()
+          CodigoLote = "LOTE-002"
+          Cantidad = 500m
+          Unidad = "Gramo" }
+
+    let mockDespachoTx (_: OrdenId) (_: MovimientoInventario) (_: string option) =
+        async { return Ok [ line1; line2 ] }
+
+    let res =
+        VentaService.confirmarDespachoFisico
+            (fun _ -> async { return Some ordenDespacho })
+            mockDespachoTx
+            responsableId
+            (let (OrdenId g) = despachoId in g.ToString())
+            { Observaciones = None }
+        |> Async.RunSynchronously
+
+    match res with
+    | Error (msg, _) -> failwith msg
+    | Ok dto ->
+        Assert.Equal(2, dto.LineasDespachadas.Length)
+
+[<Fact>]
+let ``anularVenta ok on Confirmada state`` () =
+    let ventaId = OrdenId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let prodId = ProductoId (Guid.NewGuid())
+    let responsableId = EmpleadoId (Guid.NewGuid())
+    let ordenVenta : OrdenVenta =
+        { Id = ventaId
+          Codigo = unwrap (CodigoVenta.crear "OV-202610-0001")
+          ProformaOrigenId = ProformaId (Guid.NewGuid())
+          ClienteId = clienteId
+          Fecha = DateOnly.FromDateTime(DateTime.UtcNow)
+          ResponsableId = responsableId
+          Lineas = [ { ProductoId = prodId; Cantidad = cantReconst 1m Kilogramo; PrecioUnitario = 100m } ]
+          Total = 100m
+          Moneda = "BOB"
+          Estado = EstadoVenta.Confirmada
+          CreadoEn = DateTime.UtcNow }
+
+    let mutable ventaAnuladaEstado : OrdenVenta =
+        { ordenVenta with
+            Estado =
+                EstadoVenta.Anulada
+                    { Fecha = DateTime.UtcNow
+                      Motivo = "Error en pedido"
+                      AnuladoPor = responsableId } }
+
+    let mutable txLlamado = false
+    let mockTx (_: OrdenId) (_: string) (_: EmpleadoId) =
+        async { txLlamado <- true; return Ok () }
+
+    let res =
+        VentaService.anularVenta
+            (fun _ -> async { if txLlamado then return Some ventaAnuladaEstado else return Some ordenVenta })
+            mockTx
+            (fun _ -> "Producto")
+            (fun _ -> "Cliente")
+            (let (EmpleadoId g) = responsableId in g)
+            (let (OrdenId g) = ventaId in g.ToString())
+            "Error en pedido"
+        |> Async.RunSynchronously
+
+    match res with
+    | Error (msg, code) -> failwithf "Fallo inesperado: %s (code=%d)" msg code
+    | Ok dto ->
+        Assert.True(txLlamado)
+        Assert.Equal("Anulada", dto.Estado)
+
+[<Fact>]
+let ``anularVenta fails 409 on Despachada state`` () =
+    let ventaId = OrdenId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let prodId = ProductoId (Guid.NewGuid())
+    let responsableId = EmpleadoId (Guid.NewGuid())
+    let ordenVenta : OrdenVenta =
+        { Id = ventaId
+          Codigo = unwrap (CodigoVenta.crear "OV-202610-0002")
+          ProformaOrigenId = ProformaId (Guid.NewGuid())
+          ClienteId = clienteId
+          Fecha = DateOnly.FromDateTime(DateTime.UtcNow)
+          ResponsableId = responsableId
+          Lineas = [ { ProductoId = prodId; Cantidad = cantReconst 1m Kilogramo; PrecioUnitario = 100m } ]
+          Total = 100m
+          Moneda = "BOB"
+          Estado = EstadoVenta.Despachada
+          CreadoEn = DateTime.UtcNow }
+
+    let mutable txLlamado = false
+    let mockTx (_: OrdenId) (_: string) (_: EmpleadoId) =
+        async { txLlamado <- true; return Ok () }
+
+    let res =
+        VentaService.anularVenta
+            (fun _ -> async { return Some ordenVenta })
+            mockTx
+            (fun _ -> "Producto")
+            (fun _ -> "Cliente")
+            (let (EmpleadoId g) = responsableId in g)
+            (let (OrdenId g) = ventaId in g.ToString())
+            "Cancelación cliente"
+        |> Async.RunSynchronously
+
+    match res with
+    | Ok _ -> failwith "Debió fallar con 409 en venta Despachada"
+    | Error (msg, code) ->
+        Assert.False(txLlamado, "El mock no debió ser llamado")
+        Assert.Equal(409, code)
+        Assert.Contains("despachada", msg.ToLowerInvariant())
+
+[<Fact>]
+let ``anularVenta fails 400 on empty motivo`` () =
+    let ventaId = OrdenId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let prodId = ProductoId (Guid.NewGuid())
+    let responsableId = EmpleadoId (Guid.NewGuid())
+    let ordenVenta : OrdenVenta =
+        { Id = ventaId
+          Codigo = unwrap (CodigoVenta.crear "OV-202610-0003")
+          ProformaOrigenId = ProformaId (Guid.NewGuid())
+          ClienteId = clienteId
+          Fecha = DateOnly.FromDateTime(DateTime.UtcNow)
+          ResponsableId = responsableId
+          Lineas = [ { ProductoId = prodId; Cantidad = cantReconst 1m Kilogramo; PrecioUnitario = 100m } ]
+          Total = 100m
+          Moneda = "BOB"
+          Estado = EstadoVenta.Confirmada
+          CreadoEn = DateTime.UtcNow }
+
+    let mutable txLlamado = false
+    let mockTx (_: OrdenId) (_: string) (_: EmpleadoId) =
+        async { txLlamado <- true; return Ok () }
+
+    let res =
+        VentaService.anularVenta
+            (fun _ -> async { return Some ordenVenta })
+            mockTx
+            (fun _ -> "Producto")
+            (fun _ -> "Cliente")
+            (let (EmpleadoId g) = responsableId in g)
+            (let (OrdenId g) = ventaId in g.ToString())
+            "   "
+        |> Async.RunSynchronously
+
+    match res with
+    | Ok _ -> failwith "Debió fallar con 400 por motivo vacío"
+    | Error (msg, code) ->
+        Assert.False(txLlamado, "El mock no debió ser llamado")
+        Assert.Equal(400, code)
+        Assert.Contains("motivo", msg.ToLowerInvariant())

@@ -41,6 +41,10 @@ type ConfirmarVentaRequest =
       ClienteId: string option }
 
 [<CLIMutable>]
+type AnularVentaRequest =
+    { Motivo: string }
+
+[<CLIMutable>]
 type LineaDespachoDto =
     { ProductoId: string
       NombreProducto: string
@@ -448,36 +452,17 @@ module VentaService =
 
                     let dto = toDespachoDto nombreProductoResolver nombreClienteResolver codVentaResolver despacho
 
-                    // Calcular sugerencias FIFO para cada línea
+                    // TODO FASE-6: sugerencias de lotes basadas en reserva_stock
                     let! sugerencias =
                         despacho.Lineas
                         |> List.map (fun linea ->
                             async {
                                 let prodId = linea.Referencia
-                                let! lotesActivos = listarLotes (Some prodId) (Some Activo)
-                                let fifoRes = Fifo.resolverFIFODespacho prodId linea.Cantidad lotesActivos
-                                let sugeridos =
-                                    match fifoRes with
-                                    | Error _ -> []
-                                    | Ok lineasMov ->
-                                        lineasMov
-                                        |> List.map (fun lm ->
-                                            let (LoteId lid) = lm.Referencia
-                                            let codLote =
-                                                lotesActivos
-                                                |> List.tryFind (fun l -> l.Id = lm.Referencia)
-                                                |> Option.map (fun l -> CodigoLote.valor l.Codigo)
-                                                |> Option.defaultValue "Lote"
-                                            { LoteId = lid.ToString()
-                                              CodigoLote = codLote
-                                              Cantidad = lm.Cantidad.Valor
-                                              Unidad = desmapearUnidad lm.Cantidad.Unidad })
-
                                 return { ProductoId = (let (ProductoId pid) = prodId in pid.ToString())
                                          NombreProducto = nombreProductoResolver prodId
                                          CantidadRequerida = linea.Cantidad.Valor
                                          Unidad = desmapearUnidad linea.Cantidad.Unidad
-                                         LotesSugeridos = sugeridos }
+                                         LotesSugeridos = [] }
                             })
                         |> Async.Parallel
 
@@ -485,14 +470,10 @@ module VentaService =
         }
 
     /// RF-08 / CU-11: Confirmar despacho físico en Almacén
-    /// Resuelve los lotes mediante FIFO estricto sobre lotes en estado Activo (RN12).
-    /// Ejecuta la deducción física de inventario, registra el movimiento de salida (Venta)
-    /// y marca tanto la orden de despacho como la orden de venta como Despachadas.
+    /// Consume las reservas de stock asociadas a la orden de venta (Fase 4).
     let confirmarDespachoFisico
         (obtenerDespacho: OrdenId -> Async<OrdenDespacho option>)
-        (listarLotes: ProductoId option -> EstadoLote option -> Async<Lote list>)
-        (obtenerCliente: ClienteId -> Async<Cliente option>)
-        (confirmarDespachoFisicoTx: OrdenId -> MovimientoInventario -> (LoteId * Cantidad) list -> string option -> Async<Result<unit, string>>)
+        (confirmarDespachoFisicoTx: OrdenId -> MovimientoInventario -> string option -> Async<Result<LineaMovimientoDto list, string>>)
         (responsableId: Guid)
         (despachoIdRaw: string)
         (req: ConfirmarDespachoRequest)
@@ -511,52 +492,6 @@ module VentaService =
                         return Error (sprintf "La orden de despacho no está en estado Pendiente (estado actual: '%s')" (EstadoDespacho.aTexto despacho.Estado), 409)
                     else
 
-                    // Resolver lotes por FIFO para cada línea
-                    let! resolucionesPorLinea =
-                        despacho.Lineas
-                        |> List.map (fun linea ->
-                            async {
-                                let prodId = linea.Referencia
-                                let! lotesActivos = listarLotes (Some prodId) (Some Activo)
-                                let fifoRes = Fifo.resolverFIFODespacho prodId linea.Cantidad lotesActivos
-                                match fifoRes with
-                                | Error err -> return Error (sprintf "Stock insuficiente para el producto %A: %s" prodId (errorToString err))
-                                | Ok lineasMov ->
-                                    return Ok (lineasMov, lotesActivos)
-                            })
-                        |> Async.Parallel
-
-                    let errores = resolucionesPorLinea |> Array.choose (fun r -> match r with Error e -> Some e | _ -> None)
-                    if errores.Length > 0 then
-                        return Error (errores.[0], 409)
-                    else
-
-                    let todosMovLineas =
-                        resolucionesPorLinea
-                        |> Array.choose (fun r -> match r with Ok (lm, _) -> Some lm | _ -> None)
-                        |> List.concat
-
-                    let todosLotes =
-                        resolucionesPorLinea
-                        |> Array.choose (fun r -> match r with Ok (_, lotes) -> Some lotes | _ -> None)
-                        |> List.concat
-
-                    // Deducciones de reserva por lote en Cantidad nativa consolidada
-                    let deduccionesReserva : (LoteId * Cantidad) list =
-                        todosMovLineas
-                        |> List.map (fun lm -> (lm.Referencia, lm.Cantidad))
-                        |> List.groupBy fst
-                        |> List.map (fun (loteId, items) ->
-                            let cantidades = items |> List.map snd
-                            let unidad = (List.head cantidades).Unidad
-                            let totalValor = cantidades |> List.sumBy (fun c -> c.Valor)
-                            let cantConsolidada =
-                                match Cantidad.reconstruir totalValor unidad with
-                                | Ok c -> c
-                                | Error _ -> List.head cantidades
-                            (loteId, cantConsolidada))
-
-                    // Construir MovimientoInventario
                     let movId = MovimientoId (Identidad.nuevo ())
                     let ahora = DateTime.UtcNow
 
@@ -565,51 +500,67 @@ module VentaService =
                         | Some cid -> cid
                         | None -> ClienteId Guid.Empty
 
-                    let! clienteNombreOpt =
-                        async {
-                            match despacho.ClienteId with
-                            | Some cid ->
-                                let! cOpt = obtenerCliente cid
-                                return cOpt |> Option.map Cliente.nombreVisible
-                            | None -> return None
-                        }
-
                     let movimiento : MovimientoInventario =
                         { Id = movId
                           Fecha = ahora
                           Responsable = EmpleadoId responsableId
                           Tipo = Salida (Venta clienteRef)
                           OrdenOrigen = Some dId
-                          Lineas = todosMovLineas
+                          Lineas = []
                           Observaciones = req.Observaciones }
 
-                    // Ejecutar transacción atómica con deducciones de Cantidad
-                    let! txRes = confirmarDespachoFisicoTx dId movimiento deduccionesReserva clienteNombreOpt
+                    let! txRes = confirmarDespachoFisicoTx dId movimiento None
                     match txRes with
-                    | Error msg -> return Error (sprintf "Error al confirmar despacho físico: %s" msg, 500)
-                    | Ok () ->
+                    | Error msg ->
+                        let statusCode = if msg.ToLowerInvariant().Contains("reserva") then 409 else 500
+                        return Error (msg, statusCode)
+                    | Ok lineasDto ->
+                        let (MovimientoId mGuid) = movId
+                        return Ok {
+                            DespachoId = dGuid.ToString()
+                            CodigoDespacho = CodigoDespacho.valor despacho.Codigo
+                            MovimientoId = mGuid.ToString()
+                            Fecha = ahora.ToString("yyyy-MM-dd HH:mm")
+                            LineasDespachadas = lineasDto
+                            Mensaje = "Despacho físico ejecutado y stock actualizado exitosamente."
+                        }
+        }
 
-                    let lineasDto =
-                        todosMovLineas
-                        |> List.map (fun lm ->
-                            let (LoteId lid) = lm.Referencia
-                            let codLote =
-                                todosLotes
-                                |> List.tryFind (fun l -> l.Id = lm.Referencia)
-                                |> Option.map (fun l -> CodigoLote.valor l.Codigo)
-                                |> Option.defaultValue (lid.ToString().Substring(0, 8))
-                            { LoteId = lid.ToString()
-                              CodigoLote = codLote
-                              Cantidad = lm.Cantidad.Valor
-                              Unidad = desmapearUnidad lm.Cantidad.Unidad })
-
-                    let (MovimientoId mGuid) = movId
-                    return Ok {
-                        DespachoId = dGuid.ToString()
-                        CodigoDespacho = CodigoDespacho.valor despacho.Codigo
-                        MovimientoId = mGuid.ToString()
-                        Fecha = ahora.ToString("yyyy-MM-dd HH:mm")
-                        LineasDespachadas = lineasDto
-                        Mensaje = "Despacho físico ejecutado y stock actualizado exitosamente."
-                    }
+    /// Anulación de orden de venta con liberación de reservas (Fase 4 / RN04)
+    let anularVenta
+        (obtenerVenta: OrdenId -> Async<OrdenVenta option>)
+        (anularVentaTx: OrdenId -> string -> EmpleadoId -> Async<Result<unit, string>>)
+        (nombreProductoResolver: ProductoId -> string)
+        (nombreClienteResolver: ClienteId -> string)
+        (anuladoPor: Guid)
+        (ventaIdRaw: string)
+        (motivo: string)
+        : Async<Result<OrdenVentaDto, string * int>> =
+        async {
+            match Guid.TryParse(ventaIdRaw) with
+            | false, _ -> return Error ("Identificador de orden de venta inválido", 400)
+            | true, vGuid ->
+                let vId = OrdenId vGuid
+                let! vOpt = obtenerVenta vId
+                match vOpt with
+                | None -> return Error ("Orden de venta no encontrada", 404)
+                | Some venta ->
+                    if String.IsNullOrWhiteSpace(motivo) then
+                        return Error ("El motivo de anulación es obligatorio", 400)
+                    else
+                        match venta.Estado with
+                        | EstadoVenta.Despachada ->
+                            return Error ("No se puede anular una orden de venta que ya ha sido despachada", 409)
+                        | EstadoVenta.Anulada _ ->
+                            return Error ("La orden de venta ya se encuentra anulada", 409)
+                        | EstadoVenta.Confirmada ->
+                            let! txRes = anularVentaTx vId (motivo.Trim()) (EmpleadoId anuladoPor)
+                            match txRes with
+                            | Error msg -> return Error (msg, 500)
+                            | Ok () ->
+                                let! ventaRecargadaOpt = obtenerVenta vId
+                                match ventaRecargadaOpt with
+                                | None -> return Error ("Error al recargar venta anulada", 500)
+                                | Some ventaAnulada ->
+                                    return Ok (toVentaDto nombreProductoResolver nombreClienteResolver ventaAnulada)
         }
