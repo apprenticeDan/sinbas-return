@@ -1,3 +1,9 @@
+script:pre-request {
+  console.log("adminPass =", bru.getEnvVar("adminPass"));
+  console.log("baseUrl =", bru.getEnvVar("baseUrl"));
+  console.log("env actual =", bru.getEnvName());
+}
+
 meta {
   name: Login admin OK
   type: http
