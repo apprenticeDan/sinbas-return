@@ -1,7 +1,9 @@
 namespace Sinbas.Infrastructure
 
 open System
+open Dapper
 open Dapper.FSharp.PostgreSQL
+open Npgsql
 open Sinbas.Domain
 open Sinbas.Application
 
@@ -196,4 +198,54 @@ module LoteRepository =
                 |> conn.UpdateAsync
                 |> Async.AwaitTask
                 |> Async.Ignore
+        }
+
+    /// Lock + reconstrucción de múltiples lotes dentro de una transacción externa (FOR UPDATE)
+    let obtenerMultiplesPorIdParaActualizacion
+        (conn: NpgsqlConnection)
+        (tx: NpgsqlTransaction)
+        (ids: LoteId list)
+        : Async<Result<Lote list, string>> =
+        async {
+            if List.isEmpty ids then return Ok []
+            else
+                let guids = ids |> List.map (fun (LoteId g) -> g) |> List.toArray
+                let sql = "SELECT * FROM lote WHERE id = ANY(@ids) FOR UPDATE"
+                let! rows = conn.QueryAsync<LoteRow>(sql, {| ids = guids |}, tx) |> Async.AwaitTask
+                let rec reconstruir acc = function
+                    | [] -> Ok (List.rev acc)
+                    | (row: LoteRow) :: rest ->
+                        match loteFromRow row with
+                        | Ok lote -> reconstruir (lote :: acc) rest
+                        | Error err ->
+                            eprintfn "[INTEGRIDAD] LoteRepository.obtenerMultiplesPorIdParaActualizacion id=%s campo=%s: %A"
+                                err.RegistroId err.Campo err.ErrorDominio
+                            Error (sprintf "Lote %s inconsistente en campo '%s'" err.RegistroId err.Campo)
+                return reconstruir [] (rows |> Seq.toList)
+        }
+
+    /// Persiste el estado completo de un lote (stock + reserva + estado) dentro de una transacción externa
+    let actualizarStockYEstadoTx
+        (conn: NpgsqlConnection)
+        (tx: NpgsqlTransaction)
+        (lote: Lote)
+        : Async<Result<unit, string>> =
+        async {
+            let (LoteId gId) = lote.Id
+            let sql = """
+                UPDATE lote
+                SET cantidad_actual    = @cantidad_actual,
+                    cantidad_reservada = @cantidad_reservada,
+                    estado             = @estado
+                WHERE id = @id
+            """
+            let p = {|
+                id                 = gId
+                cantidad_actual    = lote.CantidadActual.Valor
+                cantidad_reservada = lote.CantidadReservada.Valor
+                estado             = EstadoLote.aTexto lote.Estado
+            |}
+            let! affected = conn.ExecuteAsync(sql, p, tx) |> Async.AwaitTask
+            if affected = 1 then return Ok ()
+            else return Error (sprintf "Lote %s no se pudo actualizar (affectedRows=%d)" (gId.ToString()) affected)
         }

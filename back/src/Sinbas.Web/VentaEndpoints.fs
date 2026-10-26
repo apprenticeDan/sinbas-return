@@ -132,6 +132,7 @@ module VentaEndpoints =
                     return result
                 | Error (msg, 404) -> return Results.NotFound({| error = msg |})
                 | Error (msg, 409) -> return Results.Conflict({| error = msg |})
+                | Error (msg, 422) -> return Results.UnprocessableEntity({| error = msg |})
                 | Error (msg, _)   -> return Results.BadRequest({| error = msg |})
             } |> Async.StartAsTask
         ))

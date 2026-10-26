@@ -204,6 +204,7 @@ module VentaService =
     /// - RN14: Proforma debe estar Vigente y no vencida a la fecha actual (hoy).
     /// - D4: Exige ClienteId registrado obligatorio. Si la proforma era anónima, se toma del request.
     /// - RN04 / RN05: Re-valida en tiempo real que exista stock vendible disponible para todas las líneas.
+    /// - Bug 8: Re-valida que cada producto siga apto para venta al confirmar.
     /// - OBS-03: Reserva formal de stock sobre lotes al confirmar venta (cantidad_reservada).
     /// - RNF05: Convierte proforma y genera OrdenVenta + OrdenDespacho en una sola transacción atómica.
     let confirmarVenta
@@ -211,7 +212,7 @@ module VentaService =
         (obtenerCliente: ClienteId -> Async<Cliente option>)
         (obtenerProducto: ProductoId -> Async<Producto option>)
         (listarLotes: ProductoId option -> EstadoLote option -> Async<Lote list>)
-        (confirmarVentaTx: OrdenVenta -> OrdenDespacho -> (LoteId * decimal) list -> Async<Result<unit, string>>)
+        (confirmarVentaTx: OrdenVenta -> OrdenDespacho -> (LoteId * Cantidad) list -> Async<Result<unit, string>>)
         (nombreProductoResolver: ProductoId -> string)
         (nombreClienteResolver: ClienteId -> string)
         (responsableId: Guid)
@@ -275,7 +276,33 @@ module VentaService =
                         return Error ("El cliente seleccionado se encuentra inactivo.", 400)
                     | Some cliente ->
 
-                    // 4. Resolver FIFO y validar stock disponible para todas las líneas (RN04 / RN05 / OBS-03)
+                    // 4. Re-validar que los productos sigan existiendo y aptos para venta (bug 8)
+                    let! validacionesProducto =
+                        proforma.Lineas
+                        |> List.map (fun linea ->
+                            async {
+                                let! prodOpt = obtenerProducto linea.ProductoId
+                                match prodOpt with
+                                | None ->
+                                    let nomProd = nombreProductoResolver linea.ProductoId
+                                    return Error (sprintf "Producto '%s' no encontrado en el catálogo" nomProd, 404)
+                                | Some prod when not (Producto.esAptoParaVenta prod) ->
+                                    let nomProd = Producto.nombreVisible prod
+                                    return Error (sprintf "Producto '%s' no está apto para venta (fue desactivado después de emitir la proforma)" nomProd, 422)
+                                | Some _ ->
+                                    return Ok ()
+                            })
+                        |> Async.Parallel
+
+                    let errorProdOpt =
+                        validacionesProducto
+                        |> Array.tryPick (fun r -> match r with Error e -> Some e | Ok () -> None)
+
+                    match errorProdOpt with
+                    | Some err -> return Error err
+                    | None ->
+
+                    // 5. Resolver FIFO y validar stock vendible (RN04 / RN05 / OBS-03)
                     // Se resuelve la asignación FIFO al momento de confirmar la venta para saber
                     // exactamente qué lotes y cantidades reservar atómicamente.
                     let! resolucionesFifoPorLinea =
@@ -289,10 +316,10 @@ module VentaService =
                                     let nomProd = nombreProductoResolver linea.ProductoId
                                     return Error (sprintf "%s: %s" nomProd (errorToString err))
                                 | Ok lineasMov ->
-                                    // Extraer (LoteId, cantidadAReservarEnUnidadLote) para cada lote afectado
+                                    // Se conserva la Cantidad (con unidad), no decimal suelto
                                     let reservasPorLote =
                                         lineasMov
-                                        |> List.map (fun lm -> (lm.Referencia, lm.Cantidad.Valor))
+                                        |> List.map (fun lm -> (lm.Referencia, lm.Cantidad))
                                     return Ok reservasPorLote
                             })
                         |> Async.Parallel
@@ -307,14 +334,23 @@ module VentaService =
                         return Error (sprintf "Stock insuficiente para confirmar la venta. Productos con déficit: %s" detalle, 409)
                     else
 
-                    // Consolidar reservas por lote (un mismo lote puede aparecer en varias líneas)
-                    let reservasLotes =
+                    // Consolidar reservas por lote preservando unidad
+                    // (un mismo lote puede aparecer en varias líneas; FIFO retorna Cantidad en la unidad nativa del lote)
+                    let reservasLotes : (LoteId * Cantidad) list =
                         resolucionesFifoPorLinea
                         |> Array.choose (fun r -> match r with Ok rs -> Some rs | _ -> None)
                         |> Array.toList
                         |> List.concat
                         |> List.groupBy fst
-                        |> List.map (fun (loteId, items) -> (loteId, items |> List.sumBy snd))
+                        |> List.map (fun (loteId, items) ->
+                            let cantidades = items |> List.map snd
+                            let unidad = (List.head cantidades).Unidad
+                            let totalValor = cantidades |> List.sumBy (fun c -> c.Valor)
+                            let cantConsolidada =
+                                match Cantidad.reconstruir totalValor unidad with
+                                | Ok c -> c
+                                | Error _ -> List.head cantidades
+                            (loteId, cantConsolidada))
 
                     // 5. Generar entidades de dominio OrdenVenta y OrdenDespacho
                     let ordenVentaId = OrdenId (Identidad.nuevo ())
@@ -465,7 +501,7 @@ module VentaService =
         (obtenerDespacho: OrdenId -> Async<OrdenDespacho option>)
         (listarLotes: ProductoId option -> EstadoLote option -> Async<Lote list>)
         (obtenerCliente: ClienteId -> Async<Cliente option>)
-        (confirmarDespachoFisicoTx: OrdenId -> MovimientoInventario -> (LoteId * decimal) list -> (LoteId * decimal) list -> string option -> Async<Result<unit, string>>)
+        (confirmarDespachoFisicoTx: OrdenId -> MovimientoInventario -> (LoteId * Cantidad) list -> string option -> Async<Result<unit, string>>)
         (responsableId: Guid)
         (despachoIdRaw: string)
         (req: ConfirmarDespachoRequest)
@@ -495,20 +531,7 @@ module VentaService =
                                 match fifoRes with
                                 | Error err -> return Error (sprintf "Stock insuficiente para el producto %A: %s" prodId (errorToString err))
                                 | Ok lineasMov ->
-                                    // Calcular saldos restantes de los lotes
-                                    let saldosActualizados =
-                                        lineasMov
-                                        |> List.choose (fun lm ->
-                                            lotesActivos
-                                            |> List.tryFind (fun l -> l.Id = lm.Referencia)
-                                            |> Option.map (fun l ->
-                                                let cantDeducidaBase = Cantidad.aUnidadBase lm.Cantidad
-                                                let saldoActualBase = Cantidad.aUnidadBase l.CantidadActual
-                                                let nuevoSaldoBase = max 0m (saldoActualBase - cantDeducidaBase)
-                                                let esMayor = l.CantidadActual.Unidad = Kilogramo || l.CantidadActual.Unidad = Litro
-                                                let nuevoSaldoEnUnidad = if esMayor then nuevoSaldoBase / 1000m else nuevoSaldoBase
-                                                (l.Id, nuevoSaldoEnUnidad)))
-                                    return Ok (lineasMov, saldosActualizados, lotesActivos)
+                                    return Ok (lineasMov, lotesActivos)
                             })
                         |> Async.Parallel
 
@@ -519,25 +542,28 @@ module VentaService =
 
                     let todosMovLineas =
                         resolucionesPorLinea
-                        |> Array.choose (fun r -> match r with Ok (lm, _, _) -> Some lm | _ -> None)
+                        |> Array.choose (fun r -> match r with Ok (lm, _) -> Some lm | _ -> None)
                         |> List.concat
-
-                    let todosSaldos =
-                        resolucionesPorLinea
-                        |> Array.choose (fun r -> match r with Ok (_, saldos, _) -> Some saldos | _ -> None)
-                        |> List.concat
-
-                    // Calcular deducciones de reserva por lote (cantidad despachada en la unidad nativa del lote)
-                    let deduccionesReserva =
-                        todosMovLineas
-                        |> List.map (fun lm -> (lm.Referencia, lm.Cantidad.Valor))
-                        |> List.groupBy fst
-                        |> List.map (fun (loteId, items) -> (loteId, items |> List.sumBy snd))
 
                     let todosLotes =
                         resolucionesPorLinea
-                        |> Array.choose (fun r -> match r with Ok (_, _, lotes) -> Some lotes | _ -> None)
+                        |> Array.choose (fun r -> match r with Ok (_, lotes) -> Some lotes | _ -> None)
                         |> List.concat
+
+                    // Deducciones de reserva por lote en Cantidad nativa consolidada
+                    let deduccionesReserva : (LoteId * Cantidad) list =
+                        todosMovLineas
+                        |> List.map (fun lm -> (lm.Referencia, lm.Cantidad))
+                        |> List.groupBy fst
+                        |> List.map (fun (loteId, items) ->
+                            let cantidades = items |> List.map snd
+                            let unidad = (List.head cantidades).Unidad
+                            let totalValor = cantidades |> List.sumBy (fun c -> c.Valor)
+                            let cantConsolidada =
+                                match Cantidad.reconstruir totalValor unidad with
+                                | Ok c -> c
+                                | Error _ -> List.head cantidades
+                            (loteId, cantConsolidada))
 
                     // Construir MovimientoInventario
                     let movId = MovimientoId (Identidad.nuevo ())
@@ -566,8 +592,8 @@ module VentaService =
                           Lineas = todosMovLineas
                           Observaciones = req.Observaciones }
 
-                    // Ejecutar transacción atómica
-                    let! txRes = confirmarDespachoFisicoTx dId movimiento todosSaldos deduccionesReserva clienteNombreOpt
+                    // Ejecutar transacción atómica con deducciones de Cantidad
+                    let! txRes = confirmarDespachoFisicoTx dId movimiento deduccionesReserva clienteNombreOpt
                     match txRes with
                     | Error msg -> return Error (sprintf "Error al confirmar despacho físico: %s" msg, 500)
                     | Ok () ->
