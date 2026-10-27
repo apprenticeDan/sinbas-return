@@ -110,6 +110,8 @@ module ProformaEndpoints =
                 let! res =
                     ProformaService.obtenerProformaPorId
                         ProformaRepository.obtenerPorId
+                        CatalogRepository.buscarPorId
+                        obtenerStockProducto
                         resolver
                         id
 

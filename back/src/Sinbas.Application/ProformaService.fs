@@ -15,7 +15,11 @@ type LineaCotizadaDto =
       Cantidad: decimal
       Unidad: string
       PrecioUnitario: decimal
-      Subtotal: decimal }
+      Subtotal: decimal
+      PrecioVigente: decimal option
+      StockDisponibleActual: decimal option
+      StockSuficiente: bool option
+      StockUnidad: string option }
 
 [<CLIMutable>]
 type ProformaDto =
@@ -36,7 +40,9 @@ type ProformaDto =
       AnulacionMotivo: string option
       AnuladoPor: string option
       AnuladoEn: string option
-      Observaciones: string option }
+      Observaciones: string option
+      PuedeConfirmarse: bool option
+      Advertencias: string list }
 
 [<CLIMutable>]
 type LineaCotizadaRequest =
@@ -115,7 +121,11 @@ module ProformaService =
                   Cantidad = l.Cantidad.Valor
                   Unidad = UnidadMedida.aTexto l.Cantidad.Unidad
                   PrecioUnitario = l.PrecioUnitario
-                  Subtotal = Cotizacion.subtotal l })
+                  Subtotal = Cotizacion.subtotal l
+                  PrecioVigente = None
+                  StockDisponibleActual = None
+                  StockSuficiente = None
+                  StockUnidad = None })
 
         { Id = pid.ToString()
           Fecha = p.Fecha.ToString("yyyy-MM-dd")
@@ -134,7 +144,76 @@ module ProformaService =
           AnulacionMotivo = p.AnulacionMotivo
           AnuladoPor = p.AnuladoPor |> Option.map (fun (UsuarioId uid) -> uid.ToString())
           AnuladoEn = p.AnuladoEn |> Option.map (fun dt -> dt.ToString("yyyy-MM-ddTHH:mm:ssZ"))
-          Observaciones = p.Observaciones }
+          Observaciones = p.Observaciones
+          PuedeConfirmarse = None
+          Advertencias = [] }
+
+    let private enriquecerDto
+        (obtenerProducto: ProductoId -> Async<Producto option>)
+        (obtenerStockProducto: ProductoId -> Async<decimal>)
+        (dtoBase: ProformaDto)
+        (proformaDominio: Proforma)
+        : Async<ProformaDto> =
+        async {
+            match proformaDominio.Estado with
+            | EstadoProforma.Convertida
+            | EstadoProforma.Anulada ->
+                return dtoBase
+            | EstadoProforma.Vigente
+            | EstadoProforma.Vencida ->
+                let pares = List.zip dtoBase.Lineas proformaDominio.Lineas
+                let! resultados =
+                    pares
+                    |> List.map (fun (lineaDto, lineaDominio) ->
+                        async {
+                            let prodId = lineaDominio.ProductoId
+                            let cantidadPactada = lineaDominio.Cantidad
+                            let! prodOpt = obtenerProducto prodId
+                            let! stock = obtenerStockProducto prodId
+
+                            let precioVigente =
+                                prodOpt
+                                |> Option.bind (fun p ->
+                                    p.PrecioOficial |> Option.map (fun po -> po.Valor))
+
+                            let cantidadBase = Cantidad.aUnidadBase cantidadPactada
+                            let stockSuficiente = stock >= cantidadBase
+                            let stockUnidadTexto =
+                                UnidadMedida.aTexto
+                                    (UnidadMedida.unidadBase cantidadPactada.Unidad)
+
+                            let lineaFinal =
+                                { lineaDto with
+                                    PrecioVigente = precioVigente
+                                    StockDisponibleActual = Some stock
+                                    StockSuficiente = Some stockSuficiente
+                                    StockUnidad = Some stockUnidadTexto }
+
+                            let advertencias =
+                                [ match precioVigente with
+                                  | Some pv when pv <> lineaDto.PrecioUnitario ->
+                                      yield sprintf "Precio de '%s' cambió de %.2f a %.2f"
+                                              lineaDto.NombreProducto lineaDto.PrecioUnitario pv
+                                  | _ -> ()
+                                  if not stockSuficiente then
+                                      yield sprintf "Stock insuficiente para '%s': pediste %.2f, disponible %.2f"
+                                              lineaDto.NombreProducto cantidadBase stock ]
+
+                            return (lineaFinal, advertencias)
+                        })
+                    |> Async.Parallel
+
+                let lineasFinales = resultados |> Array.map fst |> Array.toList
+                let advertenciasTodas = resultados |> Array.toList |> List.collect snd
+                let puedeConfirmar =
+                    lineasFinales |> List.forall (fun l -> l.StockSuficiente = Some true)
+
+                return
+                    { dtoBase with
+                        Lineas = lineasFinales
+                        PuedeConfirmarse = Some puedeConfirmar
+                        Advertencias = advertenciasTodas }
+        }
 
     /// Elaborar una proforma nueva (RF-07 / CU-10)
     /// Valida: cliente existe (si se envía ID), productos activos con precio (RN16),
@@ -274,6 +353,8 @@ module ProformaService =
     /// Obtener una proforma por ID
     let obtenerProformaPorId
         (obtenerPorId: ProformaId -> Async<Proforma option>)
+        (obtenerProducto: ProductoId -> Async<Producto option>)
+        (obtenerStockProducto: ProductoId -> Async<decimal>)
         (nombreProductoResolver: ProductoId -> string)
         (idRaw: string)
         : Async<Result<ProformaDto, string * int>> =
@@ -284,7 +365,10 @@ module ProformaService =
                 let! pOpt = obtenerPorId (ProformaId guid)
                 match pOpt with
                 | None -> return Error ("Proforma no encontrada", 404)
-                | Some p -> return Ok (toDto nombreProductoResolver p)
+                | Some p ->
+                    let dtoBase = toDto nombreProductoResolver p
+                    let! dtoEnriquecido = enriquecerDto obtenerProducto obtenerStockProducto dtoBase p
+                    return Ok dtoEnriquecido
         }
 
     /// Listar proformas con filtros opcionales

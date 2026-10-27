@@ -1,0 +1,32 @@
+meta {
+  name: Crear proforma Fase 5
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/proformas
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+body:json {
+  {
+    "clienteId": "{{clienteId}}",
+    "lineas": [
+      {"productoId": "{{productoId}}", "cantidad": 1, "unidad": "Kilogramo"}
+    ]
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+vars:post-response {
+  proformaFase5Id: res.body.id
+}

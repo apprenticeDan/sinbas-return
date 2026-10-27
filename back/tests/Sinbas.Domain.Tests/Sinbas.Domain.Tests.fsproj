@@ -23,6 +23,7 @@
     <Compile Include="ProformaTests.fs" />
     <Compile Include="VentaDespachoTests.fs" />
     <Compile Include="VentaServiceTests.fs" />
+    <Compile Include="ProformaServiceTests.fs" />
     <Compile Include="SolicitudEgresoInternoTests.fs" />
   </ItemGroup>
 
