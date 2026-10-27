@@ -5,6 +5,10 @@ export interface LineaCotizadaDto {
   unidad: string;
   precioUnitario: number;
   subtotal: number;
+  precioVigente?: number | null;
+  stockDisponibleActual?: number | null;
+  stockSuficiente?: boolean | null;
+  stockUnidad?: string | null;
 }
 
 export interface ProformaDto {
@@ -26,6 +30,8 @@ export interface ProformaDto {
   anuladoPor?: string;
   anuladoEn?: string;
   observaciones?: string;
+  puedeConfirmarse?: boolean | null;
+  advertencias?: string[];
 }
 
 export interface LineaCotizadaRequest {

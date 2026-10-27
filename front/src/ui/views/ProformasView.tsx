@@ -758,12 +758,14 @@ export const ProformasView: Component = () => {
                   <div class="flex items-center gap-2">
                     <Show when={(p.estadoProyectado || p.estado) === 'Vigente'}>
                       <button
-                        class="btn btn-sm bg-emerald-600 text-white hover:bg-emerald-700 font-semibold flex items-center gap-1.5"
+                        class={`btn btn-sm font-semibold flex items-center gap-1.5 ${p.puedeConfirmarse === false ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
                         onClick={() => {
+                          if (p.puedeConfirmarse === false) return;
                           setModalDetalleOpen(false);
                           abrirModalConfirmarVenta(p);
                         }}
-                        title="Convertir esta proforma en venta definitiva"
+                        disabled={p.puedeConfirmarse === false}
+                        title={p.puedeConfirmarse === false ? 'Stock insuficiente: no se puede confirmar hasta re-cotizar o reponer stock' : 'Convertir esta proforma en venta definitiva'}
                       >
                         ✓ Confirmar Venta
                       </button>
@@ -787,6 +789,22 @@ export const ProformasView: Component = () => {
                     </button>
                   </div>
                 </div>
+
+                <Show when={p.advertencias && p.advertencias!.length > 0}>
+                  <div class="px-5 py-3 bg-amber-50 border-b border-amber-200 print:hidden">
+                    <div class="flex items-start gap-2">
+                      <span class="text-amber-600 text-lg leading-none mt-0.5">⚠</span>
+                      <div class="flex-1">
+                        <div class="text-xs font-bold text-amber-900 mb-1">
+                          Advertencias ({p.advertencias!.length})
+                        </div>
+                        <ul class="text-xs text-amber-800 list-disc list-inside space-y-0.5">
+                          <For each={p.advertencias}>{(adv) => <li>{adv}</li>}</For>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </Show>
 
                 {/* Hoja Imprimible */}
                 <div class="p-8 overflow-y-auto flex-1 print:p-0 print:m-0" id="proforma-print-sheet">
@@ -843,9 +861,23 @@ export const ProformasView: Component = () => {
                             <tr>
                               <td class="py-2.5 text-xs text-gray-400 font-mono">{idx() + 1}</td>
                               <td class="py-2.5 font-medium text-gray-800">{l.nombreProducto}</td>
-                              <td class="py-2.5 text-right font-mono">{l.cantidad}</td>
+                              <td class="py-2.5 text-right font-mono">
+                                {l.cantidad}
+                                <Show when={l.stockSuficiente === false}>
+                                  <div class="text-[10px] text-red-600 font-sans font-semibold mt-0.5 print:hidden">
+                                    ⚠ disp: {l.stockDisponibleActual} {l.stockUnidad}
+                                  </div>
+                                </Show>
+                              </td>
                               <td class="py-2.5 text-center text-xs text-gray-500">{l.unidad}</td>
-                              <td class="py-2.5 text-right font-mono">{l.precioUnitario.toFixed(2)}</td>
+                              <td class="py-2.5 text-right font-mono">
+                                {l.precioUnitario.toFixed(2)}
+                                <Show when={l.precioVigente != null && l.precioVigente !== l.precioUnitario}>
+                                  <div class="text-[10px] text-amber-600 font-sans font-semibold mt-0.5 print:hidden">
+                                    ⚠ actual: {l.precioVigente!.toFixed(2)}
+                                  </div>
+                                </Show>
+                              </td>
                               <td class="py-2.5 text-right font-mono font-bold text-gray-800">{l.subtotal.toFixed(2)}</td>
                             </tr>
                           )}

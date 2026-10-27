@@ -1,0 +1,30 @@
+meta {
+  name: Verificar detalle Fase 5
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/proformas/{{proformaFase5Id}}
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tokenAdmin}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("tiene campos dinámicos de Fase 5", function() {
+    const data = res.getBody();
+    expect(data).to.have.property('puedeConfirmarse');
+    expect(data).to.have.property('advertencias');
+    expect(data.lineas[0]).to.have.property('precioVigente');
+    expect(data.lineas[0]).to.have.property('stockDisponibleActual');
+    expect(data.lineas[0]).to.have.property('stockSuficiente');
+    expect(data.lineas[0]).to.have.property('stockUnidad');
+  });
+}
