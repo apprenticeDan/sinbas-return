@@ -594,32 +594,7 @@ module VentaRepository =
                             return Error msg
                         | Ok lotesDespachados ->
 
-                        // 4. Persistir lotes actualizados (con affectedRows check)
-                        let rec persistirLotes = function
-                            | [] -> async { return Ok () }
-                            | lote :: rest ->
-                                async {
-                                    let! r = LoteRepository.actualizarStockYEstadoTx conn tx lote
-                                    match r with
-                                    | Ok () -> return! persistirLotes rest
-                                    | Error msg -> return Error msg
-                                }
-                        let! persistRes = persistirLotes lotesDespachados
-                        match persistRes with
-                        | Error msg ->
-                            tx.Rollback()
-                            return Error msg
-                        | Ok () ->
-
-                        // 5. Marcar reservas como despachadas
-                        let! marcarDespRes = ReservaStockRepository.marcarDespachada conn tx ovId movimiento.Id
-                        match marcarDespRes with
-                        | Error msg ->
-                            tx.Rollback()
-                            return Error msg
-                        | Ok () ->
-
-                        // 6. Insertar movimiento_inventario
+                        // 4. INSERT movimiento_inventario (parent)
                         let sqlInsertMov = """
                             INSERT INTO movimiento_inventario (id, fecha, responsable_id, tipo, motivo, orden_origen_id, contraparte_ref, contraparte_nombre, observaciones)
                             VALUES (@id, @fecha, @responsable_id, @tipo, @motivo, @orden_origen_id, @contraparte_ref, @contraparte_nombre, @observaciones)
@@ -647,7 +622,7 @@ module VentaRepository =
                             return Error (sprintf "No se pudo insertar movimiento_inventario (affectedRows=%d)" affectedMov)
                         else
 
-                        // 7. Insertar líneas de movimiento usando las reservas consumidas
+                        // 5. INSERT linea_movimiento por cada lote
                         let sqlInsertLineaMov = """
                             INSERT INTO linea_movimiento (id, movimiento_id, lote_id, cantidad, unidad, observaciones)
                             VALUES (@id, @movimiento_id, @lote_id, @cantidad, @unidad, @observaciones)
@@ -663,7 +638,55 @@ module VentaRepository =
                                 |}, tx)
                                 |> Async.AwaitTask |> Async.Ignore
 
-                        // 8. Construir líneas DTO para retorno
+                        // 6. UPDATE lote: descontar cantidad_actual y cantidad_reservada (via Lote.despacharReserva o actualizarStockYEstadoTx)
+                        let rec persistirLotes = function
+                            | [] -> async { return Ok () }
+                            | lote :: rest ->
+                                async {
+                                    let! r = LoteRepository.actualizarStockYEstadoTx conn tx lote
+                                    match r with
+                                    | Ok () -> return! persistirLotes rest
+                                    | Error msg -> return Error msg
+                                }
+                        let! persistRes = persistirLotes lotesDespachados
+                        match persistRes with
+                        | Error msg ->
+                            tx.Rollback()
+                            return Error msg
+                        | Ok () ->
+
+                        // 7. UPDATE reserva_stock: marcar como despachadas
+                        let! marcarDespRes = ReservaStockRepository.marcarDespachada conn tx ovId movimiento.Id
+                        match marcarDespRes with
+                        | Error msg ->
+                            tx.Rollback()
+                            return Error msg
+                        | Ok () ->
+
+                        // 8. UPDATE orden_despacho
+                        let sqlUpdateDespacho = """
+                            UPDATE orden_despacho
+                            SET estado = 'Despachado', movimiento_id = @mId
+                            WHERE id = @did AND estado = 'Pendiente'
+                        """
+                        let! affectedDesp = conn.ExecuteAsync(sqlUpdateDespacho, {| did = did; mId = mId |}, tx) |> Async.AwaitTask
+                        if affectedDesp <> 1 then
+                            tx.Rollback()
+                            return Error (sprintf "UPDATE orden_despacho affectedRows=%d (esperado 1)" affectedDesp)
+                        else
+
+                        // 9. UPDATE orden_venta
+                        let! affectedVenta =
+                            conn.ExecuteAsync(
+                                "UPDATE orden_venta SET estado = 'Despachada' WHERE id = @ovId",
+                                {| ovId = despRow.orden_venta_id.Value |}, tx)
+                            |> Async.AwaitTask
+                        if affectedVenta <> 1 then
+                            tx.Rollback()
+                            return Error (sprintf "UPDATE orden_venta affectedRows=%d (esperado 1)" affectedVenta)
+                        else
+
+                        // 10. Commit y retornar líneas DTO
                         let lineasDto: LineaMovimientoDto list =
                             reservas
                             |> List.map (fun (lId, cant) ->
@@ -678,30 +701,8 @@ module VentaRepository =
                                   Cantidad = cant.Valor
                                   Unidad = UnidadMedida.aTexto cant.Unidad })
 
-                        // 9. Actualizar orden_despacho
-                        let sqlUpdateDespacho = """
-                            UPDATE orden_despacho
-                            SET estado = 'Despachado', movimiento_id = @mId
-                            WHERE id = @did AND estado = 'Pendiente'
-                        """
-                        let! affectedDesp = conn.ExecuteAsync(sqlUpdateDespacho, {| did = did; mId = mId |}, tx) |> Async.AwaitTask
-                        if affectedDesp <> 1 then
-                            tx.Rollback()
-                            return Error (sprintf "UPDATE orden_despacho affectedRows=%d (esperado 1)" affectedDesp)
-                        else
-
-                        // 10. Actualizar orden_venta
-                        let! affectedVenta =
-                            conn.ExecuteAsync(
-                                "UPDATE orden_venta SET estado = 'Despachada' WHERE id = @ovId",
-                                {| ovId = despRow.orden_venta_id.Value |}, tx)
-                            |> Async.AwaitTask
-                        if affectedVenta <> 1 then
-                            tx.Rollback()
-                            return Error (sprintf "UPDATE orden_venta affectedRows=%d (esperado 1)" affectedVenta)
-                        else
-                            tx.Commit()
-                            return Ok lineasDto
+                        tx.Commit()
+                        return Ok lineasDto
 
                 | _ ->
                     // TODO FASE-6: usar reserva_stock cuando uso interno reserve.

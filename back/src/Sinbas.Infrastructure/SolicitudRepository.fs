@@ -192,11 +192,10 @@ module SolicitudRepository =
                             return! ReservaStockRepository.insertarBatchSolicitud conn tx solicitudId reservas
         }
 
-    let private despacharLotesSolicitudTx
+    let private actualizarLotesTx
         (conn: NpgsqlConnection)
         (tx: NpgsqlTransaction)
         (solicitud: SolicitudEgresoInterno)
-        (movimientoId: MovimientoId)
         : Async<Result<unit, string>> =
         async {
             if solicitud.Signo = SignoEgresoInterno.Positivo then
@@ -249,12 +248,16 @@ module SolicitudRepository =
                                         | Ok () -> return! persistirLotes rest
                                         | Error msg -> return Error msg
                                     }
-                            let! persistRes = persistirLotes lotesDespachados
-                            match persistRes with
-                            | Error msg -> return Error msg
-                            | Ok () ->
-                                return! ReservaStockRepository.marcarDespachadaPorSolicitud conn tx solicitud.Id movimientoId
+                            return! persistirLotes lotesDespachados
         }
+
+    let private marcarReservasDespachadasTx
+        (conn: NpgsqlConnection)
+        (tx: NpgsqlTransaction)
+        (solicitudId: SolicitudEgresoInternoId)
+        (movimientoId: MovimientoId)
+        : Async<Result<unit, string>> =
+        ReservaStockRepository.marcarDespachadaPorSolicitud conn tx solicitudId movimientoId
 
     let insertar (solicitud: SolicitudEgresoInterno) : Async<Result<unit, string>> =
         async {
@@ -475,85 +478,105 @@ module SolicitudRepository =
                 let (EmpleadoId respId) = movimiento.Responsable
                 let (MovimientoId mId) = movimiento.Id
 
-                let! despRes = despacharLotesSolicitudTx conn tx solicitud movimiento.Id
-                match despRes with
+                // 1. INSERT movimiento_inventario (parent)
+                let sqlMov = """
+                    INSERT INTO movimiento_inventario (
+                        id, fecha, responsable_id, tipo, motivo, orden_origen_id, contraparte_ref,
+                        contraparte_nombre, departamento, solicitante, observaciones
+                    ) VALUES (
+                        @id, @fecha, @responsableId, @tipo, @motivo, NULL, NULL,
+                        NULL, @departamento, @solicitante, @observaciones
+                    )
+                """
+                let (tipoMovStr, motivoMovStr, deptoStr, solStr) =
+                    match solicitud.Tipo with
+                    | TipoEgresoInterno.UsoInterno dest ->
+                        ("Salida", "UsoInterno", DestinoUso.aTexto dest, "Personal Interno")
+                    | TipoEgresoInterno.Merma ->
+                        ("Salida", "Merma", null, null)
+                    | TipoEgresoInterno.Ajuste ->
+                        let t = match solicitud.Signo with SignoEgresoInterno.Positivo -> "Entrada" | SignoEgresoInterno.Negativo -> "Salida"
+                        (t, "Ajuste", null, null)
+
+                let pMov = {|
+                    id = mId
+                    fecha = movimiento.Fecha
+                    responsableId = respId
+                    tipo = tipoMovStr
+                    motivo = motivoMovStr
+                    departamento = (if isNull deptoStr then box DBNull.Value else box deptoStr)
+                    solicitante = (if isNull solStr then box DBNull.Value else box solStr)
+                    observaciones = (match movimiento.Observaciones with Some o -> box o | None -> box DBNull.Value)
+                |}
+                let! affectedMov = conn.ExecuteAsync(sqlMov, pMov, tx) |> Async.AwaitTask
+
+                if affectedMov <> 1 then
+                    tx.Rollback()
+                    return Error "No se pudo insertar movimiento_inventario"
+                else
+
+                // 2. INSERT linea_movimiento por cada línea (child de movimiento)
+                match solicitud.LoteId with
+                | Some (LoteId lId) ->
+                    let sqlLinea = """
+                        INSERT INTO linea_movimiento (id, movimiento_id, lote_id, cantidad, unidad, observaciones)
+                        VALUES (@id, @movimiento_id, @lote_id, @cantidad, @unidad, NULL)
+                    """
+                    let pLinea = {|
+                        id = Identidad.nuevo ()
+                        movimiento_id = mId
+                        lote_id = lId
+                        cantidad = solicitud.Cantidad.Valor
+                        unidad = UnidadMedida.aTexto solicitud.Cantidad.Unidad
+                    |}
+                    do! conn.ExecuteAsync(sqlLinea, pLinea, tx) |> Async.AwaitTask |> Async.Ignore
+                | None -> ()
+
+                // 3. UPDATE lote: descontar cantidad_actual y cantidad_reservada (o sumar stock si Positivo)
+                let! actLotesRes = actualizarLotesTx conn tx solicitud
+                match actLotesRes with
                 | Error msg ->
                     tx.Rollback()
                     return Error msg
                 | Ok () ->
-                    let sqlMov = """
-                        INSERT INTO movimiento_inventario (
-                            id, fecha, responsable_id, tipo, motivo, orden_origen_id, contraparte_ref,
-                            contraparte_nombre, departamento, solicitante, observaciones
-                        ) VALUES (
-                            @id, @fecha, @responsableId, @tipo, @motivo, NULL, NULL,
-                            NULL, @departamento, @solicitante, @observaciones
-                        )
-                    """
-                    let (tipoMovStr, motivoMovStr, deptoStr, solStr) =
-                        match solicitud.Tipo with
-                        | TipoEgresoInterno.UsoInterno dest ->
-                            ("Salida", "UsoInterno", DestinoUso.aTexto dest, "Personal Interno")
-                        | TipoEgresoInterno.Merma ->
-                            ("Salida", "Merma", null, null)
-                        | TipoEgresoInterno.Ajuste ->
-                            let t = match solicitud.Signo with SignoEgresoInterno.Positivo -> "Entrada" | SignoEgresoInterno.Negativo -> "Salida"
-                            (t, "Ajuste", null, null)
 
-                    let pMov = {|
-                        id = mId
-                        fecha = movimiento.Fecha
-                        responsableId = respId
-                        tipo = tipoMovStr
-                        motivo = motivoMovStr
-                        departamento = (if isNull deptoStr then box DBNull.Value else box deptoStr)
-                        solicitante = (if isNull solStr then box DBNull.Value else box solStr)
-                        observaciones = (match movimiento.Observaciones with Some o -> box o | None -> box DBNull.Value)
-                    |}
-                    let! affectedMov = conn.ExecuteAsync(sqlMov, pMov, tx) |> Async.AwaitTask
-
-                    if affectedMov <> 1 then
-                        tx.Rollback()
-                        return Error "No se pudo insertar movimiento_inventario"
+                // 4. UPDATE reserva_stock: marcar como despachadas (solo si no es Ajuste Positivo)
+                let! resvRes =
+                    if solicitud.Signo = SignoEgresoInterno.Positivo then
+                        async { return Ok () }
                     else
-                        match solicitud.LoteId with
-                        | Some (LoteId lId) ->
-                            let sqlLinea = """
-                                INSERT INTO linea_movimiento (id, movimiento_id, lote_id, cantidad, unidad, observaciones)
-                                VALUES (@id, @movimiento_id, @lote_id, @cantidad, @unidad, NULL)
-                            """
-                            let pLinea = {|
-                                id = Identidad.nuevo ()
-                                movimiento_id = mId
-                                lote_id = lId
-                                cantidad = solicitud.Cantidad.Valor
-                                unidad = UnidadMedida.aTexto solicitud.Cantidad.Unidad
-                            |}
-                            do! conn.ExecuteAsync(sqlLinea, pLinea, tx) |> Async.AwaitTask |> Async.Ignore
-                        | None -> ()
+                        marcarReservasDespachadasTx conn tx solicitud.Id movimiento.Id
 
-                        let (estadoStr, resAprob, resFecha, resMotivo, entPor, fEntrega) = estadoToRow solicitud.Estado
-                        let sqlUpdateSol = """
-                            UPDATE solicitud_egreso_interno
-                            SET estado = @estado,
-                                entregado_por = @entPor,
-                                fecha_entrega = @fEntrega
-                            WHERE id = @id
-                        """
-                        let pSol = {|
-                            id = sId
-                            estado = estadoStr
-                            entPor = entPor
-                            fEntrega = fEntrega
-                        |}
-                        let! affectedSol = conn.ExecuteAsync(sqlUpdateSol, pSol, tx) |> Async.AwaitTask
+                match resvRes with
+                | Error msg ->
+                    tx.Rollback()
+                    return Error msg
+                | Ok () ->
 
-                        if affectedSol <> 1 then
-                            tx.Rollback()
-                            return Error (sprintf "No se pudo actualizar estado de solicitud %s" (sId.ToString()))
-                        else
-                            tx.Commit()
-                            return Ok ()
+                // 5. UPDATE solicitud_egreso_interno SET estado='Confirmada', entregado_por=@resp, fecha_entrega=NOW() WHERE id=@sId
+                let (estadoStr, _resAprob, _resFecha, _resMotivo, entPor, fEntrega) = estadoToRow solicitud.Estado
+                let sqlUpdateSol = """
+                    UPDATE solicitud_egreso_interno
+                    SET estado = @estado,
+                        entregado_por = @entPor,
+                        fecha_entrega = @fEntrega
+                    WHERE id = @id
+                """
+                let pSol = {|
+                    id = sId
+                    estado = estadoStr
+                    entPor = entPor
+                    fEntrega = fEntrega
+                |}
+                let! affectedSol = conn.ExecuteAsync(sqlUpdateSol, pSol, tx) |> Async.AwaitTask
+
+                if affectedSol <> 1 then
+                    tx.Rollback()
+                    return Error (sprintf "No se pudo actualizar estado de solicitud %s" (sId.ToString()))
+                else
+                    // 6. tx.Commit()
+                    tx.Commit()
+                    return Ok ()
             with ex ->
                 tx.Rollback()
                 eprintfn "[SolicitudRepository.confirmarTx] Error: %s" ex.Message
