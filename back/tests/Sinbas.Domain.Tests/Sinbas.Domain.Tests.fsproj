@@ -25,6 +25,7 @@
     <Compile Include="VentaServiceTests.fs" />
     <Compile Include="ProformaServiceTests.fs" />
     <Compile Include="SolicitudEgresoInternoTests.fs" />
+    <Compile Include="SolicitudEgresoInternoServiceTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

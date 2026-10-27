@@ -20,6 +20,7 @@
     <Compile Include="ReservaStockRepository.fs" />
     <Compile Include="VentaRepository.fs" />
     <Compile Include="IdempotenciaRepository.fs" />
+    <Compile Include="SolicitudRepository.fs" />
   </ItemGroup>
 
   <ItemGroup>
