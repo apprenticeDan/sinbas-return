@@ -257,6 +257,7 @@ let ``3. Merma Pendiente -> Aprobada -> Confirmada: reserva al aprobar, consume 
             (fun _ _ -> async { return [ lote ] })
             resolverProd
             resolverLote
+            [ "Gerencia" ]
             aprobEmpId
             solIdRaw
         |> Async.RunSynchronously
@@ -361,6 +362,7 @@ let ``4. Ajuste Positivo Pendiente -> Aprobada -> Confirmada: no reserva, suma c
             (fun _ _ -> async { return [ lote ] })
             resolverProd
             resolverLote
+            [ "Gerencia" ]
             aprobEmpId
             solIdRaw
         |> Async.RunSynchronously
@@ -456,6 +458,7 @@ let ``5. Ajuste Negativo Pendiente -> Aprobada -> Confirmada: reserva al aprobar
             (fun _ _ -> async { return [ lote ] })
             resolverProd
             resolverLote
+            [ "Gerencia" ]
             aprobEmpId
             solIdRaw
         |> Async.RunSynchronously
@@ -524,6 +527,7 @@ let ``6. Aprobador = solicitante en Merma/Ajuste: retorna OperacionInvalida (RN1
             (fun _ _ -> async { return [] })
             resolverProd
             resolverLote
+            [ "Almacen" ]
             mismoUsuarioId
             solIdRaw
         |> Async.RunSynchronously
@@ -565,6 +569,7 @@ let ``7. UsoInterno intentando aprobarse: retorna OperacionInvalida`` () =
             (fun _ _ -> async { return [] })
             resolverProd
             resolverLote
+            [ "Gerencia" ]
             aprobEmpId
             solIdRaw
         |> Async.RunSynchronously

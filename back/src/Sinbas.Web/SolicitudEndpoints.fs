@@ -98,7 +98,7 @@ module SolicitudEndpoints =
                     return mapError (msg, code)
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization("RequireAlmacen")
+            .RequireAuthorization("RequireSolicitudesWrite")
             .WithName("CrearSolicitudEgresoInterno")
             .WithTags("SolicitudesEgresoInterno")
         |> ignore
@@ -134,7 +134,7 @@ module SolicitudEndpoints =
                 return Results.Ok(dtos)
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization("RequireAlmacen")
+            .RequireAuthorization("RequireSolicitudesRead")
             .WithName("ListarSolicitudesEgresoInterno")
             .WithTags("SolicitudesEgresoInterno")
         |> ignore
@@ -157,10 +157,15 @@ module SolicitudEndpoints =
                 | Error (msg, code) -> return mapError (msg, code)
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization("RequireAlmacen")
+            .RequireAuthorization("RequireSolicitudesRead")
             .WithName("ObtenerSolicitudEgresoInternoPorId")
             .WithTags("SolicitudesEgresoInterno")
         |> ignore
+
+        let obtenerRoles (ctx: HttpContext) : string list =
+            ctx.User.FindAll(ClaimTypes.Role)
+            |> Seq.map (fun c -> c.Value)
+            |> Seq.toList
 
         // 4. PUT /api/solicitudes/{id}/aprobar (RequireGerencia)
         app.MapPut("/api/solicitudes/{id}/aprobar", Func<HttpContext, string, Threading.Tasks.Task<IResult>>(fun ctx id ->
@@ -176,6 +181,7 @@ module SolicitudEndpoints =
                         LoteRepository.listar
                         nombreProdResolver
                         codLoteResolver
+                        (obtenerRoles ctx)
                         aprobadorId
                         id
 
@@ -243,7 +249,7 @@ module SolicitudEndpoints =
                 | Error (msg, code) -> return mapError (msg, code)
             } |> Async.StartAsTask
         ))
-            .RequireAuthorization("RequireAlmacen")
+            .RequireAuthorization("RequireSolicitudesWrite")
             .WithName("ConfirmarSolicitudEgresoInterno")
             .WithTags("SolicitudesEgresoInterno")
         |> ignore

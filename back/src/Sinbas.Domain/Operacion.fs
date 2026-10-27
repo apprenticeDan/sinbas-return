@@ -369,6 +369,7 @@ module SolicitudEgresoInterno =
 
     let aprobar
         (aprobador: EmpleadoId)
+        (esExento: bool)
         (fecha: DateTime)
         (solicitud: SolicitudEgresoInterno)
         : Result<SolicitudEgresoInterno, DomainError> =
@@ -378,7 +379,7 @@ module SolicitudEgresoInterno =
             | TipoEgresoInterno.UsoInterno _ ->
                 Error (OperacionInvalida "El uso interno no requiere aprobación previa sino confirmación física de entrega")
             | TipoEgresoInterno.Ajuste | TipoEgresoInterno.Merma ->
-                if aprobador = solicitud.Solicitante then
+                if not esExento && aprobador = solicitud.Solicitante then
                     Error (OperacionInvalida "RN11: El aprobador no puede ser el mismo usuario que registró la solicitud")
                 else
                     let resolucion = { Aprobador = aprobador; Fecha = fecha; Motivo = None }

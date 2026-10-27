@@ -5,15 +5,38 @@ import { ApiAuthGateway } from '../../infrastructure/api/ApiAuthGateway';
 interface UserState {
   username: string;
   roles: string[];
+  empleadoId: string | null;
 }
 
 const savedToken = localStorage.getItem('sinbas_token');
 const savedUser = localStorage.getItem('sinbas_user');
 
+function extractEmpleadoIdFromJwt(jwt: string): string | null {
+  try {
+    const parts = jwt.split('.');
+    if (parts.length < 2) return null;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.empleado_id || null;
+  } catch {
+    return null;
+  }
+}
+
+const initialUser: UserState | null = (() => {
+  if (!savedUser) return null;
+  try {
+    const parsed = JSON.parse(savedUser);
+    if (savedToken && !parsed.empleadoId) {
+      parsed.empleadoId = extractEmpleadoIdFromJwt(savedToken);
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+})();
+
 const [token, setToken] = createSignal<string | null>(savedToken);
-const [user, setUser] = createSignal<UserState | null>(
-  savedUser ? JSON.parse(savedUser) : null
-);
+const [user, setUser] = createSignal<UserState | null>(initialUser);
 
 let proactiveRefreshTimer: number | null = null;
 
@@ -91,7 +114,11 @@ export const authStore = {
   user,
 
   setAuth: (newToken: string, username: string, roles: string[]) => {
-    const userData = { username, roles };
+    const userData: UserState = {
+      username,
+      roles,
+      empleadoId: extractEmpleadoIdFromJwt(newToken),
+    };
     localStorage.setItem('sinbas_token', newToken);
     localStorage.setItem('sinbas_user', JSON.stringify(userData));
     setToken(newToken);
@@ -100,6 +127,13 @@ export const authStore = {
   },
 
   updateToken: (newToken: string) => {
+    const currentUser = user();
+    const newEmpleadoId = extractEmpleadoIdFromJwt(newToken);
+    if (currentUser && newEmpleadoId !== currentUser.empleadoId) {
+      const updatedUser: UserState = { ...currentUser, empleadoId: newEmpleadoId };
+      localStorage.setItem('sinbas_user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+    }
     localStorage.setItem('sinbas_token', newToken);
     setToken(newToken);
     programarRefrescoProactivo(newToken);
@@ -160,6 +194,8 @@ export const authStore = {
         return userRoles.some((r) => ['Comercial', 'Gerencia', 'Almacen'].includes(r));
       case 'ventas':
         return userRoles.some((r) => ['Comercial', 'Gerencia', 'Almacen'].includes(r));
+      case 'solicitudes':
+        return userRoles.some((r) => ['Almacen', 'Gerencia', 'Comercial'].includes(r));
       default:
         return false;
     }

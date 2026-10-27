@@ -47,6 +47,10 @@ let main args =
         options.AddPolicy("RequireAdmin", fun policy -> policy.RequireRole("Administrador") |> ignore)
         options.AddPolicy("RequireGerencia", fun policy -> policy.RequireRole("Administrador", "Gerencia") |> ignore)
         options.AddPolicy("RequireAlmacen", fun policy -> policy.RequireRole("Administrador", "Almacen") |> ignore)
+        options.AddPolicy("RequireSolicitudesRead", fun policy ->
+            policy.RequireRole("Almacen", "Gerencia", "Administrador") |> ignore)
+        options.AddPolicy("RequireSolicitudesWrite", fun policy ->
+            policy.RequireRole("Almacen", "Gerencia", "Administrador") |> ignore)
         options.AddPolicy("RequireLaboratorio", fun policy -> policy.RequireRole("Administrador", "Laboratorio") |> ignore)
         options.AddPolicy("RequireComercial", fun policy -> policy.RequireRole("Administrador", "Gerencia", "Comercial") |> ignore)
         options.AddPolicy("RequireSoloGerencia", fun policy -> policy.RequireRole("Gerencia") |> ignore)

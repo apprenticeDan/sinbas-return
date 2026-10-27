@@ -256,6 +256,7 @@ module SolicitudService =
         (listarLotes: ProductoId option -> EstadoLote option -> Async<Lote list>)
         (resolverNombreProducto: ProductoId -> string)
         (resolverCodigoLote: LoteId -> string)
+        (rolesAprobador: string list)
         (aprobadorId: Guid)
         (solicitudIdRaw: string)
         : Async<Result<SolicitudDto, string * int>> =
@@ -269,8 +270,12 @@ module SolicitudService =
             | None -> return Error ("Solicitud no encontrada", 404)
             | Some sol ->
 
+            let esExento =
+                rolesAprobador
+                |> List.exists (fun r -> r = "Gerencia" || r = "Administrador")
+
             let aprobador = EmpleadoId aprobadorId
-            match SolicitudEgresoInterno.aprobar aprobador DateTime.UtcNow sol with
+            match SolicitudEgresoInterno.aprobar aprobador esExento DateTime.UtcNow sol with
             | Error err -> return Error (errorToString err, 409)
             | Ok aprobada ->
 
