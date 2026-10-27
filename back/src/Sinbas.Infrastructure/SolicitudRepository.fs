@@ -346,59 +346,62 @@ module SolicitudRepository =
             conn.Open()
             use tx = conn.BeginTransaction()
             try
+                // 1. INSERT solicitud PRIMERO (parent), para que la FK se satisfaga
+                let (SolicitudEgresoInternoId sId) = solicitud.Id
+                let (EmpleadoId solId) = solicitud.Solicitante
+                let (tipoStr, destinoTipo, destinoOtro) = tipoToRow solicitud.Tipo
+                let signoStr = match solicitud.Signo with SignoEgresoInterno.Positivo -> "Positivo" | SignoEgresoInterno.Negativo -> "Negativo"
+                let prodId = solicitud.ProductoId |> Option.map (fun (ProductoId g) -> box g) |> Option.defaultValue (box DBNull.Value)
+                let loteId = solicitud.LoteId |> Option.map (fun (LoteId g) -> box g) |> Option.defaultValue (box DBNull.Value)
+                let (estadoStr, resAprob, resFecha, resMotivo, entPor, fEntrega) = estadoToRow solicitud.Estado
+
+                let sql = """
+                    INSERT INTO solicitud_egreso_interno (
+                        id, tipo, destino_uso_tipo, destino_uso_otro, signo,
+                        producto_id, lote_id, cantidad, unidad, motivo, solicitante_id,
+                        estado, resolucion_aprobador_id, resolucion_fecha, resolucion_motivo,
+                        entregado_por, fecha_entrega, creado_en
+                    ) VALUES (
+                        @id, @tipo, @destinoTipo, @destinoOtro, @signo,
+                        @productoId, @loteId, @cantidad, @unidad, @motivo, @solicitanteId,
+                        @estado, @resAprob, @resFecha, @resMotivo, @entPor, @fEntrega, @creadoEn
+                    )
+                """
+                let p = {|
+                    id = sId
+                    tipo = tipoStr
+                    destinoTipo = (if isNull destinoTipo then box DBNull.Value else box destinoTipo)
+                    destinoOtro = (if isNull destinoOtro then box DBNull.Value else box destinoOtro)
+                    signo = signoStr
+                    productoId = prodId
+                    loteId = loteId
+                    cantidad = solicitud.Cantidad.Valor
+                    unidad = UnidadMedida.aTexto solicitud.Cantidad.Unidad
+                    motivo = solicitud.Motivo
+                    solicitanteId = solId
+                    estado = estadoStr
+                    resAprob = resAprob
+                    resFecha = resFecha
+                    resMotivo = (if isNull resMotivo then box DBNull.Value else box resMotivo)
+                    entPor = entPor
+                    fEntrega = fEntrega
+                    creadoEn = solicitud.CreadoEn
+                |}
+                let! affected = conn.ExecuteAsync(sql, p, tx) |> Async.AwaitTask
+                if affected <> 1 then
+                    tx.Rollback()
+                    return Error (sprintf "insertar solicitud afectó %d filas" affected)
+                else
+
+                // 2. AHORA reservar lotes (child). La solicitud ya existe, FK se satisface.
                 let! resLotes = reservarLotesTx conn tx solicitud.Id reservas
                 match resLotes with
                 | Error msg ->
                     tx.Rollback()
                     return Error msg
                 | Ok () ->
-                    let (SolicitudEgresoInternoId sId) = solicitud.Id
-                    let (EmpleadoId solId) = solicitud.Solicitante
-                    let (tipoStr, destinoTipo, destinoOtro) = tipoToRow solicitud.Tipo
-                    let signoStr = match solicitud.Signo with SignoEgresoInterno.Positivo -> "Positivo" | SignoEgresoInterno.Negativo -> "Negativo"
-                    let prodId = solicitud.ProductoId |> Option.map (fun (ProductoId g) -> box g) |> Option.defaultValue (box DBNull.Value)
-                    let loteId = solicitud.LoteId |> Option.map (fun (LoteId g) -> box g) |> Option.defaultValue (box DBNull.Value)
-                    let (estadoStr, resAprob, resFecha, resMotivo, entPor, fEntrega) = estadoToRow solicitud.Estado
-
-                    let sql = """
-                        INSERT INTO solicitud_egreso_interno (
-                            id, tipo, destino_uso_tipo, destino_uso_otro, signo,
-                            producto_id, lote_id, cantidad, unidad, motivo, solicitante_id,
-                            estado, resolucion_aprobador_id, resolucion_fecha, resolucion_motivo,
-                            entregado_por, fecha_entrega, creado_en
-                        ) VALUES (
-                            @id, @tipo, @destinoTipo, @destinoOtro, @signo,
-                            @productoId, @loteId, @cantidad, @unidad, @motivo, @solicitanteId,
-                            @estado, @resAprob, @resFecha, @resMotivo, @entPor, @fEntrega, @creadoEn
-                        )
-                    """
-                    let p = {|
-                        id = sId
-                        tipo = tipoStr
-                        destinoTipo = (if isNull destinoTipo then box DBNull.Value else box destinoTipo)
-                        destinoOtro = (if isNull destinoOtro then box DBNull.Value else box destinoOtro)
-                        signo = signoStr
-                        productoId = prodId
-                        loteId = loteId
-                        cantidad = solicitud.Cantidad.Valor
-                        unidad = UnidadMedida.aTexto solicitud.Cantidad.Unidad
-                        motivo = solicitud.Motivo
-                        solicitanteId = solId
-                        estado = estadoStr
-                        resAprob = resAprob
-                        resFecha = resFecha
-                        resMotivo = (if isNull resMotivo then box DBNull.Value else box resMotivo)
-                        entPor = entPor
-                        fEntrega = fEntrega
-                        creadoEn = solicitud.CreadoEn
-                    |}
-                    let! affected = conn.ExecuteAsync(sql, p, tx) |> Async.AwaitTask
-                    if affected <> 1 then
-                        tx.Rollback()
-                        return Error (sprintf "insertar solicitud afectó %d filas" affected)
-                    else
-                        tx.Commit()
-                        return Ok ()
+                    tx.Commit()
+                    return Ok ()
             with ex ->
                 tx.Rollback()
                 eprintfn "[SolicitudRepository.insertarConReservaTx] Error: %s" ex.Message
