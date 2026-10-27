@@ -249,12 +249,36 @@ let ``Invariante RN11: El aprobador no puede ser el mismo usuario que registro l
                 DateTime.UtcNow
         )
 
-    let res = SolicitudEgresoInterno.aprobar usuario DateTime.UtcNow sol
+    let res = SolicitudEgresoInterno.aprobar usuario false DateTime.UtcNow sol
     match res with
     | Error (OperacionInvalida msg) ->
         Assert.Contains("RN11", msg)
         Assert.Contains("mismo usuario", msg)
     | other -> failwithf "FALLO RN11: Se permitió auto-aprobación del solicitante: %A" other
+
+[<Fact>]
+let ``RN11 exento: Gerencia y Admin pueden auto-aprobar su propia solicitud`` () =
+    let usuario = nuevoEmpleado ()
+    let fecha = DateTime.UtcNow
+    let sol =
+        unwrap (
+            SolicitudEgresoInterno.crear
+                (nuevaSolicitudId ())
+                TipoEgresoInterno.Ajuste
+                SignoEgresoInterno.Negativo
+                None
+                (Some (nuevoLote ()))
+                (crearCantidad 50m Gramo)
+                "Ajuste por merma física"
+                usuario
+                DateTime.UtcNow
+        )
+
+    match SolicitudEgresoInterno.aprobar usuario true fecha sol with
+    | Ok aprobada ->
+        Assert.Equal(EstadoSolicitudInterna.Aprobada { Aprobador = usuario; Fecha = fecha; Motivo = None }, aprobada.Estado)
+    | Error err ->
+        failwithf "Debió permitir auto-aprobación con esExento=true: %A" err
 
 [<Fact>]
 let ``Aprobador distinto aprueba exitosamente solicitud pendiente de ajuste o merma`` () =
@@ -276,7 +300,7 @@ let ``Aprobador distinto aprueba exitosamente solicitud pendiente de ajuste o me
                 DateTime.UtcNow
         )
 
-    let res = SolicitudEgresoInterno.aprobar gerente fechaAprob sol
+    let res = SolicitudEgresoInterno.aprobar gerente false fechaAprob sol
     match res with
     | Ok aprobada ->
         match aprobada.Estado with
@@ -366,10 +390,10 @@ let ``No se puede aprobar ni rechazar una solicitud que ya fue aprobada`` () =
                 DateTime.UtcNow
         )
 
-    let aprobada = unwrap (SolicitudEgresoInterno.aprobar gerente1 DateTime.UtcNow sol)
+    let aprobada = unwrap (SolicitudEgresoInterno.aprobar gerente1 false DateTime.UtcNow sol)
 
     // Re-aprobar
-    match SolicitudEgresoInterno.aprobar gerente2 DateTime.UtcNow aprobada with
+    match SolicitudEgresoInterno.aprobar gerente2 false DateTime.UtcNow aprobada with
     | Error (OperacionInvalida msg) -> Assert.Contains("ya se encuentra aprobada", msg)
     | other -> failwithf "Fallo: %A" other
 
@@ -399,7 +423,7 @@ let ``No se puede aprobar ni rechazar una solicitud que ya fue rechazada`` () =
     let rechazada = unwrap (SolicitudEgresoInterno.rechazar gerente "Rechazado" DateTime.UtcNow sol)
 
     // Aprobar ya rechazada
-    match SolicitudEgresoInterno.aprobar gerente DateTime.UtcNow rechazada with
+    match SolicitudEgresoInterno.aprobar gerente false DateTime.UtcNow rechazada with
     | Error (OperacionInvalida msg) -> Assert.Contains("solicitud rechazada", msg)
     | other -> failwithf "Fallo: %A" other
 
@@ -428,7 +452,7 @@ let ``UsoInterno no requiere aprobacion previa y se confirma directamente al ent
         )
 
     // Aprobar debe fallar (uso interno no requiere aprobación)
-    match SolicitudEgresoInterno.aprobar almacenero fecha sol with
+    match SolicitudEgresoInterno.aprobar almacenero false fecha sol with
     | Error (OperacionInvalida msg) -> Assert.Contains("confirmación física", msg)
     | other -> failwithf "Se esperaba que UsoInterno no admitiera aprobación: %A" other
 
@@ -484,7 +508,7 @@ let ``Ajuste o Merma aprobada se confirma exitosamente al ejecutarse`` () =
                 DateTime.UtcNow
         )
 
-    let aprobada = unwrap (SolicitudEgresoInterno.aprobar gerente fecha sol)
+    let aprobada = unwrap (SolicitudEgresoInterno.aprobar gerente false fecha sol)
     let res = SolicitudEgresoInterno.confirmar almacenero fecha aprobada
     match res with
     | Ok confirmada ->

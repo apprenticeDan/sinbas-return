@@ -14,6 +14,7 @@ import { LabView } from './ui/views/LabView';
 import { ClientesView } from './ui/views/ClientesView';
 import { ProformasView } from './ui/views/ProformasView';
 import { VentasView } from './ui/views/VentasView';
+import { SolicitudesView } from './ui/views/SolicitudesView';
 
 export const App: Component = () => {
   const [currentView, setCurrentView] = createSignal(authStore.getDefaultView());
@@ -60,6 +61,9 @@ export const App: Component = () => {
           </Show>
           <Show when={currentView() === 'ventas' && authStore.canAccessView('ventas')}>
             <VentasView />
+          </Show>
+          <Show when={currentView() === 'solicitudes' && authStore.canAccessView('solicitudes')}>
+            <SolicitudesView />
           </Show>
         </main>
       </div>
