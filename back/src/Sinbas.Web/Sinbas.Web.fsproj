@@ -15,6 +15,7 @@
     <Compile Include="AdminEndpoints.fs" />
     <Compile Include="ProformaEndpoints.fs" />
     <Compile Include="VentaEndpoints.fs" />
+    <Compile Include="SolicitudEndpoints.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
