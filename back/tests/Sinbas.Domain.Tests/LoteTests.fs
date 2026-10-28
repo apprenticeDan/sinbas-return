@@ -288,3 +288,49 @@ let ``OBS-12: Lote.archivar exige justificacion formal si el lote esta Activo co
     let archivadoTestigo = unwrap (Lote.archivar (Some "Muestra testigo permanente de colección biológica") lote)
     Assert.Equal(Archivado, archivadoTestigo.Estado)
     Assert.Contains("ARCHIVADO (Muestra Testigo)", archivadoTestigo.Observaciones.Value)
+
+let private cantReconst v u = unwrap (Cantidad.reconstruir v u)
+
+[<Fact>]
+let ``sumarStock suma delta al saldo actual del lote`` () =
+    let lote = crearLoteValido ()   // 50 kg según helper existente
+    let delta = cantReconst 2m Kilogramo
+    match Lote.sumarStock delta lote with
+    | Error e -> failwithf "esperaba Ok, recibí %A" e
+    | Ok actualizado ->
+        Assert.Equal(52m, actualizado.CantidadActual.Valor)
+        Assert.Equal(Activo, actualizado.Estado)
+
+[<Fact>]
+let ``sumarStock reactiva lote Agotado`` () =
+    let lote =
+        let baseLote = crearLoteValido ()
+        match Lote.descontarStock baseLote.CantidadActual baseLote with
+        | Ok agotado -> agotado
+        | Error e -> failwithf "setup falló: %A" e
+    Assert.Equal(Agotado, lote.Estado)
+    match Lote.sumarStock (cantReconst 1m Kilogramo) lote with
+    | Error e -> failwithf "esperaba Ok, recibí %A" e
+    | Ok actualizado ->
+        Assert.Equal(1m, actualizado.CantidadActual.Valor)
+        Assert.Equal(Activo, actualizado.Estado)
+
+[<Fact>]
+let ``sumarStock rechaza delta cero o negativo`` () =
+    let lote = crearLoteValido ()
+    let deltaCero = Cantidad.cero Kilogramo
+    Assert.True(Lote.sumarStock deltaCero lote |> Result.isError)
+    match Lote.sumarStock deltaCero lote with
+    | Error (CantidadInvalida msg) -> Assert.Contains("mayor a cero", msg)
+    | _ -> failwith "esperaba CantidadInvalida"
+    match Cantidad.reconstruir -1m Kilogramo with
+    | Error (CantidadInvalida _) -> ()
+    | _ -> failwith "esperaba que Cantidad.reconstruir rechazara negativo"
+
+[<Fact>]
+let ``sumarStock rechaza unidades incompatibles`` () =
+    let lote = crearLoteValido ()   // Kilogramo
+    match Lote.sumarStock (cantReconst 10m Litro) lote with
+    | Error (UnidadIncompatible _) -> ()
+    | _ -> failwith "esperaba UnidadIncompatible"
+

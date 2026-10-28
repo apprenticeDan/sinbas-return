@@ -208,7 +208,7 @@ module SolicitudRepository =
                     | Error msg -> return Error msg
                     | Ok [] -> return Error "Lote para ajuste no encontrado"
                     | Ok [ lote ] ->
-                        match Lote.actualizarSaldo solicitud.Cantidad.Valor lote with
+                        match Lote.sumarStock solicitud.Cantidad lote with
                         | Error err -> return Error (sprintf "Error sumando stock al lote: %A" err)
                         | Ok loteActualizado ->
                             return! LoteRepository.actualizarStockYEstadoTx conn tx loteActualizado
