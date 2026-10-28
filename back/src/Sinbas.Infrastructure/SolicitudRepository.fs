@@ -514,11 +514,10 @@ module SolicitudRepository =
                 if affectedMov <> 1 then
                     tx.Rollback()
                     return Error "No se pudo insertar movimiento_inventario"
-                else
-
-                if solicitud.Signo = SignoEgresoInterno.Positivo && Option.isNone solicitud.LoteId then
+                elif solicitud.Signo = SignoEgresoInterno.Positivo && Option.isNone solicitud.LoteId then
                     tx.Rollback()
                     return Error "Datos inconsistentes: Ajuste Positivo sin lote asignado"
+                else
 
                 // 2. INSERT linea_movimiento por cada línea (child de movimiento)
                 match solicitud.LoteId with
