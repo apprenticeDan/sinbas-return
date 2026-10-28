@@ -379,12 +379,14 @@ module InventoryService =
                             | Entrada (Devolucion _) -> "Devolución"
                             | Entrada (TruequeEntrada _) -> "Trueque"
                             | Entrada (DevolucionAnulacion (OrdenId oId)) -> sprintf "Devolución por Anulación (Orden %s)" (oId.ToString("D"))
+                            | Entrada MotivoIngreso.Ajuste -> "Ajuste"
                             | Salida (Venta _) -> "Venta"
                             | Salida (MuestraLab _) -> "Muestra Lab"
                             | Salida (Merma c) -> sprintf "Merma (%s)" c
                             | Salida (UsoInterno (d, s)) -> sprintf "Uso Interno [%s] (%s)" (DestinoUso.aTexto d) s
                             | Salida (DonacionEnviada d) -> sprintf "Donación (%s)" d
                             | Salida (TruequeSalida _) -> "Trueque"
+                            | Salida MotivoEgreso.Ajuste -> "Ajuste"
 
                         let! lineasDtos =
                             mov.Lineas
@@ -622,6 +624,7 @@ module InventoryService =
                             | DonacionRecibida don -> sprintf "Donación: %s" don
                             | Devolucion _ -> "Devolución"
                             | DevolucionAnulacion (OrdenId oId) -> sprintf "Devolución Anulación: %s" (oId.ToString("D"))
+                            | MotivoIngreso.Ajuste -> "Ajuste"
                         | Salida m ->
                             match m with
                             | Venta _ -> "Venta"
@@ -630,6 +633,7 @@ module InventoryService =
                             | UsoInterno (d, s) -> sprintf "Uso Interno [%s]: %s" (DestinoUso.aTexto d) s
                             | DonacionEnviada dest -> sprintf "Donación: %s" dest
                             | TruequeSalida _ -> "Trueque / Intercambio"
+                            | MotivoEgreso.Ajuste -> "Ajuste"
 
                     let dispResultante =
                         if kl.Cantidad.Unidad = Kilogramo || kl.Cantidad.Unidad = Litro then kl.SaldoResultanteGramos / 1000m

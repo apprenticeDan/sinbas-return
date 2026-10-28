@@ -65,6 +65,7 @@ module InventoryRepository =
             | Devolucion (ClienteId cliId) -> ("Entrada", motivoStr, Nullable cliId, null)
             | TruequeEntrada (TruequeId truId) -> ("Entrada", motivoStr, Nullable truId, null)
             | DevolucionAnulacion (OrdenId oId) -> ("Entrada", motivoStr, Nullable oId, null)
+            | MotivoIngreso.Ajuste -> ("Entrada", motivoStr, Nullable(), null)
         | Salida motivoEgreso ->
             let motivoStr = MotivoEgreso.aTexto motivoEgreso
             match motivoEgreso with
@@ -74,6 +75,7 @@ module InventoryRepository =
             | UsoInterno _ -> ("Salida", motivoStr, Nullable(), null)
             | DonacionEnviada dest -> ("Salida", motivoStr, Nullable(), dest)
             | TruequeSalida (TruequeId truId) -> ("Salida", motivoStr, Nullable truId, null)
+            | MotivoEgreso.Ajuste -> ("Salida", motivoStr, Nullable(), null)
 
     let private aMovimientoDominio (row: MovimientoInventarioRow) (lineasRows: LineaMovimientoRow list) : Result<MovimientoInventario, ErrorIntegridad> =
         let contraparteOpt = if row.contraparte_ref.HasValue then Some row.contraparte_ref.Value else None

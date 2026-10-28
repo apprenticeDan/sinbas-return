@@ -391,12 +391,12 @@ module SolicitudService =
 
             let tipoMov =
                 if confirmada.Signo = SignoEgresoInterno.Positivo then
-                    Entrada (MotivoIngreso.Recoleccion "Ajuste de inventario")
+                    Entrada MotivoIngreso.Ajuste
                 else
                     match confirmada.Tipo with
                     | TipoEgresoInterno.UsoInterno dest -> Salida (MotivoEgreso.UsoInterno (dest, "Personal Interno"))
                     | TipoEgresoInterno.Merma -> Salida (MotivoEgreso.Merma confirmada.Motivo)
-                    | TipoEgresoInterno.Ajuste -> Salida (MotivoEgreso.UsoInterno (DestinoUso.Otro "Ajuste", "Personal Interno"))
+                    | TipoEgresoInterno.Ajuste -> Salida MotivoEgreso.Ajuste
 
             let lineasMov =
                 match confirmada.LoteId with

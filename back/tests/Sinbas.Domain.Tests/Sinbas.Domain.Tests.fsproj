@@ -17,6 +17,7 @@
     <Compile Include="ValidacionTests.fs" />
     <Compile Include="EmpleadoTests.fs" />
     <Compile Include="InventoryTests.fs" />
+    <Compile Include="MovimientoTests.fs" />
     <Compile Include="StockTests.fs" />
     <Compile Include="UserTests.fs" />
     <Compile Include="RefreshTokenTests.fs" />

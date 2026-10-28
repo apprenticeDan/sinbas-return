@@ -52,6 +52,7 @@ type MotivoIngreso =
     | Devolucion of ClienteId
     | TruequeEntrada of TruequeId
     | DevolucionAnulacion of OrdenId
+    | Ajuste
 
 module MotivoIngreso =
 
@@ -62,6 +63,7 @@ module MotivoIngreso =
         | Devolucion _ -> "Devolucion"
         | TruequeEntrada _ -> "Trueque"
         | DevolucionAnulacion _ -> "DevolucionAnulacion"
+        | Ajuste -> "Ajuste"
 
     let desdeTexto (motivo: string) (contraparteRef: Guid option) (contraparteNombre: string option) : Result<MotivoIngreso, DomainError> =
         match (if isNull motivo then "" else motivo.Trim()) with
@@ -93,6 +95,8 @@ module MotivoIngreso =
             match contraparteRef with
             | Some oId -> Ok (DevolucionAnulacion (OrdenId oId))
             | None -> Error (ValorRequerido "El ingreso por Devolución por Anulación requiere un OrdenId (contraparte_ref)")
+        | "Ajuste" ->
+            Ok MotivoIngreso.Ajuste
         | desconocido ->
             Error (ValorRequerido (sprintf "Motivo de ingreso desconocido o inválido: '%s'" desconocido))
 
@@ -122,6 +126,7 @@ type MotivoEgreso =
     | UsoInterno of destino: DestinoUso * solicitante: string
     | DonacionEnviada of destinatario: string
     | TruequeSalida of TruequeId
+    | Ajuste
 
 module MotivoEgreso =
 
@@ -132,6 +137,7 @@ module MotivoEgreso =
         | UsoInterno _ -> "UsoInterno"
         | DonacionEnviada _ -> "Donacion"
         | TruequeSalida _ -> "Trueque"
+        | Ajuste -> "Ajuste"
 
     let desdeTexto
         (motivo: string)
@@ -191,6 +197,8 @@ module MotivoEgreso =
             match contraparteRef with
             | Some tId -> Ok (TruequeSalida (TruequeId tId))
             | None -> Error (ValorRequerido "El egreso por Trueque requiere un TruequeId (contraparte_ref)")
+        | "Ajuste" ->
+            Ok MotivoEgreso.Ajuste
         | desconocido ->
             Error (ValorRequerido (sprintf "Motivo de egreso desconocido o inválido: '%s'" desconocido))
 
