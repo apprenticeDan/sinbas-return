@@ -1021,7 +1021,7 @@ export const ProformasView: Component = () => {
                               Asignar Cliente Registrado *
                             </label>
                             <p class="text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 mb-2">
-                              ⚠️ Esta proforma fue emitida como libre/anónima. La normativa contable exige asignar un cliente registrado en SINBAS antes de confirmar la venta.
+                              ⚠️ Esta proforma fue emitida como libre/anónima. Debe asociar un cliente registrado para confirmar la venta.
                             </p>
                             <select
                               class="input-field text-sm w-full"
