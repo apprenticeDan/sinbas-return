@@ -200,7 +200,8 @@ module SolicitudRepository =
         async {
             if solicitud.Signo = SignoEgresoInterno.Positivo then
                 match solicitud.LoteId with
-                | None -> return Ok ()
+                | None ->
+                    return Error "Datos inconsistentes: Ajuste Positivo sin lote asignado (posible registro legacy)"
                 | Some loteId ->
                     let! lotesLockedRes = LoteRepository.obtenerMultiplesPorIdParaActualizacion conn tx [ loteId ]
                     match lotesLockedRes with
@@ -514,6 +515,10 @@ module SolicitudRepository =
                     tx.Rollback()
                     return Error "No se pudo insertar movimiento_inventario"
                 else
+
+                if solicitud.Signo = SignoEgresoInterno.Positivo && Option.isNone solicitud.LoteId then
+                    tx.Rollback()
+                    return Error "Datos inconsistentes: Ajuste Positivo sin lote asignado"
 
                 // 2. INSERT linea_movimiento por cada línea (child de movimiento)
                 match solicitud.LoteId with

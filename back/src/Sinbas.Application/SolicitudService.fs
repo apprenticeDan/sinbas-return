@@ -219,7 +219,10 @@ module SolicitudService =
                                             | _ ->
                                                 return Error ("No se encontraron lotes para asignar", 422)
                                 else
-                                    return Ok (Some pId, None, [])
+                                    if tipo = TipoEgresoInterno.Ajuste then
+                                        return Error ("Un Ajuste Positivo requiere especificar el lote físico afectado", 400)
+                                    else
+                                        return Ok (Some pId, None, [])
                         | _ ->
                             return Ok (None, None, [])
                 }

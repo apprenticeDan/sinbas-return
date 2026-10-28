@@ -351,6 +351,10 @@ module SolicitudEgresoInterno =
             Error (CantidadInvalida "La cantidad debe ser mayor a cero")
         elif Option.isNone productoId && Option.isNone loteId then
             Error (ValorRequerido "La solicitud debe especificar al menos un producto o un lote")
+        elif (match tipo with TipoEgresoInterno.Ajuste -> true | _ -> false)
+             && signo = Positivo
+             && Option.isNone loteId then
+            Error (ValorRequerido "Un Ajuste Positivo requiere especificar el lote al que se suma el stock")
         elif (match tipo with TipoEgresoInterno.UsoInterno _ | TipoEgresoInterno.Merma -> signo = Positivo | TipoEgresoInterno.Ajuste -> false) then
             Error (OperacionInvalida "El uso interno o merma no puede tener signo positivo")
         else
