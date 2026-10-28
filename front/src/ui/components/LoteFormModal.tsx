@@ -1,3 +1,7 @@
+// DEPRECATED: La creación de lotes se realiza desde IngresosView.
+// Este componente quedó desconectado en Fase 7b-lite. Se conserva
+// como referencia hasta 7d (deuda técnica).
+
 import { createSignal, Show, For, onMount } from 'solid-js';
 import { loteStore } from '../store/loteStore';
 import { catalogStore } from '../store/catalogStore';
