@@ -19,6 +19,8 @@ import {
   type DestinoUso,
   type CrearSolicitudRequest,
 } from '../../domain/models/Solicitud';
+import { ApiLoteGateway } from '../../infrastructure/api/ApiLoteGateway';
+import type { LoteItem } from '../../domain/models/Lote';
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -160,6 +162,31 @@ export const SolicitudesView: Component = () => {
 
   const opcionesUnidad = createMemo(() => unidadesCompatibles(productoSeleccionado()));
 
+  const [formLoteId, setFormLoteId] = createSignal('');
+  const [lotesProducto, setLotesProducto] = createSignal<LoteItem[]>([]);
+  const [loadingLotes, setLoadingLotes] = createSignal(false);
+
+  async function handleProductoChange(id: string) {
+    setFormProductoId(id);
+    setFormLoteId('');
+    setLotesProducto([]);
+    const prod = almacenStore.productosCache().find((p) => p.id === id);
+    if (prod && prod.unidadManejo) {
+      setFormUnidad(prod.unidadManejo);
+    }
+    if (id) {
+      setLoadingLotes(true);
+      try {
+        const items = await ApiLoteGateway.listarLotes(id, 'Activo');
+        setLotesProducto(items);
+      } catch (err) {
+        console.error('Error cargando lotes del producto:', err);
+      } finally {
+        setLoadingLotes(false);
+      }
+    }
+  }
+
   // ─── Helpers de form y modales ────────────────────────────
   function limpiarForm() {
     setFormTipo('');
@@ -167,6 +194,8 @@ export const SolicitudesView: Component = () => {
     setFormDestinoOtro('');
     setFormSigno('Negativo');
     setFormProductoId('');
+    setFormLoteId('');
+    setLotesProducto([]);
     setFormCantidad('');
     setFormUnidad('Kilogramo');
     setFormMotivo('');
@@ -240,10 +269,16 @@ export const SolicitudesView: Component = () => {
     const motivo = formMotivo().trim();
     if (motivo.length < 5) { setFormError('El motivo debe tener al menos 5 caracteres.'); return; }
 
+    if (tipo === 'Ajuste' && formSigno() === 'Positivo' && !formLoteId()) {
+      setFormError('Un Ajuste Positivo requiere seleccionar el lote al que se suma el stock.');
+      return;
+    }
+
     const req: CrearSolicitudRequest = {
       tipo: tipo as TipoEgresoInterno,
       signo: tipo === 'Ajuste' ? formSigno() : 'Negativo',
       productoId: formProductoId() || null,
+      loteId: formLoteId() || null,
       cantidad: cant,
       unidad: formUnidad(),
       motivo,
@@ -605,18 +640,45 @@ export const SolicitudesView: Component = () => {
                   <label>Producto</label>
                   <select
                     value={formProductoId()}
-                    onChange={(e) => {
-                      const id = e.currentTarget.value;
-                      setFormProductoId(id);
-                      const prod = almacenStore.productosCache().find((p) => p.id === id);
-                      if (prod && prod.unidadManejo) {
-                        setFormUnidad(prod.unidadManejo);
-                      }
-                    }}
+                    onChange={(e) => handleProductoChange(e.currentTarget.value)}
                   >
                     <option value="">— Seleccione producto —</option>
                     <For each={almacenStore.productosCache()}>
                       {(p) => <option value={p.id}>{p.nombreVisible}</option>}
+                    </For>
+                  </select>
+                </div>
+
+                {/* Lote */}
+                <div class="field">
+                  <label>
+                    Lote
+                    {formTipo() === 'Ajuste' && formSigno() === 'Positivo' ? (
+                      <span style={{ color: 'var(--rust)', 'margin-left': '4px' }}>*</span>
+                    ) : (
+                      <span style={{ color: 'var(--ink-soft)', 'font-size': '11px', 'margin-left': '4px' }}>
+                        (opcional)
+                      </span>
+                    )}
+                  </label>
+                  <select
+                    value={formLoteId()}
+                    onChange={(e) => setFormLoteId(e.currentTarget.value)}
+                    disabled={!formProductoId() || loadingLotes()}
+                  >
+                    <option value="">
+                      {loadingLotes()
+                        ? 'Cargando lotes...'
+                        : formTipo() === 'Ajuste' && formSigno() === 'Positivo'
+                        ? '— Seleccionar lote (obligatorio) —'
+                        : '— Seleccionar lote (opcional) —'}
+                    </option>
+                    <For each={lotesProducto()}>
+                      {(lote) => (
+                        <option value={lote.id}>
+                          {lote.codigo} — {lote.procedencia || 'sin procedencia'} ({lote.cantidadActual} {lote.unidad})
+                        </option>
+                      )}
                     </For>
                   </select>
                 </div>
