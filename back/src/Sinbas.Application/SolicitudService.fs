@@ -219,7 +219,10 @@ module SolicitudService =
                                             | _ ->
                                                 return Error ("No se encontraron lotes para asignar", 422)
                                 else
-                                    return Ok (Some pId, None, [])
+                                    if tipo = TipoEgresoInterno.Ajuste then
+                                        return Error ("Un Ajuste Positivo requiere especificar el lote físico afectado", 400)
+                                    else
+                                        return Ok (Some pId, None, [])
                         | _ ->
                             return Ok (None, None, [])
                 }
@@ -388,12 +391,12 @@ module SolicitudService =
 
             let tipoMov =
                 if confirmada.Signo = SignoEgresoInterno.Positivo then
-                    Entrada (MotivoIngreso.Recoleccion "Ajuste de inventario")
+                    Entrada MotivoIngreso.Ajuste
                 else
                     match confirmada.Tipo with
                     | TipoEgresoInterno.UsoInterno dest -> Salida (MotivoEgreso.UsoInterno (dest, "Personal Interno"))
                     | TipoEgresoInterno.Merma -> Salida (MotivoEgreso.Merma confirmada.Motivo)
-                    | TipoEgresoInterno.Ajuste -> Salida (MotivoEgreso.UsoInterno (DestinoUso.Otro "Ajuste", "Personal Interno"))
+                    | TipoEgresoInterno.Ajuste -> Salida MotivoEgreso.Ajuste
 
             let lineasMov =
                 match confirmada.LoteId with

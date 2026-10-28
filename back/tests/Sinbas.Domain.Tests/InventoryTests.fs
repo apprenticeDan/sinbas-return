@@ -3,6 +3,7 @@ module Sinbas.Domain.Tests.InventoryTests
 open System
 open Xunit
 open Sinbas.Domain
+open Sinbas.Application
 
 [<Fact>]
 let ``Stock de un lote acumula entradas y salidas correctamente`` () =
@@ -238,5 +239,185 @@ let ``TipoMovimiento.resolver resuelve entradas y salidas validas correctamente`
 
     let salidaRes = TipoMovimiento.resolver "Salida" "Venta" (Some cliId) None None None None
     Assert.Equal(Ok (Salida (Venta (ClienteId cliId))), salidaRes)
+
+// ─────────────────────────────────────────────────────────────
+// Tests de InventoryService.registrarIngreso (7b-lite-ter)
+// ─────────────────────────────────────────────────────────────
+
+let private crearProductoTest (pId: ProductoId) =
+    let nc = unwrap (NombreCientifico.crear "Cedrela" "odorata" None)
+    let nomComun = unwrap (NombreComun.crear "Cedro")
+    let cat = Semilla(nc, [ nomComun ])
+    Producto.crearBorradorConUnidad pId Kilogramo PorLote cat None
+
+let private crearLoteTest (lId: LoteId) (pId: ProductoId) (codStr: string) (cant: decimal) (unidad: UnidadMedida) : Lote =
+    let cod = unwrap (CodigoLote.desdeString codStr)
+    { Id = lId
+      Codigo = cod
+      ProductoId = pId
+      Procedencia = Some "Cochabamba"
+      CantidadInicial = unwrap (Cantidad.reconstruir cant unidad)
+      CantidadActual = unwrap (Cantidad.reconstruir cant unidad)
+      CantidadReservada = Cantidad.cero unidad
+      FechaIngreso = DateOnly(2026, 10, 28)
+      Ubicacion = None
+      Estado = Activo
+      Observaciones = None }
+
+let private crearReqIngreso (pId: ProductoId) (loteIdStr: string) (cant: decimal) : RegistrarIngresoRequest =
+    let (ProductoId pGuid) = pId
+    { ProductoId = string pGuid
+      LoteId = loteIdStr
+      Descripcion = "Cedrela odorata"
+      Categoria = "Semilla"
+      TipoIngreso = "Recoleccion"
+      Cantidad = cant
+      Unidad = "Kilogramo"
+      Procedencia = "Test"
+      Observaciones = ""
+      Fecha = "2026-10-28" }
+
+[<Fact>]
+let ``Ingreso nuevo sin LoteId sobre producto con lote Activo crea LOTE NUEVO`` () =
+    let prodId = ProductoId (Identidad.nuevo ())
+    let prod = crearProductoTest prodId
+    let loteExistenteId = LoteId (Identidad.nuevo ())
+    let loteExistente = crearLoteTest loteExistenteId prodId "CEDREODO-02610-01" 10m Kilogramo
+
+    let mutable lotesDb : Lote list = [ loteExistente ]
+    let mutable movimientosDb : MovimientoInventario list = []
+
+    let obtenerProductoPorId (pId: ProductoId) = async { return if pId = prodId then Some prod else None }
+    let listarProductos () = async { return [ prod ] }
+    let obtenerLotePorId (lId: LoteId) = async { return lotesDb |> List.tryFind (fun (l: Lote) -> l.Id = lId) }
+    let listarLotes (pIdOpt: ProductoId option) (estOpt: EstadoLote option) =
+        async {
+            return
+                lotesDb
+                |> List.filter (fun (l: Lote) ->
+                    (match pIdOpt with Some p -> l.ProductoId = p | None -> true)
+                    && (match estOpt with Some e -> l.Estado = e | None -> true))
+        }
+    let insertarLote (l: Lote) = async { lotesDb <- lotesDb @ [ l ] }
+    let actualizarLoteStock (l: Lote) = async { lotesDb <- lotesDb |> List.map (fun (x: Lote) -> if x.Id = l.Id then l else x) }
+    let insertarMovimiento (m: MovimientoInventario) (_: string option) (_: string option) (_: string option) = async { movimientosDb <- movimientosDb @ [ m ] }
+    let responsableId = Guid.NewGuid()
+
+    let req = crearReqIngreso prodId "" 5m
+
+    let res =
+        InventoryService.registrarIngreso
+            obtenerProductoPorId listarProductos obtenerLotePorId listarLotes
+            insertarLote actualizarLoteStock insertarMovimiento responsableId req
+        |> Async.RunSynchronously
+
+    match res with
+    | Error err -> failwithf "Fallo inesperado: %s" err
+    | Ok _ ->
+        Assert.Equal(2, lotesDb.Length)
+        let loteExistentePost = lotesDb.[0]
+        let loteNuevo = lotesDb.[1]
+        Assert.NotEqual(loteExistentePost.Id, loteNuevo.Id)
+        Assert.NotEqual(loteExistentePost.Codigo, loteNuevo.Codigo)
+        Assert.Equal(10m, Cantidad.valor loteExistentePost.CantidadActual)
+        Assert.Equal(5m, Cantidad.valor loteNuevo.CantidadActual)
+
+[<Fact>]
+let ``2 ingresos consecutivos sin LoteId producen 2 lotes distintos`` () =
+    let prodId = ProductoId (Identidad.nuevo ())
+    let prod = crearProductoTest prodId
+
+    let mutable lotesDb : Lote list = []
+    let mutable movimientosDb : MovimientoInventario list = []
+
+    let obtenerProductoPorId (pId: ProductoId) = async { return if pId = prodId then Some prod else None }
+    let listarProductos () = async { return [ prod ] }
+    let obtenerLotePorId (lId: LoteId) = async { return lotesDb |> List.tryFind (fun (l: Lote) -> l.Id = lId) }
+    let listarLotes (pIdOpt: ProductoId option) (estOpt: EstadoLote option) =
+        async {
+            return
+                lotesDb
+                |> List.filter (fun (l: Lote) ->
+                    (match pIdOpt with Some p -> l.ProductoId = p | None -> true)
+                    && (match estOpt with Some e -> l.Estado = e | None -> true))
+        }
+    let insertarLote (l: Lote) = async { lotesDb <- lotesDb @ [ l ] }
+    let actualizarLoteStock (l: Lote) = async { lotesDb <- lotesDb |> List.map (fun (x: Lote) -> if x.Id = l.Id then l else x) }
+    let insertarMovimiento (m: MovimientoInventario) (_: string option) (_: string option) (_: string option) = async { movimientosDb <- movimientosDb @ [ m ] }
+    let responsableId = Guid.NewGuid()
+
+    let req1 = crearReqIngreso prodId "" 3.8m
+    let req2 = crearReqIngreso prodId "" 1.2m
+
+    let res1 =
+        InventoryService.registrarIngreso
+            obtenerProductoPorId listarProductos obtenerLotePorId listarLotes
+            insertarLote actualizarLoteStock insertarMovimiento responsableId req1
+        |> Async.RunSynchronously
+
+    let res2 =
+        InventoryService.registrarIngreso
+            obtenerProductoPorId listarProductos obtenerLotePorId listarLotes
+            insertarLote actualizarLoteStock insertarMovimiento responsableId req2
+        |> Async.RunSynchronously
+
+    match res1, res2 with
+    | Ok _, Ok _ ->
+        Assert.Equal(2, lotesDb.Length)
+        let lote1 = lotesDb.[0]
+        let lote2 = lotesDb.[1]
+        Assert.NotEqual(lote1.Id, lote2.Id)
+        Assert.NotEqual(lote1.Codigo, lote2.Codigo)
+        Assert.Equal(3.8m, Cantidad.valor lote1.CantidadActual)
+        Assert.Equal(1.2m, Cantidad.valor lote2.CantidadActual)
+    | Error e, _ | _, Error e -> failwithf "Fallo inesperado: %s" e
+
+[<Fact>]
+let ``Ingreso con LoteId invalido 'abc' retorna Error`` () =
+    let prodId = ProductoId (Identidad.nuevo ())
+    let prod = crearProductoTest prodId
+    let req = crearReqIngreso prodId "abc" 5m
+
+    let res =
+        InventoryService.registrarIngreso
+            (fun _ -> async { return Some prod })
+            (fun () -> async { return [ prod ] })
+            (fun _ -> async { return None })
+            (fun _ _ -> async { return [] })
+            (fun (_: Lote) -> async { return () })
+            (fun (_: Lote) -> async { return () })
+            (fun (_: MovimientoInventario) _ _ _ -> async { return () })
+            (Guid.NewGuid())
+            req
+        |> Async.RunSynchronously
+
+    match res with
+    | Error err -> Assert.Contains("no es un UUID válido", err)
+    | Ok _ -> failwith "Se esperaba Error pero retornó Ok"
+
+[<Fact>]
+let ``Ingreso con LoteId valido pero inexistente retorna Error`` () =
+    let prodId = ProductoId (Identidad.nuevo ())
+    let prod = crearProductoTest prodId
+    let nonExistentGuid = Guid.NewGuid().ToString()
+    let req = crearReqIngreso prodId nonExistentGuid 5m
+
+    let res =
+        InventoryService.registrarIngreso
+            (fun _ -> async { return Some prod })
+            (fun () -> async { return [ prod ] })
+            (fun _ -> async { return None })
+            (fun _ _ -> async { return [] })
+            (fun (_: Lote) -> async { return () })
+            (fun (_: Lote) -> async { return () })
+            (fun (_: MovimientoInventario) _ _ _ -> async { return () })
+            (Guid.NewGuid())
+            req
+        |> Async.RunSynchronously
+
+    match res with
+    | Error err -> Assert.Contains("no existe", err)
+    | Ok _ -> failwith "Se esperaba Error pero retornó Ok"
+
 
 

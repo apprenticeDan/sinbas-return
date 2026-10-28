@@ -192,6 +192,27 @@ let ``Invariante: la solicitud debe especificar al menos un producto o un lote``
     | other -> failwithf "Se esperaba ValorRequerido pero se obtuvo: %A" other
 
 [<Fact>]
+let ``Invariante: Ajuste Positivo requiere LoteId obligatorio`` () =
+    let solId = SolicitudEgresoInternoId (Identidad.nuevo ())
+    let prodId = ProductoId (Identidad.nuevo ())
+    let cant = crearCantidad 2m Kilogramo
+    let r =
+        SolicitudEgresoInterno.crear
+            solId
+            TipoEgresoInterno.Ajuste
+            Positivo
+            (Some prodId)
+            None // ← sin lote
+            cant
+            "Sobrante de inventario"
+            (nuevoEmpleado ())
+            DateTime.UtcNow
+    match r with
+    | Error (ValorRequerido msg) when msg.Contains "Ajuste Positivo" -> ()
+    | Error e -> failwithf "esperaba ValorRequerido, recibí %A" e
+    | Ok _ -> failwith "esperaba error"
+
+[<Fact>]
 let ``Invariante: UsoInterno y Merma no pueden crearse con signo positivo`` () =
     let loteId = nuevoLote ()
     let emp = nuevoEmpleado ()

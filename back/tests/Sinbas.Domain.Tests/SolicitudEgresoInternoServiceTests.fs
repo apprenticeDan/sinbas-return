@@ -614,3 +614,26 @@ let ``8. FIFO requiere >1 lote para la cantidad: retorna 422 con mensaje`` () =
     | Error (msg, code) ->
         Assert.Equal(422, code)
         Assert.Contains("requiere múltiples lotes", msg)
+
+[<Fact>]
+let ``Ajuste Positivo sin LoteId es rechazado en crear`` () =
+    let req : CrearSolicitudRequest =
+        { Tipo = "Ajuste"; DestinoTipo = None; DestinoOtro = None
+          Signo = "Positivo"
+          ProductoId = Some (Guid.NewGuid().ToString())
+          LoteId = None
+          Cantidad = 2m; Unidad = "Kilogramo"
+          Motivo = "Sobrante auditado" }
+    let res =
+        SolicitudService.crear
+            (fun _ _ -> async { return Ok () })
+            (fun _ -> async { return None })
+            (fun _ _ -> async { return [] })
+            resolverProd resolverLote
+            (Guid.NewGuid ())
+            req
+        |> Async.RunSynchronously
+    match res with
+    | Error (msg, 400) when msg.Contains "Ajuste Positivo" -> ()
+    | _ -> failwithf "esperaba Error 400, recibí %A" res
+

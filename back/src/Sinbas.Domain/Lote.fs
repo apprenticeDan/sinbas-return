@@ -255,6 +255,36 @@ module Lote =
                         CantidadActual = nuevaCantidad
                         Estado = nuevoEstado }
 
+    /// Suma un delta de cantidad al saldo actual del lote.
+    /// Diferencia clave con `actualizarSaldo`: esa función SETea el saldo
+    /// total; esta suma el delta (uso: Ajuste Positivo, devoluciones).
+    /// Reactiva el estado a Activo si estaba Agotado.
+    let sumarStock (delta: Cantidad) (lote: Lote) : Result<Lote, DomainError> =
+        if Cantidad.valor delta <= 0m then
+            Error (CantidadInvalida "El delta a sumar debe ser mayor a cero")
+        elif not (UnidadMedida.sonCompatibles delta.Unidad lote.CantidadActual.Unidad) then
+            Error (UnidadIncompatible
+                (sprintf "No se puede sumar %s a un lote en %s"
+                    (UnidadMedida.aTexto delta.Unidad)
+                    (UnidadMedida.aTexto lote.CantidadActual.Unidad)))
+        else
+            let deltaBase = Cantidad.aUnidadBase delta
+            let actualBase = Cantidad.aUnidadBase lote.CantidadActual
+            let nuevoBase = actualBase + deltaBase
+            let unidadLote = lote.CantidadActual.Unidad
+            let uBase = UnidadMedida.unidadBase unidadLote
+            match UnidadMedida.convertir uBase unidadLote nuevoBase with
+            | Error err -> Error err
+            | Ok valorEnUnidadLote ->
+                match Cantidad.reconstruir valorEnUnidadLote unidadLote with
+                | Error err -> Error err
+                | Ok nuevaCantidad ->
+                    let nuevoEstado =
+                        match lote.Estado with
+                        | Agotado when Cantidad.valor nuevaCantidad > 0m -> Activo
+                        | e -> e
+                    Ok { lote with CantidadActual = nuevaCantidad; Estado = nuevoEstado }
+
     let descontarStock (cantidadADescontar: Cantidad) (lote: Lote) : Result<Lote, DomainError> =
         if cantidadADescontar.Valor <= 0m then
             Error (CantidadInvalida (sprintf "La cantidad a descontar debe ser mayor a cero, recibido: %M" cantidadADescontar.Valor))

@@ -1,9 +1,13 @@
+// Nota: la creación de lotes se gestiona exclusivamente desde
+// IngresosView, que genera movimiento de entrada + actualización de
+// stock + kardex coherentemente. Este módulo es consulta + gestión
+// de estado (bloquear, liberar, archivar, ficha técnica).
+
 import { onMount, Show, For, createMemo, createSignal } from 'solid-js';
 import { loteStore } from '../store/loteStore';
 import { authStore } from '../store/authStore';
 import { LoteItem } from '../../domain/models/Lote';
 import { DataTable, Column } from '../components/DataTable';
-import { LoteFormModal } from '../components/LoteFormModal';
 import { LoteBlockModal } from '../components/LoteBlockModal';
 import { LoteFichaTecnicaModal } from '../components/LoteFichaTecnicaModal';
 import { formatDisplayId } from '../utils/formatters';
@@ -17,8 +21,6 @@ export function LotesView() {
     loteStore.loadLotes();
   });
 
-
-  const canManageLotes = createMemo(() => authStore.hasAnyRole(['Administrador', 'Almacen', 'Gerencia']));
   const canBlockLotes = createMemo(() => authStore.hasAnyRole(['Laboratorio', 'Gerencia']));
 
   const stats = createMemo(() => {
@@ -225,19 +227,6 @@ export function LotesView() {
               </select>
             </div>
           </div>
-
-          <Show when={canManageLotes()}>
-            <button
-              onClick={() => loteStore.setCreateModalOpen(true)}
-              class="btn btn-primary"
-              style={{ 'align-self': 'flex-end' }}
-            >
-              <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-              </svg>
-              Ingreso de Lote
-            </button>
-          </Show>
         </div>
 
         {/* Stats Sub-bar */}
@@ -260,7 +249,6 @@ export function LotesView() {
       />
 
       {/* Modals */}
-      <LoteFormModal />
       <LoteBlockModal />
       <LoteFichaTecnicaModal
         open={fichaModalOpen()}

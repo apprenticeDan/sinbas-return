@@ -12,6 +12,7 @@ const [lotes, setLotes] = createSignal<LoteItem[]>([]);
 const [loading, setLoading] = createSignal<boolean>(false);
 const [searchTerm, setSearchTerm] = createSignal<string>('');
 const [stateFilter, setStateFilter] = createSignal<string>('');
+// DEPRECATED: mover a 7d
 const [createModalOpen, setCreateModalOpen] = createSignal<boolean>(false);
 
 const [selectedLote, setSelectedLote] = createSignal<LoteItem | null>(null);
@@ -22,12 +23,14 @@ export const loteStore = {
   loading,
   searchTerm,
   stateFilter,
+  // DEPRECATED: mover a 7d
   createModalOpen,
   selectedLote,
   blockModalOpen,
 
   setSearchTerm,
   setStateFilter,
+  // DEPRECATED: mover a 7d
   setCreateModalOpen,
   setBlockModalOpen,
   setSelectedLote,
@@ -44,6 +47,7 @@ export const loteStore = {
     }
   },
 
+  // DEPRECATED: mover a 7d
   async crearLote(payload: CreateLotePayload) {
     const nuevo = await ApiLoteGateway.crearLote(payload);
     setLotes((prev) => [nuevo, ...prev]);

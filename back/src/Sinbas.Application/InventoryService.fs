@@ -230,74 +230,64 @@ module InventoryService =
                         // 3. Resolver o crear el Lote asociado
                         let! optLoteFinal =
                             async {
-                                match Guid.TryParse(req.LoteId) with
-                                | true, lGuid ->
-                                    let! lOpt = obtenerLotePorId (LoteId lGuid)
-                                    match lOpt with
-                                    | Some l ->
-                                        match Cantidad.sumar l.CantidadActual cantidadIngreso with
-                                        | Error (CantidadInvalida msg) -> return Error msg
-                                        | Error (UnidadIncompatible msg) -> return Error msg
-                                        | Error err -> return Error (sprintf "%A" err)
-                                        | Ok nuevaCant ->
-                                            let loteActualizado = { l with CantidadActual = nuevaCant; Estado = Activo }
-                                            do! actualizarLoteStock loteActualizado
-                                            return Ok loteActualizado
-                                    | None ->
-                                        return Error "El lote especificado no existe"
-                                | false, _ ->
-                                    // Buscar si ya existe un lote activo para este producto
-                                    let! lotesActivos = listarLotes (Some prodId) (Some Activo)
-                                    match lotesActivos |> List.tryHead with
-                                    | Some loteExistente ->
-                                        match Cantidad.sumar loteExistente.CantidadActual cantidadIngreso with
-                                        | Error (CantidadInvalida msg) -> return Error msg
-                                        | Error (UnidadIncompatible msg) -> return Error msg
-                                        | Error err -> return Error (sprintf "%A" err)
-                                        | Ok nuevaCant ->
-                                            let loteActualizado = { loteExistente with CantidadActual = nuevaCant }
-                                            do! actualizarLoteStock loteActualizado
-                                            return Ok loteActualizado
-                                    | None ->
-                                        // Generar nuevo lote automáticamente
-                                        let (genero, epiteto) =
-                                            match producto.Categoria with
-                                            | Semilla(nc, _) -> (nc.Genero, nc.Epiteto)
-                                            | Plantin(nc, _, _) -> (nc.Genero, nc.Epiteto)
-                                            | Insumo(n, _, _) -> (n, "INS")
+                                if String.IsNullOrWhiteSpace req.LoteId then
+                                    // Caso 1: sin lote → crear lote NUEVO. NO reutilizar Activo.
+                                    let (genero, epiteto) =
+                                        match producto.Categoria with
+                                        | Semilla(nc, _) -> (nc.Genero, nc.Epiteto)
+                                        | Plantin(nc, _, _) -> (nc.Genero, nc.Epiteto)
+                                        | Insumo(n, _, _) -> (n, "INS")
 
-                                        let! todosLosLotes = listarLotes None None
-                                        let codigosExistentes =
-                                            todosLosLotes
-                                            |> List.map (fun l -> (CodigoLote.valor l.Codigo).ToUpperInvariant())
-                                            |> Set.ofList
+                                    let! todosLosLotes = listarLotes None None
+                                    let codigosExistentes =
+                                        todosLosLotes
+                                        |> List.map (fun l -> (CodigoLote.valor l.Codigo).ToUpperInvariant())
+                                        |> Set.ofList
 
-                                        let rec encontrarSecuenciaDisponible seqNum =
-                                            if seqNum > 99 then Error "Se alcanzó el límite de 99 lotes para esta especie en la misma fecha"
-                                            else
-                                                match CodigoLote.generar genero epiteto fechaIngresoDateOnly seqNum with
-                                                | Error err -> Error (sprintf "Error generando código de lote: %A" err)
-                                                | Ok codigo ->
-                                                    let cStr = CodigoLote.valor codigo
-                                                    if codigosExistentes.Contains(cStr.ToUpperInvariant()) then
-                                                        encontrarSecuenciaDisponible (seqNum + 1)
-                                                    else
-                                                        Ok codigo
+                                    let rec encontrarSecuenciaDisponible seqNum =
+                                        if seqNum > 99 then Error "Se alcanzó el límite de 99 lotes para esta especie en la misma fecha"
+                                        else
+                                            match CodigoLote.generar genero epiteto fechaIngresoDateOnly seqNum with
+                                            | Error err -> Error (sprintf "Error generando código de lote: %A" err)
+                                            | Ok codigo ->
+                                                let cStr = CodigoLote.valor codigo
+                                                if codigosExistentes.Contains(cStr.ToUpperInvariant()) then
+                                                    encontrarSecuenciaDisponible (seqNum + 1)
+                                                else
+                                                    Ok codigo
 
-                                        let resCodigo = encontrarSecuenciaDisponible 1
+                                    let resCodigo = encontrarSecuenciaDisponible 1
 
-                                        match resCodigo with
-                                        | Error err -> return Error (sprintf "Error generando código de lote: %A" err)
-                                        | Ok codigo ->
-                                            let nuevoLoteId = LoteId (Identidad.nuevo ())
-                                            let procOpt = if String.IsNullOrWhiteSpace req.Procedencia then None else Some req.Procedencia
-                                            let obsOpt = if String.IsNullOrWhiteSpace req.Observaciones then None else Some req.Observaciones
+                                    match resCodigo with
+                                    | Error err -> return Error (sprintf "Error generando código de lote: %A" err)
+                                    | Ok codigo ->
+                                        let nuevoLoteId = LoteId (Identidad.nuevo ())
+                                        let procOpt = if String.IsNullOrWhiteSpace req.Procedencia then None else Some req.Procedencia
+                                        let obsOpt = if String.IsNullOrWhiteSpace req.Observaciones then None else Some req.Observaciones
 
-                                            match Lote.crear nuevoLoteId codigo prodId procOpt cantidadIngreso fechaIngresoDateOnly None obsOpt with
-                                            | Error err -> return Error (sprintf "Error creando lote de dominio: %A" err)
-                                            | Ok nuevoLote ->
-                                                do! insertarLote nuevoLote
-                                                return Ok nuevoLote
+                                        match Lote.crear nuevoLoteId codigo prodId procOpt cantidadIngreso fechaIngresoDateOnly None obsOpt with
+                                        | Error err -> return Error (sprintf "Error creando lote de dominio: %A" err)
+                                        | Ok nuevoLote ->
+                                            do! insertarLote nuevoLote
+                                            return Ok nuevoLote
+                                else
+                                    match Guid.TryParse req.LoteId with
+                                    | false, _ ->
+                                        return Error "El LoteId especificado no es un UUID válido"
+                                    | true, lGuid ->
+                                        let! lOpt = obtenerLotePorId (LoteId lGuid)
+                                        match lOpt with
+                                        | None ->
+                                            return Error "El lote especificado no existe"
+                                        | Some loteExistente ->
+                                            match Cantidad.sumar loteExistente.CantidadActual cantidadIngreso with
+                                            | Error (CantidadInvalida msg) -> return Error msg
+                                            | Error (UnidadIncompatible msg) -> return Error msg
+                                            | Error err -> return Error (sprintf "%A" err)
+                                            | Ok nuevaCant ->
+                                                let loteActualizado = { loteExistente with CantidadActual = nuevaCant; Estado = Activo }
+                                                do! actualizarLoteStock loteActualizado
+                                                return Ok loteActualizado
                             }
 
                         match optLoteFinal with
@@ -379,12 +369,14 @@ module InventoryService =
                             | Entrada (Devolucion _) -> "Devolución"
                             | Entrada (TruequeEntrada _) -> "Trueque"
                             | Entrada (DevolucionAnulacion (OrdenId oId)) -> sprintf "Devolución por Anulación (Orden %s)" (oId.ToString("D"))
+                            | Entrada MotivoIngreso.Ajuste -> "Ajuste"
                             | Salida (Venta _) -> "Venta"
                             | Salida (MuestraLab _) -> "Muestra Lab"
                             | Salida (Merma c) -> sprintf "Merma (%s)" c
                             | Salida (UsoInterno (d, s)) -> sprintf "Uso Interno [%s] (%s)" (DestinoUso.aTexto d) s
                             | Salida (DonacionEnviada d) -> sprintf "Donación (%s)" d
                             | Salida (TruequeSalida _) -> "Trueque"
+                            | Salida MotivoEgreso.Ajuste -> "Ajuste"
 
                         let! lineasDtos =
                             mov.Lineas
@@ -622,6 +614,7 @@ module InventoryService =
                             | DonacionRecibida don -> sprintf "Donación: %s" don
                             | Devolucion _ -> "Devolución"
                             | DevolucionAnulacion (OrdenId oId) -> sprintf "Devolución Anulación: %s" (oId.ToString("D"))
+                            | MotivoIngreso.Ajuste -> "Ajuste"
                         | Salida m ->
                             match m with
                             | Venta _ -> "Venta"
@@ -630,6 +623,7 @@ module InventoryService =
                             | UsoInterno (d, s) -> sprintf "Uso Interno [%s]: %s" (DestinoUso.aTexto d) s
                             | DonacionEnviada dest -> sprintf "Donación: %s" dest
                             | TruequeSalida _ -> "Trueque / Intercambio"
+                            | MotivoEgreso.Ajuste -> "Ajuste"
 
                     let dispResultante =
                         if kl.Cantidad.Unidad = Kilogramo || kl.Cantidad.Unidad = Litro then kl.SaldoResultanteGramos / 1000m
