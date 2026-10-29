@@ -1,6 +1,7 @@
 import { Component, createSignal, For, Show, onMount } from 'solid-js';
 import { stockStore } from '../store/stockStore';
 import { authStore } from '../store/authStore';
+import { downloadBlob } from '../../infrastructure/api/HttpClient';
 
 export const StockView: Component = () => {
   const [tabActiva, setTabActiva] = createSignal<'existencias' | 'kardex'>('existencias');
@@ -166,6 +167,17 @@ export const StockView: Component = () => {
           </div>
 
           <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              class="btn btn-ghost"
+              style={{ 'font-size': '12.5px', padding: '6px 12px' }}
+              onClick={() => downloadBlob(
+                '/reportes/stock.csv',
+                `stock-${new Date().toISOString().split('T')[0]}.csv`
+              ).catch(e => alert(e.message))}
+              title="Exportar existencias a CSV"
+            >
+              📥 Exportar CSV
+            </button>
             <button
               class="btn btn-ghost"
               style={{ 'font-size': '12.5px', padding: '6px 12px' }}
@@ -395,17 +407,30 @@ export const StockView: Component = () => {
             </Show>
           </div>
 
-          <button
-            class="btn btn-ghost"
-            style={{ 'font-size': '12.5px', padding: '6px 12px' }}
-            onClick={() => stockStore.cargarKardex()}
-            disabled={stockStore.isLoading()}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ width: '14px', height: '14px', 'margin-right': '5px' }}>
-              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refrescar Kardex
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              class="btn btn-ghost"
+              style={{ 'font-size': '12.5px', padding: '6px 12px' }}
+              onClick={() => downloadBlob(
+                '/reportes/kardex.csv',
+                `kardex-${new Date().toISOString().split('T')[0]}.csv`
+              ).catch(e => alert(e.message))}
+              title="Exportar kardex a CSV"
+            >
+              📥 Exportar CSV
+            </button>
+            <button
+              class="btn btn-ghost"
+              style={{ 'font-size': '12.5px', padding: '6px 12px' }}
+              onClick={() => stockStore.cargarKardex()}
+              disabled={stockStore.isLoading()}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ width: '14px', height: '14px', 'margin-right': '5px' }}>
+                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refrescar Kardex
+            </button>
+          </div>
         </div>
 
         {/* Tabla Kardex */}
