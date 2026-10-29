@@ -181,6 +181,7 @@ module InventoryService =
         (insertarLote: Lote -> Async<unit>)
         (actualizarLoteStock: Lote -> Async<unit>)
         (insertarMovimiento: MovimientoInventario -> string option -> string option -> string option -> Async<unit>)
+        (listarCodigosExistentes: unit -> Async<string list>)
         (responsableId: Guid)
         (req: RegistrarIngresoRequest)
         : Async<Result<MovimientoDto, string>> =
@@ -238,23 +239,33 @@ module InventoryService =
                                         | Plantin(nc, _, _) -> (nc.Genero, nc.Epiteto)
                                         | Insumo(n, _, _) -> (n, "INS")
 
-                                    let! todosLosLotes = listarLotes None None
-                                    let codigosExistentes =
-                                        todosLosLotes
-                                        |> List.map (fun l -> (CodigoLote.valor l.Codigo).ToUpperInvariant())
+                                    let! codigosRaw = listarCodigosExistentes ()
+                                    let codigosSet =
+                                        codigosRaw
+                                        |> List.map (fun c -> c.Trim().ToUpperInvariant())
                                         |> Set.ofList
 
                                     let rec encontrarSecuenciaDisponible seqNum =
                                         if seqNum > 99 then Error "Se alcanzó el límite de 99 lotes para esta especie en la misma fecha"
                                         else
-                                            match CodigoLote.generar genero epiteto fechaIngresoDateOnly seqNum with
-                                            | Error err -> Error (sprintf "Error generando código de lote: %A" err)
-                                            | Ok codigo ->
-                                                let cStr = CodigoLote.valor codigo
-                                                if codigosExistentes.Contains(cStr.ToUpperInvariant()) then
-                                                    encontrarSecuenciaDisponible (seqNum + 1)
-                                                else
-                                                    Ok codigo
+                                            let nuevoFormat =
+                                                match CodigoLote.generar genero epiteto fechaIngresoDateOnly seqNum with
+                                                | Ok c -> Some (CodigoLote.valor c)
+                                                | Error _ -> None
+                                            let legacyFormat =
+                                                match CodigoLote.generarLegacy genero epiteto fechaIngresoDateOnly seqNum with
+                                                | Ok c -> Some (CodigoLote.valor c)
+                                                | Error _ -> None
+                                            let yaExiste =
+                                                [ nuevoFormat; legacyFormat ]
+                                                |> List.choose id
+                                                |> List.exists (fun c -> Set.contains (c.ToUpperInvariant()) codigosSet)
+                                            if yaExiste then
+                                                encontrarSecuenciaDisponible (seqNum + 1)
+                                            else
+                                                match CodigoLote.generar genero epiteto fechaIngresoDateOnly seqNum with
+                                                | Ok c -> Ok c
+                                                | Error err -> Error (sprintf "Error generando código de lote: %A" err)
 
                                     let resCodigo = encontrarSecuenciaDisponible 1
 

@@ -112,6 +112,8 @@ module Lote =
                   Observaciones = observaciones }
 
     /// Crea un lote listo para comercialización (Activo) (preserva compatibilidad operativa).
+    /// Nota: `codigo: CodigoLote` garantiza validez estructural por tipo privado.
+    /// La validación se hace en `CodigoLote.generar` o `CodigoLote.desdeString`.
     let crear
         (id: LoteId)
         (codigo: CodigoLote)
@@ -125,6 +127,8 @@ module Lote =
         crearConEstado id codigo productoId procedencia cantidadInicial fechaIngreso ubicacion Activo observaciones
 
     /// Crea un lote en recepción inicial de almacén, en cuarentena técnica pendiente de laboratorio (OBS-12).
+    /// Nota: `codigo: CodigoLote` garantiza validez estructural por tipo privado.
+    /// La validación se hace en `CodigoLote.generar` o `CodigoLote.desdeString`.
     let crearEnCuarentena
         (id: LoteId)
         (codigo: CodigoLote)

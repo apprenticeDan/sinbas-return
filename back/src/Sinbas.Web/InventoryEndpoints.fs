@@ -56,6 +56,7 @@ module InventoryEndpoints =
                         LoteRepository.insertar
                         LoteRepository.actualizarStockYEstado
                         InventoryRepository.insertarMovimiento
+                        LoteRepository.listarCodigosRaw
                         responsableId
                         req
 

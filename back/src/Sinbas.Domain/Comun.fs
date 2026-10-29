@@ -387,20 +387,28 @@ module Cantidad =
 // ─────────────────────────────────────────────────────────────
 // Código visible de negocio para lotes
 //
-// Formato: [GGGGG][EEE]-[S][AA][MM]-[SS]
-//   GGGGG = 5 letras del género     (rellenado con _ si es corto)
-//   EEE   = 3 letras del epíteto    (rellenado con _ si es corto)
+// Formato: [GGGGG][EEEE]-[S][AA][MM]-[SS]   (18 chars)
+//   GGGGG = 5 letras del género  (PadRight('_') si corto)
+//   EEEE  = 4 letras del epíteto (PadRight('_') si corto)
 //   S     = siglo (0 = 2000s, 1 = 2100s)
 //   AA    = año de 2 dígitos
 //   MM    = mes de 2 dígitos
 //   SS    = secuencia de 2 dígitos (01-99)
 //
-// Ejemplo: IPOMO_ANA-02601-03  (Ipomoea anatina, enero 2026, lote 3)
+// Formato legacy (pre-7b-04): [GGGGG][EEE]-[S][AA][MM]-[SS]  (17 chars)
+//   Sin padding, epiteto 3 chars. Se mantiene válido para no romper
+//   lotes existentes. `desdeString` acepta ambos; `generar` produce
+//   solo el nuevo.
+//
+// Ejemplo nuevo:  TEST_INGR-02610-01 (Test ingreso, enero 2026, seq 1)
+// Ejemplo legacy: TESTING-02610-01   (Test ingreso, formato pre-fix)
 // ─────────────────────────────────────────────────────────────
 
 type CodigoLote = private CodigoLote of string
 
 module CodigoLote =
+
+    open System.Text.RegularExpressions
 
     let valor (CodigoLote c) = c
 
@@ -412,31 +420,12 @@ module CodigoLote =
         |> fun s -> s.Normalize(NormalizationForm.FormC)
 
     let private normalizar (s: string) =
-        s.Trim().ToUpperInvariant() |> removerAcentos
+        s.Trim().ToUpperInvariant() |> removerAcentos |> fun t -> t.Replace(" ", "")
 
-    let private segmentoGenero (s: string) : string =
-        let limpio = normalizar s |> fun t -> t.Replace(" ", "")
-
-        if limpio.Length >= 5 then
-            limpio.Substring(0, 5)
-        else
-            limpio // sin relleno, el '_' vendrá como separador
-
-    let private segmentoEpiteto (s: string) : string =
-        let limpio = normalizar s |> fun t -> t.Replace(" ", "")
-
-        if limpio.Length >= 3 then
-            limpio.Substring(0, 3)
-        else
-            limpio
-
-    let generar
-        (genero: string)
-        (epiteto: string)
-        (fecha: DateOnly)
-        (secuencia: int)
+    let private generarConLongitudes
+        (generoLen: int) (epitetoLen: int) (padGenero: bool) (padEpiteto: bool)
+        (genero: string) (epiteto: string) (fecha: DateOnly) (secuencia: int)
         : Result<CodigoLote, DomainError> =
-
         if secuencia < 1 || secuencia > 99 then
             Error(SecuenciaInvalida(sprintf "Secuencia debe ser 1-99, recibido: %d" secuencia))
         elif String.IsNullOrWhiteSpace(genero) then
@@ -444,20 +433,44 @@ module CodigoLote =
         elif String.IsNullOrWhiteSpace(epiteto) then
             Error(CodigoLoteInvalido "El epíteto no puede estar vacío")
         else
-            let g = segmentoGenero genero
-            let e = segmentoEpiteto epiteto
+            let prep (s: string) (len: int) (pad: bool) =
+                let limpio = normalizar s
+                if limpio.Length >= len then limpio.Substring(0, len)
+                elif pad then limpio.PadRight(len, '_')
+                else limpio
+            let g = prep genero generoLen padGenero
+            let e = prep epiteto epitetoLen padEpiteto
             let siglo = (fecha.Year - 2000) / 100
             let anio = fecha.Year % 100
             let mes = fecha.Month
-            // let sep = if g.Length < 5 then "_" else ""
-            let codigo = sprintf "%s%s-%d%02d%02d-%02d" g e siglo anio mes secuencia
-            Ok(CodigoLote codigo)
+            Ok(CodigoLote (sprintf "%s%s-%d%02d%02d-%02d" g e siglo anio mes secuencia))
 
-    /// Parsea un código ya existente en la BD sin re-validar la lógica
+    /// Formato nuevo (18 chars, epiteto 4, con padding). Produce el código
+    /// que se persiste en lotes nuevos.
+    let generar genero epiteto fecha secuencia : Result<CodigoLote, DomainError> =
+        generarConLongitudes 5 4 true true genero epiteto fecha secuencia
+
+    /// Formato legacy (17 chars, epiteto 3, sin padding). Solo para
+    /// chequear unicidad contra códigos existentes pre-7b-04.
+    /// NO usar para generar códigos nuevos.
+    let generarLegacy genero epiteto fecha secuencia : Result<CodigoLote, DomainError> =
+        generarConLongitudes 5 3 false false genero epiteto fecha secuencia
+
+    /// Regex para aceptar tanto formato legacy como nuevo.
+    /// - 7 a 12 chars de prefijo [A-Z0-9_] (cubre "TESTING"=7 legacy
+    ///   hasta "ALNUSACUM"=9 nuevo, con margen para futuro)
+    /// - "-" + 5 dígitos (S AA MM) + "-" + 2 dígitos (secuencia)
+    let private codeRegex = Regex(@"^[A-Z0-9_]{7,12}-\d{5}-\d{2}$", RegexOptions.Compiled)
+
+    /// Parsea un código existente en la BD. Acepta legacy y nuevo.
     let desdeString (raw: string) : Result<CodigoLote, DomainError> =
-        let s = raw.Trim()
-        // formato mínimo: 8 chars + "-" + 5 chars + "-" + 2 chars = 17 chars
-        if s.Length < 17 then
-            Error(CodigoLoteInvalido(sprintf "Código demasiado corto: '%s'" s))
+        if String.IsNullOrWhiteSpace raw then
+            Error(CodigoLoteInvalido "Código vacío")
         else
-            Ok(CodigoLote s)
+            let s = raw.Trim().ToUpperInvariant()
+            if s.Length < 16 then
+                Error(CodigoLoteInvalido(sprintf "Código demasiado corto: '%s' (mínimo 16 chars)" raw))
+            elif not (codeRegex.IsMatch(s)) then
+                Error(CodigoLoteInvalido(sprintf "Formato inválido: '%s'. Esperado: PREFIJO-DDDDD-DD" raw))
+            else
+                Ok(CodigoLote s)

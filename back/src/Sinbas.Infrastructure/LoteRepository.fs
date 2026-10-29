@@ -184,6 +184,18 @@ module LoteRepository =
             return col.Validos
         }
 
+    /// Devuelve TODOS los códigos de lote en DB sin pasar por reconstrucción
+    /// de dominio. Útil para chequear unicidad de secuenciales cuando algunos
+    /// lotes podrían estar en Inconsistencias (ej. legacy con formato viejo).
+    let listarCodigosRaw () : Async<string list> =
+        async {
+            use conn = DbConnection.crear ()
+            let! codes =
+                conn.QueryAsync<string>("SELECT codigo FROM lote")
+                |> Async.AwaitTask
+            return codes |> Seq.toList
+        }
+
     let actualizarStockYEstado (lote: Lote) : Async<unit> =
         async {
             use conn = DbConnection.crear ()

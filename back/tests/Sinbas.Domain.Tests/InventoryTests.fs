@@ -303,12 +303,15 @@ let ``Ingreso nuevo sin LoteId sobre producto con lote Activo crea LOTE NUEVO`` 
     let insertarMovimiento (m: MovimientoInventario) (_: string option) (_: string option) (_: string option) = async { movimientosDb <- movimientosDb @ [ m ] }
     let responsableId = Guid.NewGuid()
 
+    // listarCodigosExistentes: devuelve códigos raw desde el state mutable
+    let listarCodigosExistentes () = async { return lotesDb |> List.map (fun (l: Lote) -> CodigoLote.valor l.Codigo) }
+
     let req = crearReqIngreso prodId "" 5m
 
     let res =
         InventoryService.registrarIngreso
             obtenerProductoPorId listarProductos obtenerLotePorId listarLotes
-            insertarLote actualizarLoteStock insertarMovimiento responsableId req
+            insertarLote actualizarLoteStock insertarMovimiento listarCodigosExistentes responsableId req
         |> Async.RunSynchronously
 
     match res with
@@ -346,19 +349,22 @@ let ``2 ingresos consecutivos sin LoteId producen 2 lotes distintos`` () =
     let insertarMovimiento (m: MovimientoInventario) (_: string option) (_: string option) (_: string option) = async { movimientosDb <- movimientosDb @ [ m ] }
     let responsableId = Guid.NewGuid()
 
+    // listarCodigosExistentes: devuelve códigos raw desde el state mutable
+    let listarCodigosExistentes () = async { return lotesDb |> List.map (fun (l: Lote) -> CodigoLote.valor l.Codigo) }
+
     let req1 = crearReqIngreso prodId "" 3.8m
     let req2 = crearReqIngreso prodId "" 1.2m
 
     let res1 =
         InventoryService.registrarIngreso
             obtenerProductoPorId listarProductos obtenerLotePorId listarLotes
-            insertarLote actualizarLoteStock insertarMovimiento responsableId req1
+            insertarLote actualizarLoteStock insertarMovimiento listarCodigosExistentes responsableId req1
         |> Async.RunSynchronously
 
     let res2 =
         InventoryService.registrarIngreso
             obtenerProductoPorId listarProductos obtenerLotePorId listarLotes
-            insertarLote actualizarLoteStock insertarMovimiento responsableId req2
+            insertarLote actualizarLoteStock insertarMovimiento listarCodigosExistentes responsableId req2
         |> Async.RunSynchronously
 
     match res1, res2 with
@@ -387,6 +393,7 @@ let ``Ingreso con LoteId invalido 'abc' retorna Error`` () =
             (fun (_: Lote) -> async { return () })
             (fun (_: Lote) -> async { return () })
             (fun (_: MovimientoInventario) _ _ _ -> async { return () })
+            (fun () -> async { return [] })
             (Guid.NewGuid())
             req
         |> Async.RunSynchronously
@@ -411,6 +418,7 @@ let ``Ingreso con LoteId valido pero inexistente retorna Error`` () =
             (fun (_: Lote) -> async { return () })
             (fun (_: Lote) -> async { return () })
             (fun (_: MovimientoInventario) _ _ _ -> async { return () })
+            (fun () -> async { return [] })
             (Guid.NewGuid())
             req
         |> Async.RunSynchronously
