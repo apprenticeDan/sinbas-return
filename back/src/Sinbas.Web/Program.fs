@@ -115,6 +115,7 @@ let main args =
     ProformaEndpoints.mapEndpoints app
     VentaEndpoints.mapEndpoints app
     SolicitudEndpoints.mapEndpoints app
+    ReporteEndpoints.mapEndpoints app
 
     app.Run()
 

@@ -12,6 +12,7 @@ import { LoteBlockModal } from '../components/LoteBlockModal';
 import { LoteFichaTecnicaModal } from '../components/LoteFichaTecnicaModal';
 import { formatDisplayId } from '../utils/formatters';
 import { ApiLabGateway } from '../../infrastructure/api/ApiLabGateway';
+import { downloadBlob } from '../../infrastructure/api/HttpClient';
 
 export function LotesView() {
   const [fichaModalOpen, setFichaModalOpen] = createSignal<boolean>(false);
@@ -226,6 +227,18 @@ export function LotesView() {
                 <option value="Rechazado">Rechazados</option>
               </select>
             </div>
+
+            <button
+              class="btn btn-ghost"
+              style={{ 'font-size': '12.5px', padding: '6px 12px', 'align-self': 'flex-end' }}
+              onClick={() => downloadBlob(
+                '/reportes/lotes.csv',
+                `lotes-${new Date().toISOString().split('T')[0]}.csv`
+              ).catch(e => alert(e.message))}
+              title="Exportar lotes a CSV"
+            >
+              📥 Exportar CSV
+            </button>
           </div>
         </div>
 
