@@ -187,7 +187,7 @@ export function LabAnalysisModal(props: LabAnalysisModalProps) {
               </div>
 
               <div class="field">
-                <label>Viabilidad Tetrazolio (%) *</label>
+                <label>Viabilidad (%) *</label>
                 <input
                   type="number"
                   step="0.01"

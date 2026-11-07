@@ -163,7 +163,7 @@ export function LabView() {
         <p class="panel-eyebrow">Control de Calidad y Ensayos (F3)</p>
         <h1 class="panel-title">Laboratorio de Semillas & Etiquetado</h1>
         <p class="panel-desc">
-          Evaluación de germinación, pureza física, viabilidad tetrazolio y emisión de dictamen técnico con etiqueta oficial.
+          Evaluación de germinación, pureza física, viabilidad y emisión de dictamen técnico con etiqueta oficial.
         </p>
       </div>
 
