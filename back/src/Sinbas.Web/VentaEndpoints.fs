@@ -40,31 +40,32 @@ module VentaEndpoints =
                 |> Option.map Cliente.nombreVisible
                 |> Option.defaultValue "?")
 
-    /// Helper: extraer EmpleadoId del claim del JWT
-    let private resolverEmpleadoId (ctx: HttpContext) : Async<Guid> =
+    /// Q1 + P4-01: identidad + roles del actor. Ya no hay fallback seed.
+    /// Fail-open → fail-closed: sin claim válido, 401.
+    let private resolverActor (ctx: HttpContext) : Async<Result<Actor, string * int>> =
         async {
-            let defaultEmpleado = Guid.Parse("01917f3a-0001-7000-8000-000000000001")
             let empClaim = ctx.User.FindFirst("empleado_id")
-            if not (isNull empClaim) then
-                match Guid.TryParse(empClaim.Value) with
-                | true, g -> return g
-                | false, _ -> return defaultEmpleado
+            let subClaim =
+                let c1 = ctx.User.FindFirst(ClaimTypes.NameIdentifier)
+                if isNull c1 then ctx.User.FindFirst(JwtRegisteredClaimNames.Sub) else c1
+
+            if isNull empClaim || empClaim.Value.Length <> 36 then
+                return Error ("Token inválido: falta claim 'empleado_id'", 401)
+            elif isNull subClaim || subClaim.Value.Length <> 36 then
+                return Error ("Token inválido: falta claim 'sub'", 401)
             else
-                let subClaim =
-                    let c1 = ctx.User.FindFirst(ClaimTypes.NameIdentifier)
-                    if isNull c1 then ctx.User.FindFirst(JwtRegisteredClaimNames.Sub) else c1
-                if not (isNull subClaim) then
-                    match Guid.TryParse(subClaim.Value) with
-                    | true, uGuid ->
-                        let! uRes = AuthRepository.buscarUsuarioPorId (UsuarioId uGuid)
-                        match uRes with
-                        | Ok u ->
-                            let (EmpleadoId eId) = Usuario.empleadoId u
-                            return eId
-                        | Error _ -> return defaultEmpleado
-                    | false, _ -> return defaultEmpleado
-                else
-                    return defaultEmpleado
+                match Guid.TryParse(empClaim.Value), Guid.TryParse(subClaim.Value) with
+                | (false, _), _ -> return Error ("Token inválido: 'empleado_id' no es UUID", 401)
+                | _, (false, _) -> return Error ("Token inválido: 'sub' no es UUID", 401)
+                | (true, empGuid), (true, usrGuid) ->
+                    let roles =
+                        ctx.User.Claims
+                        |> Seq.filter (fun c -> c.Type = ClaimTypes.Role || c.Type = "role" || c.Type = "roles")
+                        |> Seq.choose (fun c -> NombreRol.desdeTexto c.Value)
+                        |> Set.ofSeq
+                    return Ok { UsuarioId = UsuarioId usrGuid
+                                EmpleadoId = EmpleadoId empGuid
+                                Roles = roles }
         }
 
     let mapEndpoints (app: WebApplication) =
@@ -75,65 +76,69 @@ module VentaEndpoints =
         // ─────────────────────────────────────────────────────────
         app.MapPost("/api/proformas/{id}/confirmar-venta", Func<HttpContext, string, ConfirmarVentaRequest, Threading.Tasks.Task<IResult>>(fun ctx id req ->
             async {
-                let! responsableId = resolverEmpleadoId ctx
-                let nombreProdResolver = crearNombreProductoResolver ()
-                let nombreCliResolver = crearNombreClienteResolver ()
+                let! actorRes = resolverActor ctx
+                match actorRes with
+                | Error (msg, code) -> return Results.Json({| error = msg |}, statusCode = code)
+                | Ok actor ->
+                    let (EmpleadoId responsableId) = actor.EmpleadoId
+                    let nombreProdResolver = crearNombreProductoResolver ()
+                    let nombreCliResolver = crearNombreClienteResolver ()
 
-                // Soporte de idempotencia
-                let idempotencyKey =
-                    if ctx.Request.Headers.ContainsKey("Idempotency-Key") then
-                        let k = ctx.Request.Headers.["Idempotency-Key"].ToString()
-                        if String.IsNullOrWhiteSpace k then None else Some (k.Trim())
-                    else None
+                    // Soporte de idempotencia
+                    let idempotencyKey =
+                        if ctx.Request.Headers.ContainsKey("Idempotency-Key") then
+                            let k = ctx.Request.Headers.["Idempotency-Key"].ToString()
+                            if String.IsNullOrWhiteSpace k then None else Some (k.Trim())
+                        else None
 
-                let! regPrevio =
-                    match idempotencyKey with
-                    | Some key -> IdempotenciaRepository.buscar key
-                    | None -> async { return None }
+                    let! regPrevio =
+                        match idempotencyKey with
+                        | Some key -> IdempotenciaRepository.buscar key
+                        | None -> async { return None }
 
-                match regPrevio with
-                | Some r ->
-                    return Results.Content(r.cuerpo_respuesta, "application/json", null, Nullable r.status_code)
-                | None ->
+                    match regPrevio with
+                    | Some r ->
+                        return Results.Content(r.cuerpo_respuesta, "application/json", null, Nullable r.status_code)
+                    | None ->
 
-                let reqBody = if isNull (box req) then { ClienteId = None } else req
+                    let reqBody = if isNull (box req) then { ClienteId = None } else req
 
-                let! res =
-                    VentaService.confirmarVenta
-                        ProformaRepository.obtenerPorId
-                        ClientRepository.obtenerPorId
-                        CatalogRepository.buscarPorId
-                        LoteRepository.listar
-                        VentaRepository.confirmarVentaTx
-                        nombreProdResolver
-                        nombreCliResolver
-                        responsableId
-                        id
-                        reqBody
+                    let! res =
+                        VentaService.confirmarVenta
+                            ProformaRepository.obtenerPorId
+                            ClientRepository.obtenerPorId
+                            CatalogRepository.buscarPorId
+                            LoteRepository.listar
+                            VentaRepository.confirmarVentaTx
+                            nombreProdResolver
+                            nombreCliResolver
+                            responsableId
+                            id
+                            reqBody
 
-                match res with
-                | Ok dto ->
-                    let location = sprintf "/api/ventas/%s" dto.Venta.Id
-                    let result = Results.Created(location, dto)
-                    match idempotencyKey with
-                    | Some key ->
-                        let subClaim = ctx.User.FindFirst(ClaimTypes.NameIdentifier)
-                        let uId = if isNull subClaim then responsableId else (match Guid.TryParse(subClaim.Value) with true, g -> g | _ -> responsableId)
-                        let json = System.Text.Json.JsonSerializer.Serialize(dto)
-                        let reg : RegistroIdempotenciaRow =
-                            { clave = key
-                              endpoint = sprintf "POST /api/proformas/%s/confirmar-venta" id
-                              usuario_id = uId
-                              status_code = 201
-                              cuerpo_respuesta = json
-                              creado_en = DateTime.UtcNow }
-                        do! IdempotenciaRepository.guardar reg
-                    | None -> ()
-                    return result
-                | Error (msg, 404) -> return Results.NotFound({| error = msg |})
-                | Error (msg, 409) -> return Results.Conflict({| error = msg |})
-                | Error (msg, 422) -> return Results.UnprocessableEntity({| error = msg |})
-                | Error (msg, _)   -> return Results.BadRequest({| error = msg |})
+                    match res with
+                    | Ok dto ->
+                        let location = sprintf "/api/ventas/%s" dto.Venta.Id
+                        let result = Results.Created(location, dto)
+                        match idempotencyKey with
+                        | Some key ->
+                            let subClaim = ctx.User.FindFirst(ClaimTypes.NameIdentifier)
+                            let uId = if isNull subClaim then responsableId else (match Guid.TryParse(subClaim.Value) with true, g -> g | _ -> responsableId)
+                            let json = System.Text.Json.JsonSerializer.Serialize(dto)
+                            let reg : RegistroIdempotenciaRow =
+                                { clave = key
+                                  endpoint = sprintf "POST /api/proformas/%s/confirmar-venta" id
+                                  usuario_id = uId
+                                  status_code = 201
+                                  cuerpo_respuesta = json
+                                  creado_en = DateTime.UtcNow }
+                            do! IdempotenciaRepository.guardar reg
+                        | None -> ()
+                        return result
+                    | Error (msg, 404) -> return Results.NotFound({| error = msg |})
+                    | Error (msg, 409) -> return Results.Conflict({| error = msg |})
+                    | Error (msg, 422) -> return Results.UnprocessableEntity({| error = msg |})
+                    | Error (msg, _)   -> return Results.BadRequest({| error = msg |})
             } |> Async.StartAsTask
         ))
             .RequireAuthorization("RequireComercial")
@@ -218,26 +223,30 @@ module VentaEndpoints =
         // ─────────────────────────────────────────────────────────
         app.MapPut("/api/ventas/{id}/anular", Func<HttpContext, string, AnularVentaRequest, Threading.Tasks.Task<IResult>>(fun ctx id req ->
             async {
-                let! responsableId = resolverEmpleadoId ctx
-                let nombreProdResolver = crearNombreProductoResolver ()
-                let nombreCliResolver = crearNombreClienteResolver ()
-                let motivo = if isNull (box req) then "" else defaultArg (Option.ofObj req.Motivo) ""
+                let! actorRes = resolverActor ctx
+                match actorRes with
+                | Error (msg, code) -> return Results.Json({| error = msg |}, statusCode = code)
+                | Ok actor ->
+                    let (EmpleadoId responsableId) = actor.EmpleadoId
+                    let nombreProdResolver = crearNombreProductoResolver ()
+                    let nombreCliResolver = crearNombreClienteResolver ()
+                    let motivo = if isNull (box req) then "" else defaultArg (Option.ofObj req.Motivo) ""
 
-                let! res =
-                    VentaService.anularVenta
-                        VentaRepository.obtenerVentaPorId
-                        VentaRepository.anularVentaTx
-                        nombreProdResolver
-                        nombreCliResolver
-                        responsableId
-                        id
-                        motivo
+                    let! res =
+                        VentaService.anularVenta
+                            VentaRepository.obtenerVentaPorId
+                            VentaRepository.anularVentaTx
+                            nombreProdResolver
+                            nombreCliResolver
+                            responsableId
+                            id
+                            motivo
 
-                match res with
-                | Ok dto -> return Results.Ok(dto)
-                | Error (msg, 404) -> return Results.NotFound({| error = msg |})
-                | Error (msg, 409) -> return Results.Conflict({| error = msg |})
-                | Error (msg, _)   -> return Results.BadRequest({| error = msg |})
+                    match res with
+                    | Ok dto -> return Results.Ok(dto)
+                    | Error (msg, 404) -> return Results.NotFound({| error = msg |})
+                    | Error (msg, 409) -> return Results.Conflict({| error = msg |})
+                    | Error (msg, _)   -> return Results.BadRequest({| error = msg |})
             } |> Async.StartAsTask
         ))
             .RequireAuthorization("RequireComercial")
@@ -309,22 +318,26 @@ module VentaEndpoints =
         // ─────────────────────────────────────────────────────────
         app.MapPost("/api/despachos/{id}/confirmar", Func<HttpContext, string, ConfirmarDespachoRequest, Threading.Tasks.Task<IResult>>(fun ctx id req ->
             async {
-                let! responsableId = resolverEmpleadoId ctx
-                let reqBody = if isNull (box req) then { Observaciones = None } else req
+                let! actorRes = resolverActor ctx
+                match actorRes with
+                | Error (msg, code) -> return Results.Json({| error = msg |}, statusCode = code)
+                | Ok actor ->
+                    let (EmpleadoId responsableId) = actor.EmpleadoId
+                    let reqBody = if isNull (box req) then { Observaciones = None } else req
 
-                let! res =
-                    VentaService.confirmarDespachoFisico
-                        VentaRepository.obtenerDespachoPorId
-                        VentaRepository.confirmarDespachoFisicoTx
-                        responsableId
-                        id
-                        reqBody
+                    let! res =
+                        VentaService.confirmarDespachoFisico
+                            VentaRepository.obtenerDespachoPorId
+                            VentaRepository.confirmarDespachoFisicoTx
+                            responsableId
+                            id
+                            reqBody
 
-                match res with
-                | Ok dto -> return Results.Ok(dto)
-                | Error (msg, 404) -> return Results.NotFound({| error = msg |})
-                | Error (msg, 409) -> return Results.Conflict({| error = msg |})
-                | Error (msg, _)   -> return Results.BadRequest({| error = msg |})
+                    match res with
+                    | Ok dto -> return Results.Ok(dto)
+                    | Error (msg, 404) -> return Results.NotFound({| error = msg |})
+                    | Error (msg, 409) -> return Results.Conflict({| error = msg |})
+                    | Error (msg, _)   -> return Results.BadRequest({| error = msg |})
             } |> Async.StartAsTask
         ))
             .RequireAuthorization("RequireAlmacen")
