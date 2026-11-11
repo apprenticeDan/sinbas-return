@@ -62,32 +62,6 @@ type RefreshTokenError =
     /// toda la familia de tokens del usuario como medida preventiva.
     | TokenReutilizado of UsuarioId
 
-type NombreRol =
-    | Administrador
-    | Gerencia
-    | Comercial
-    | Almacen
-    | Laboratorio
-
-module NombreRol =
-
-    let toString =
-        function
-        | Administrador -> "Administrador"
-        | Gerencia -> "Gerencia"
-        | Comercial -> "Comercial"
-        | Almacen -> "Almacen"
-        | Laboratorio -> "Laboratorio"
-
-    let fromString =
-        function
-        | "Administrador" -> Ok Administrador
-        | "Gerencia" -> Ok Gerencia
-        | "Comercial" -> Ok Comercial
-        | "Almacen" -> Ok Almacen
-        | "Laboratorio" -> Ok Laboratorio
-        | x -> Error $"Rol desconocido: {x}"
-
 type EstadoUsuario =
     | Activo
     | Desactivado
