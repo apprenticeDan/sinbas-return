@@ -55,6 +55,53 @@ type UbicacionId = UbicacionId of Guid
 
 type TruequeId = TruequeId of Guid
 type MovimientoId = MovimientoId of Guid
+
+// ─────────────────────────────────────────────────────────────
+// Roles y Actores del sistema (P4-01)
+// ─────────────────────────────────────────────────────────────
+
+type NombreRol =
+    | Administrador
+    | Gerencia
+    | Comercial
+    | Almacen
+    | Laboratorio
+    | Vivero
+
+module NombreRol =
+    let aTexto = function
+        | Administrador -> "Administrador"
+        | Gerencia      -> "Gerencia"
+        | Comercial     -> "Comercial"
+        | Almacen       -> "Almacen"
+        | Laboratorio   -> "Laboratorio"
+        | Vivero        -> "Vivero"
+
+    let toString = aTexto
+
+    let desdeTexto (s: string) : NombreRol option =
+        match (if isNull s then "" else s.Trim()) with
+        | "Administrador" -> Some Administrador
+        | "Gerencia"      -> Some Gerencia
+        | "Comercial"     -> Some Comercial
+        | "Almacen"       -> Some Almacen
+        | "Laboratorio"   -> Some Laboratorio
+        | "Vivero"        -> Some Vivero
+        | _               -> None
+
+    let fromString (s: string) : Result<NombreRol, string> =
+        match desdeTexto s with
+        | Some r -> Ok r
+        | None   -> Error $"Rol desconocido: {s}"
+
+/// Identidad del actor que ejecuta una operación (resuelta en el borde, no en la capa de dominio).
+type Actor =
+    { UsuarioId:  UsuarioId
+      EmpleadoId: EmpleadoId
+      Roles:      Set<NombreRol> }
+
+module Actor =
+    let tieneRol (rol: NombreRol) (actor: Actor) = actor.Roles.Contains rol
 // ─────────────────────────────────────────────────────────────
 // CI boliviana — número + complemento opcional + extensión
 // ─────────────────────────────────────────────────────────────

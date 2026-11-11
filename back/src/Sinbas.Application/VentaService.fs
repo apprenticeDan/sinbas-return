@@ -219,7 +219,7 @@ module VentaService =
         (confirmarVentaTx: OrdenVenta -> OrdenDespacho -> (LoteId * Cantidad) list -> Async<Result<unit, string>>)
         (nombreProductoResolver: ProductoId -> string)
         (nombreClienteResolver: ClienteId -> string)
-        (responsableId: Guid)
+        (actor: Actor)
         (proformaIdRaw: string)
         (req: ConfirmarVentaRequest)
         : Async<Result<VentaConfirmadaDto, string * int>> =
@@ -350,7 +350,7 @@ module VentaService =
                     // 5. Generar entidades de dominio OrdenVenta y OrdenDespacho
                     let ordenVentaId = OrdenId (Identidad.nuevo ())
                     let ordenDespachoId = OrdenId (Identidad.nuevo ())
-                    let respEmpleadoId = EmpleadoId responsableId
+                    let respEmpleadoId = actor.EmpleadoId
 
                     // Generar códigos identificadores basados en fecha y sufijo único
                     let ticks = DateTime.UtcNow.Ticks % 10000L
@@ -474,7 +474,7 @@ module VentaService =
     let confirmarDespachoFisico
         (obtenerDespacho: OrdenId -> Async<OrdenDespacho option>)
         (confirmarDespachoFisicoTx: OrdenId -> MovimientoInventario -> string option -> Async<Result<LineaMovimientoDto list, string>>)
-        (responsableId: Guid)
+        (actor: Actor)
         (despachoIdRaw: string)
         (req: ConfirmarDespachoRequest)
         : Async<Result<DespachoConfirmadoDto, string * int>> =
@@ -503,7 +503,7 @@ module VentaService =
                     let movimiento : MovimientoInventario =
                         { Id = movId
                           Fecha = ahora
-                          Responsable = EmpleadoId responsableId
+                          Responsable = actor.EmpleadoId
                           Tipo = Salida (Venta clienteRef)
                           OrdenOrigen = Some dId
                           Lineas = []
@@ -532,7 +532,7 @@ module VentaService =
         (anularVentaTx: OrdenId -> string -> EmpleadoId -> Async<Result<unit, string>>)
         (nombreProductoResolver: ProductoId -> string)
         (nombreClienteResolver: ClienteId -> string)
-        (anuladoPor: Guid)
+        (actor: Actor)
         (ventaIdRaw: string)
         (motivo: string)
         : Async<Result<OrdenVentaDto, string * int>> =
@@ -554,7 +554,7 @@ module VentaService =
                         | EstadoVenta.Anulada _ ->
                             return Error ("La orden de venta ya se encuentra anulada", 409)
                         | EstadoVenta.Confirmada ->
-                            let! txRes = anularVentaTx vId (motivo.Trim()) (EmpleadoId anuladoPor)
+                            let! txRes = anularVentaTx vId (motivo.Trim()) actor.EmpleadoId
                             match txRes with
                             | Error msg -> return Error (msg, 500)
                             | Ok () ->
