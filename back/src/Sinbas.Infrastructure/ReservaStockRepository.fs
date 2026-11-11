@@ -62,6 +62,7 @@ module ReservaStockRepository =
                 SELECT lote_id, cantidad, unidad
                 FROM reserva_stock
                 WHERE orden_venta_id = @ovId AND estado = 'Activa'
+                ORDER BY id
                 FOR UPDATE
             """
             let! rows = conn.QueryAsync<ReservaStockActivaRow>(sql, {| ovId = ovId |}, tx) |> Async.AwaitTask
@@ -175,6 +176,7 @@ module ReservaStockRepository =
                 SELECT lote_id, cantidad, unidad
                 FROM reserva_stock
                 WHERE solicitud_id = @sId AND estado = 'Activa'
+                ORDER BY id
                 FOR UPDATE
             """
             let! rows = conn.QueryAsync<ReservaStockActivaRow>(sql, {| sId = sId |}, tx) |> Async.AwaitTask
