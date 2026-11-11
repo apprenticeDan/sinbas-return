@@ -753,6 +753,7 @@ module VentaRepository =
         }
 
     /// Anulación de orden de venta con liberación transaccional de reservas (Fase 4 / RN04)
+    /// L3 (orden_venta) → L4 (orden_despacho) → L5 (reserva_stock) → L6 (lotes) → updates
     let anularVentaTx
         (ventaId: OrdenId)
         (motivo: string)
@@ -766,19 +767,28 @@ module VentaRepository =
                 let (OrdenId vid) = ventaId
                 let (EmpleadoId uId) = anuladoPor
 
-                // 1. Lock orden_venta y verificar estado
-                let sqlVenta = "SELECT * FROM orden_venta WHERE id = @vid FOR UPDATE"
-                let! vRows = conn.QueryAsync<OrdenVentaRow>(sqlVenta, {| vid = vid |}, tx) |> Async.AwaitTask
-                match vRows |> Seq.tryHead with
-                | None ->
+                // ── L3: lock orden_venta + re-verificar estado ──
+                let! vRow =
+                    conn.QueryFirstOrDefaultAsync<OrdenVentaRow>(
+                        "SELECT * FROM orden_venta WHERE id = @vid FOR UPDATE",
+                        {| vid = vid |}, tx)
+                    |> Async.AwaitTask
+                if isNull (box vRow) then
                     tx.Rollback()
                     return Error (sprintf "Orden de venta %s no encontrada" (vid.ToString()))
-                | Some vRow when vRow.estado <> "Confirmada" ->
+                elif vRow.estado <> "Confirmada" then
                     tx.Rollback()
                     return Error (sprintf "La orden de venta no está en estado Confirmada (estado actual: '%s')" vRow.estado)
-                | Some _ ->
+                else
 
-                // 2. Listar reservas activas
+                // ── L4: lock orden_despacho (por orden_venta_id) ──
+                let! dRowOpt =
+                    conn.QueryFirstOrDefaultAsync<OrdenDespachoRow>(
+                        "SELECT * FROM orden_despacho WHERE orden_venta_id = @vid FOR UPDATE",
+                        {| vid = vid |}, tx)
+                    |> Async.AwaitTask
+
+                // ── L5: lock reservas activas (ORDER BY id) ───────
                 let! reservasRes = ReservaStockRepository.listarActivasPorVenta conn tx ventaId
                 match reservasRes with
                 | Error msg ->
@@ -789,7 +799,7 @@ module VentaRepository =
                     return Error "La venta no tiene reservas activas; posible inconsistencia. Contactar soporte."
                 | Ok reservas ->
 
-                // 3. Lock lotes y liberar reserva con dominio
+                // ── L6: lock lotes (ORDER BY id) ─────────────────
                 let loteIds = reservas |> List.map fst
                 let! lotesLockedRes = LoteRepository.obtenerMultiplesPorIdParaActualizacion conn tx loteIds
                 match lotesLockedRes with
@@ -822,7 +832,7 @@ module VentaRepository =
                     return Error msg
                 | Ok lotesLiberados ->
 
-                // 4. Persistir lotes actualizados (con affectedRows check)
+                // ── UPDATE lotes ─────────────────────────────────
                 let rec persistirLotes = function
                     | [] -> async { return Ok () }
                     | lote :: rest ->
@@ -839,54 +849,58 @@ module VentaRepository =
                     return Error msg
                 | Ok () ->
 
-                // 5. Marcar reservas como liberadas
-                let! marcarRes = ReservaStockRepository.marcarLiberada conn tx ventaId
-                match marcarRes with
+                // ── UPDATE reserva_stock → Liberada ──────────────
+                let! marcRes = ReservaStockRepository.marcarLiberada conn tx ventaId
+                match marcRes with
                 | Error msg ->
                     tx.Rollback()
                     return Error msg
                 | Ok () ->
 
-                // 6. UPDATE orden_venta
-                let sqlUpdVenta = """
-                    UPDATE orden_venta
-                    SET estado = 'Anulada',
-                        anulacion_motivo = @m,
-                        anulado_por = @u,
-                        anulado_en = NOW()
-                    WHERE id = @vid
-                """
-                let! affectedVenta = conn.ExecuteAsync(sqlUpdVenta, {| vid = vid; m = motivo; u = uId |}, tx) |> Async.AwaitTask
-                if affectedVenta <> 1 then
-                    tx.Rollback()
-                    return Error (sprintf "UPDATE orden_venta afectó %d filas (affectedRows=%d, esperado 1)" affectedVenta affectedVenta)
-                else
-
-                // 7. UPDATE orden_despacho (si existe orden de despacho para la venta)
-                let sqlCheckDesp = "SELECT count(1) FROM orden_despacho WHERE orden_venta_id = @vid"
-                let! totalDesp = conn.ExecuteScalarAsync<int>(sqlCheckDesp, {| vid = vid |}, tx) |> Async.AwaitTask
-
-                if totalDesp > 0 then
-                    let sqlUpdDesp = """
-                        UPDATE orden_despacho
+                // ── UPDATE orden_venta (guard) ───────────────────
+                let! affectedVenta =
+                    conn.ExecuteAsync(
+                        """
+                        UPDATE orden_venta
                         SET estado = 'Anulada',
                             anulacion_motivo = @m,
                             anulado_por = @u,
                             anulado_en = NOW()
-                        WHERE orden_venta_id = @vid AND estado = 'Pendiente'
-                    """
-                    let! affectedDesp = conn.ExecuteAsync(sqlUpdDesp, {| vid = vid; m = motivo; u = uId |}, tx) |> Async.AwaitTask
+                        WHERE id = @vid AND estado = 'Confirmada'
+                        """,
+                        {| vid = vid; m = motivo; u = uId |}, tx)
+                    |> Async.AwaitTask
+                if affectedVenta <> 1 then
+                    tx.Rollback()
+                    return Error (sprintf "UPDATE orden_venta afectó %d filas (esperado 1)" affectedVenta)
+                else
+
+                // ── UPDATE orden_despacho si existe ───────────────
+                if isNull (box dRowOpt) then
+                    tx.Commit()
+                    return Ok ()
+                else
+                    let! affectedDesp =
+                        conn.ExecuteAsync(
+                            """
+                            UPDATE orden_despacho
+                            SET estado = 'Anulado',
+                                anulacion_motivo = @m,
+                                anulado_por = @u,
+                                anulado_en = NOW()
+                            WHERE id = @did AND estado = 'Pendiente'
+                            """,
+                            {| did = dRowOpt.id; m = motivo; u = uId |}, tx)
+                        |> Async.AwaitTask
                     if affectedDesp <> 1 then
                         tx.Rollback()
-                        return Error (sprintf "UPDATE orden_despacho afectó %d filas (affectedRows=%d, esperado 1)" affectedDesp affectedDesp)
+                        return Error (sprintf "UPDATE orden_despacho afectó %d filas (esperado 1)" affectedDesp)
                     else
                         tx.Commit()
                         return Ok ()
-                else
-                    tx.Commit()
-                    return Ok ()
+
             with ex ->
-                tx.Rollback()
+                try tx.Rollback() with _ -> ()
                 eprintfn "[VentaRepository.anularVentaTx] Error: %s" ex.Message
-                return Error ex.Message
+                return Error (sprintf "Error al anular venta: %s" ex.Message)
         }
