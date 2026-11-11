@@ -1,6 +1,7 @@
 namespace Sinbas.Infrastructure
 
 open System
+open Npgsql
 open Dapper
 open Sinbas.Domain
 open Sinbas.Application
@@ -161,6 +162,18 @@ module VentaRepository =
         | EmpleadoDuplicado m | SinAnalisisLaboratorio m | LoteRechazado m
         | PorcentajeInvalido m | FechaInvalida m | OperacionInvalida m -> m
 
+    /// Configura la sesión de BD para la transacción actual.
+    /// Q6: lock_timeout previene cuelgues indefinidos ante bloqueos imprevistos.
+    let private configurarTx (conn: NpgsqlConnection) (tx: NpgsqlTransaction) =
+        conn.Execute("SET LOCAL lock_timeout = '5s';", null, tx) |> ignore
+        conn.Execute("SET LOCAL statement_timeout = '30s';", null, tx) |> ignore
+
+    let private esTransitorio (ex: exn) =
+        match ex with
+        | :? PostgresException as pg ->
+            pg.SqlState = "40P01" || pg.SqlState = "40001" || pg.SqlState = "55P03"
+        | _ -> false
+
     /// Inserción atómica transaccional de Confirmación de Venta (RNF05 / OBS-03)
     /// 1. Convierte Proforma a 'Convertida' de manera optimista (WHERE id=@id AND estado='Vigente')
     /// 2. Lock + re-reserva autoritativa con dominio (Lote.reservar bajo FOR UPDATE)
@@ -176,6 +189,7 @@ module VentaRepository =
             conn.Open()
             use tx = conn.BeginTransaction()
             try
+                configurarTx conn tx
                 let (OrdenId ovId) = ordenVenta.Id
                 let (ProformaId pId) = ordenVenta.ProformaOrigenId
                 let (ClienteId cId) = ordenVenta.ClienteId
@@ -330,9 +344,13 @@ module VentaRepository =
                         tx.Commit()
                         return Ok ()
             with ex ->
-                tx.Rollback()
-                eprintfn "[VentaRepository.confirmarVentaTx] Error: %s" ex.Message
-                return Error ex.Message
+                try tx.Rollback() with _ -> ()
+                if esTransitorio ex then
+                    eprintfn "[VentaRepository.confirmarVentaTx] Error transitorio: %s" ex.Message
+                    return Error (sprintf "Error transitorio: %s" ex.Message)
+                else
+                    eprintfn "[VentaRepository.confirmarVentaTx] Error: %s" ex.Message
+                    return Error ex.Message
         }
 
     let obtenerVentaPorId (id: OrdenId) : Async<OrdenVenta option> =
@@ -523,6 +541,8 @@ module VentaRepository =
             conn.Open()
             use tx = conn.BeginTransaction()
             try
+                configurarTx conn tx
+
                 let (OrdenId did) = despachoId
                 let (MovimientoId mId) = movimiento.Id
                 let (EmpleadoId eId) = movimiento.Responsable
@@ -748,8 +768,12 @@ module VentaRepository =
 
             with ex ->
                 try tx.Rollback() with _ -> ()
-                eprintfn "[VentaRepository.confirmarDespachoFisicoTx] Error: %s" ex.Message
-                return Error (sprintf "Error al confirmar despacho: %s" ex.Message)
+                if esTransitorio ex then
+                    eprintfn "[VentaRepository.confirmarDespachoFisicoTx] Error transitorio: %s" ex.Message
+                    return Error (sprintf "Error transitorio: %s" ex.Message)
+                else
+                    eprintfn "[VentaRepository.confirmarDespachoFisicoTx] Error: %s" ex.Message
+                    return Error (sprintf "Error al confirmar despacho: %s" ex.Message)
         }
 
     /// Anulación de orden de venta con liberación transaccional de reservas (Fase 4 / RN04)
@@ -764,6 +788,8 @@ module VentaRepository =
             conn.Open()
             use tx = conn.BeginTransaction()
             try
+                configurarTx conn tx
+
                 let (OrdenId vid) = ventaId
                 let (EmpleadoId uId) = anuladoPor
 
@@ -901,6 +927,10 @@ module VentaRepository =
 
             with ex ->
                 try tx.Rollback() with _ -> ()
-                eprintfn "[VentaRepository.anularVentaTx] Error: %s" ex.Message
-                return Error (sprintf "Error al anular venta: %s" ex.Message)
+                if esTransitorio ex then
+                    eprintfn "[VentaRepository.anularVentaTx] Error transitorio: %s" ex.Message
+                    return Error (sprintf "Error transitorio: %s" ex.Message)
+                else
+                    eprintfn "[VentaRepository.anularVentaTx] Error: %s" ex.Message
+                    return Error (sprintf "Error al anular venta: %s" ex.Message)
         }
