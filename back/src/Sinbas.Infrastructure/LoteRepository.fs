@@ -219,21 +219,37 @@ module LoteRepository =
         (ids: LoteId list)
         : Async<Result<Lote list, string>> =
         async {
-            if List.isEmpty ids then return Ok []
+            // Orden canónico por Guid (UUID v7 es comparable). El orden de
+            // ASIGNACIÓN FIFO (FechaIngreso) se resuelve después, en memoria.
+            let idsOrdenados =
+                ids
+                |> List.map (fun (LoteId g) -> g)
+                |> List.distinct
+                |> List.sort
+
+            if List.isEmpty idsOrdenados then return Ok []
             else
-                let guids = ids |> List.map (fun (LoteId g) -> g) |> List.toArray
-                let sql = "SELECT * FROM lote WHERE id = ANY(@ids) FOR UPDATE"
-                let! rows = conn.QueryAsync<LoteRow>(sql, {| ids = guids |}, tx) |> Async.AwaitTask
-                let rec reconstruir acc = function
-                    | [] -> Ok (List.rev acc)
-                    | (row: LoteRow) :: rest ->
-                        match loteFromRow row with
-                        | Ok lote -> reconstruir (lote :: acc) rest
-                        | Error err ->
-                            eprintfn "[INTEGRIDAD] LoteRepository.obtenerMultiplesPorIdParaActualizacion id=%s campo=%s: %A"
-                                err.RegistroId err.Campo err.ErrorDominio
-                            Error (sprintf "Lote %s inconsistente en campo '%s'" err.RegistroId err.Campo)
-                return reconstruir [] (rows |> Seq.toList)
+                let! rows =
+                    conn.QueryAsync<LoteRow>(
+                        "SELECT * FROM lote WHERE id = ANY(@ids) ORDER BY id FOR UPDATE",
+                        {| ids = idsOrdenados |> List.toArray |}, tx)
+                    |> Async.AwaitTask
+
+                let rowsList = rows |> Seq.toList
+                if rowsList.Length <> idsOrdenados.Length then
+                    return Error (sprintf "LoteRepository.obtenerMultiplesPorIdParaActualizacion: se esperaban %d lotes, se encontraron %d"
+                                      idsOrdenados.Length rowsList.Length)
+                else
+                    let rec reconstruir acc = function
+                        | [] -> Ok (List.rev acc)
+                        | (row: LoteRow) :: rest ->
+                            match loteFromRow row with
+                            | Ok lote -> reconstruir (lote :: acc) rest
+                            | Error err ->
+                                eprintfn "[INTEGRIDAD] LoteRepository.obtenerMultiplesPorIdParaActualizacion id=%s campo=%s: %A"
+                                    err.RegistroId err.Campo err.ErrorDominio
+                                Error (sprintf "Lote %s inconsistente en campo '%s'" err.RegistroId err.Campo)
+                    return reconstruir [] rowsList
         }
 
     /// Persiste el estado completo de un lote (stock + reserva + estado) dentro de una transacción externa
