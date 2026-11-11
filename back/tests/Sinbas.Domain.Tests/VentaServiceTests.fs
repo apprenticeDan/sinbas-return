@@ -61,6 +61,11 @@ let private mkCliente (cId: ClienteId) : Cliente =
       Direccion = None
       Estado = EstadoCliente.Activo }
 
+let private actorTest : Actor =
+    { UsuarioId = UsuarioId (Guid.NewGuid())
+      EmpleadoId = EmpleadoId (Guid.NewGuid())
+      Roles = Set.ofList [ NombreRol.Comercial; NombreRol.Almacen; NombreRol.Gerencia ] }
+
 // ── Tests ──
 
 [<Fact>]
@@ -91,7 +96,7 @@ let ``confirmarVenta convierte 1 kg a 1000 g al reservar en lote en gramos`` () 
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
-            (let (UsuarioId g) = responsableId in g)
+            actorTest
             (let (ProformaId g) = proformaId in g.ToString())
             { ClienteId = None }
         |> Async.RunSynchronously
@@ -134,7 +139,7 @@ let ``confirmarVenta falla 409 si stock disponible insuficiente tras reserva par
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
-            (let (UsuarioId g) = responsableId in g)
+            actorTest
             (let (ProformaId g) = proformaId in g.ToString())
             { ClienteId = None }
         |> Async.RunSynchronously
@@ -173,7 +178,7 @@ let ``confirmarVenta falla 422 si producto fue desactivado despues de proforma``
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
-            (let (UsuarioId g) = responsableId in g)
+            actorTest
             (let (ProformaId g) = proformaId in g.ToString())
             { ClienteId = None }
         |> Async.RunSynchronously
@@ -222,7 +227,7 @@ let ``confirmarDespachoFisico descuenta reserva y stock fisico enviando Cantidad
         VentaService.confirmarDespachoFisico
             (fun _ -> async { return Some ordenDespacho })
             mockDespachoTx
-            responsableId
+            actorTest
             (let (OrdenId g) = despachoId in g.ToString())
             { Observaciones = Some "Despacho test" }
         |> Async.RunSynchronously
@@ -268,7 +273,7 @@ let ``confirmarVenta OBS-04: proforma con FechaVencimiento en el pasado no bloqu
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
-            (let (UsuarioId g) = responsableId in g)
+            actorTest
             (let (ProformaId g) = proformaId in g.ToString())
             { ClienteId = None }
         |> Async.RunSynchronously
@@ -311,7 +316,7 @@ let ``confirmarVenta OBS-04: proforma con Estado Vencida no bloquea y retorna Ok
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
-            (let (UsuarioId g) = responsableId in g)
+            actorTest
             (let (ProformaId g) = proformaId in g.ToString())
             { ClienteId = None }
         |> Async.RunSynchronously
@@ -352,7 +357,7 @@ let ``confirmarVenta inserts reservas with preserved unit`` () =
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
-            (let (UsuarioId g) = responsableId in g)
+            actorTest
             (let (ProformaId g) = proformaId in g.ToString())
             { ClienteId = None }
         |> Async.RunSynchronously
@@ -387,7 +392,7 @@ let ``confirmarDespachoFisico fails 409 if no active reservations`` () =
         VentaService.confirmarDespachoFisico
             (fun _ -> async { return Some ordenDespacho })
             mockDespachoTx
-            responsableId
+            actorTest
             (let (OrdenId g) = despachoId in g.ToString())
             { Observaciones = None }
         |> Async.RunSynchronously
@@ -430,7 +435,7 @@ let ``confirmarDespachoFisico returns lines from repo`` () =
         VentaService.confirmarDespachoFisico
             (fun _ -> async { return Some ordenDespacho })
             mockDespachoTx
-            responsableId
+            actorTest
             (let (OrdenId g) = despachoId in g.ToString())
             { Observaciones = None }
         |> Async.RunSynchronously
@@ -471,13 +476,15 @@ let ``anularVenta ok on Confirmada state`` () =
     let mockTx (_: OrdenId) (_: string) (_: EmpleadoId) =
         async { txLlamado <- true; return Ok () }
 
+    let actor = { actorTest with EmpleadoId = responsableId }
+
     let res =
         VentaService.anularVenta
             (fun _ -> async { if txLlamado then return Some ventaAnuladaEstado else return Some ordenVenta })
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
-            (let (EmpleadoId g) = responsableId in g)
+            actor
             (let (OrdenId g) = ventaId in g.ToString())
             "Error en pedido"
         |> Async.RunSynchronously
@@ -517,7 +524,7 @@ let ``anularVenta fails 409 on Despachada state`` () =
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
-            (let (EmpleadoId g) = responsableId in g)
+            actorTest
             (let (OrdenId g) = ventaId in g.ToString())
             "Cancelación cliente"
         |> Async.RunSynchronously
@@ -558,7 +565,7 @@ let ``anularVenta fails 400 on empty motivo`` () =
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
-            (let (EmpleadoId g) = responsableId in g)
+            actorTest
             (let (OrdenId g) = ventaId in g.ToString())
             "   "
         |> Async.RunSynchronously

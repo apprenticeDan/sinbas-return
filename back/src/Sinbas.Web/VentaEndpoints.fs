@@ -80,7 +80,7 @@ module VentaEndpoints =
                 match actorRes with
                 | Error (msg, code) -> return Results.Json({| error = msg |}, statusCode = code)
                 | Ok actor ->
-                    let (EmpleadoId responsableId) = actor.EmpleadoId
+                    let (EmpleadoId respGuid) = actor.EmpleadoId
                     let nombreProdResolver = crearNombreProductoResolver ()
                     let nombreCliResolver = crearNombreClienteResolver ()
 
@@ -112,7 +112,7 @@ module VentaEndpoints =
                             VentaRepository.confirmarVentaTx
                             nombreProdResolver
                             nombreCliResolver
-                            responsableId
+                            actor
                             id
                             reqBody
 
@@ -122,8 +122,7 @@ module VentaEndpoints =
                         let result = Results.Created(location, dto)
                         match idempotencyKey with
                         | Some key ->
-                            let subClaim = ctx.User.FindFirst(ClaimTypes.NameIdentifier)
-                            let uId = if isNull subClaim then responsableId else (match Guid.TryParse(subClaim.Value) with true, g -> g | _ -> responsableId)
+                            let (UsuarioId uId) = actor.UsuarioId
                             let json = System.Text.Json.JsonSerializer.Serialize(dto)
                             let reg : RegistroIdempotenciaRow =
                                 { clave = key
@@ -227,7 +226,6 @@ module VentaEndpoints =
                 match actorRes with
                 | Error (msg, code) -> return Results.Json({| error = msg |}, statusCode = code)
                 | Ok actor ->
-                    let (EmpleadoId responsableId) = actor.EmpleadoId
                     let nombreProdResolver = crearNombreProductoResolver ()
                     let nombreCliResolver = crearNombreClienteResolver ()
                     let motivo = if isNull (box req) then "" else defaultArg (Option.ofObj req.Motivo) ""
@@ -238,7 +236,7 @@ module VentaEndpoints =
                             VentaRepository.anularVentaTx
                             nombreProdResolver
                             nombreCliResolver
-                            responsableId
+                            actor
                             id
                             motivo
 
@@ -322,14 +320,13 @@ module VentaEndpoints =
                 match actorRes with
                 | Error (msg, code) -> return Results.Json({| error = msg |}, statusCode = code)
                 | Ok actor ->
-                    let (EmpleadoId responsableId) = actor.EmpleadoId
                     let reqBody = if isNull (box req) then { Observaciones = None } else req
 
                     let! res =
                         VentaService.confirmarDespachoFisico
                             VentaRepository.obtenerDespachoPorId
                             VentaRepository.confirmarDespachoFisicoTx
-                            responsableId
+                            actor
                             id
                             reqBody
 
