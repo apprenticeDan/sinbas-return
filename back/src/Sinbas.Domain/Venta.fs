@@ -40,6 +40,11 @@ module EstadoVenta =
         | EstadoVenta.Despachada -> "Despachada"
         | EstadoVenta.Anulada _  -> "Anulada"
 
+    let aTextoEstado = function
+        | EstadoVenta.Confirmada -> "Confirmada"
+        | EstadoVenta.Despachada -> "Despachada"
+        | EstadoVenta.Anulada _  -> "Anulada"
+
     let desdeTexto (s: string) (anulacion: Anulacion option) : Result<EstadoVenta, DomainError> =
         match (if isNull s then "" else s.Trim().ToLowerInvariant()) with
         | "confirmada" -> Ok EstadoVenta.Confirmada
@@ -67,6 +72,28 @@ type OrdenVenta =
       Moneda: string
       Estado: EstadoVenta
       CreadoEn: DateTime }
+
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module Anulacion =
+    /// Constante compartida backend ↔ frontend.
+    [<Literal>]
+    let MotivoMinimoLength = 3
+
+    let validarMotivo (motivo: string) : Result<string, DomainError> =
+        let m = if isNull motivo then "" else motivo.Trim()
+        if String.IsNullOrWhiteSpace m then
+            Error (ValorRequerido "El motivo de anulación es obligatorio")
+        elif m.Length < MotivoMinimoLength then
+            Error (ValorRequerido (sprintf "El motivo debe tener al menos %d caracteres" MotivoMinimoLength))
+        else
+            Ok m
+
+module Venta =
+    /// Q1: ownership con escalamiento a Gerencia/Administrador.
+    let puedeAnularVenta (actor: Actor) (venta: OrdenVenta) : bool =
+        Actor.tieneRol NombreRol.Gerencia actor
+        || Actor.tieneRol NombreRol.Administrador actor
+        || (Actor.tieneRol NombreRol.Comercial actor && venta.ResponsableId = actor.EmpleadoId)
 
 module OrdenVenta =
 
@@ -140,11 +167,11 @@ module OrdenVenta =
         | EstadoVenta.Anulada _ ->
             Error (OperacionInvalida "La orden de venta ya se encuentra anulada")
         | EstadoVenta.Confirmada ->
-            if String.IsNullOrWhiteSpace motivo then
-                Error (ValorRequerido "El motivo de anulación de la venta es obligatorio")
-            else
+            match Anulacion.validarMotivo motivo with
+            | Error e -> Error e
+            | Ok m ->
                 let anulacion : Anulacion =
                     { Fecha = ahora
-                      Motivo = motivo.Trim()
+                      Motivo = m
                       AnuladoPor = anuladoPor }
                 Ok { orden with Estado = EstadoVenta.Anulada anulacion }

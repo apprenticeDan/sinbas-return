@@ -265,3 +265,123 @@ let ``// OBS-03: Fifo.resolverFIFODespacho permite despachar lotes totalmente re
         Assert.Equal(lId, lineas.[0].Referencia)
         Assert.Equal(50m, Cantidad.valor lineas.[0].Cantidad)
     | Error err -> failwithf "Se esperaba éxito en resolverFIFODespacho, se obtuvo: %A" err
+
+// ─────────────────────────────────────────────────────────────
+// Tests Rama 04: Anulación, Ownership y Validaciones (Q1 / RN04)
+// ─────────────────────────────────────────────────────────────
+
+let private crearOrdenVentaParaTest (responsableId: EmpleadoId) : OrdenVenta =
+    let p = proformaVigente ()
+    let hoy = DateOnly(2026, 10, 8)
+    let ordenId = OrdenId (Guid.NewGuid())
+    let codVenta = CodigoVenta.reconstruir "OV-202610-TEST"
+    match OrdenVenta.crearDesdeProforma hoy ordenId codVenta p clienteId responsableId with
+    | Ok (ov, _) -> ov
+    | Error err -> failwithf "Error creando OrdenVenta: %A" err
+
+let private crearActorConRol (rol: NombreRol) (empleadoId: EmpleadoId) : Actor =
+    { UsuarioId = UsuarioId (Guid.NewGuid())
+      EmpleadoId = empleadoId
+      Roles = Set.singleton rol }
+
+[<Theory>]
+[<InlineData("Administrador", true, true)>]
+[<InlineData("Administrador", false, true)>]
+[<InlineData("Gerencia", true, true)>]
+[<InlineData("Gerencia", false, true)>]
+[<InlineData("Comercial", true, true)>]
+[<InlineData("Comercial", false, false)>]
+[<InlineData("Almacen", true, false)>]
+[<InlineData("Almacen", false, false)>]
+let ``// Q1 - puedeAnularVenta verifica ownership y escalamiento a Gerencia/Admin (8 casos: 4 roles x 2 ownership)`` (rolStr: string, esEmisor: bool, esperado: bool) =
+    let emisorId = EmpleadoId (Guid.NewGuid())
+    let otroId = EmpleadoId (Guid.NewGuid())
+    let actorId = if esEmisor then emisorId else otroId
+    let rol =
+        match NombreRol.desdeTexto rolStr with
+        | Some r -> r
+        | None -> failwithf "Rol desconocido: %s" rolStr
+    let actor = crearActorConRol rol actorId
+    let venta = crearOrdenVentaParaTest emisorId
+
+    let resultado = Venta.puedeAnularVenta actor venta
+    Assert.Equal(esperado, resultado)
+
+[<Fact>]
+let ``// Anulacion.validarMotivo rechaza cadenas vacias, espacios o nulos`` () =
+    match Anulacion.validarMotivo "" with
+    | Error (ValorRequerido msg) -> Assert.Contains("obligatorio", msg)
+    | res -> failwithf "Se esperaba Error ValorRequerido, se obtuvo: %A" res
+
+    match Anulacion.validarMotivo "   " with
+    | Error (ValorRequerido msg) -> Assert.Contains("obligatorio", msg)
+    | res -> failwithf "Se esperaba Error ValorRequerido, se obtuvo: %A" res
+
+    match Anulacion.validarMotivo null with
+    | Error (ValorRequerido msg) -> Assert.Contains("obligatorio", msg)
+    | res -> failwithf "Se esperaba Error ValorRequerido, se obtuvo: %A" res
+
+[<Fact>]
+let ``// Anulacion.validarMotivo rechaza motivos con longitud menor a MotivoMinimoLength`` () =
+    match Anulacion.validarMotivo "a" with
+    | Error (ValorRequerido msg) -> Assert.Contains(sprintf "%d caracteres" Anulacion.MotivoMinimoLength, msg)
+    | res -> failwithf "Se esperaba Error ValorRequerido, se obtuvo: %A" res
+
+    match Anulacion.validarMotivo "ab" with
+    | Error (ValorRequerido msg) -> Assert.Contains(sprintf "%d caracteres" Anulacion.MotivoMinimoLength, msg)
+    | res -> failwithf "Se esperaba Error ValorRequerido, se obtuvo: %A" res
+
+    match Anulacion.validarMotivo "  ab  " with
+    | Error (ValorRequerido msg) -> Assert.Contains(sprintf "%d caracteres" Anulacion.MotivoMinimoLength, msg)
+    | res -> failwithf "Se esperaba Error ValorRequerido con trim, se obtuvo: %A" res
+
+[<Fact>]
+let ``// Anulacion.validarMotivo acepta motivos de longitud minima o superior con trim`` () =
+    match Anulacion.validarMotivo "abc" with
+    | Ok m -> Assert.Equal("abc", m)
+    | Error e -> failwithf "Se esperaba Ok, se obtuvo: %A" e
+
+    match Anulacion.validarMotivo "  Error en digitación de cliente  " with
+    | Ok m -> Assert.Equal("Error en digitación de cliente", m)
+    | Error e -> failwithf "Se esperaba Ok, se obtuvo: %A" e
+
+[<Fact>]
+let ``// EstadoVenta.aTextoEstado retorna representacion de texto exacta para todos los casos`` () =
+    Assert.Equal("Confirmada", EstadoVenta.aTextoEstado EstadoVenta.Confirmada)
+    Assert.Equal("Despachada", EstadoVenta.aTextoEstado EstadoVenta.Despachada)
+    let anulacion = { Fecha = DateTime.UtcNow; Motivo = "Prueba"; AnuladoPor = EmpleadoId Guid.Empty }
+    Assert.Equal("Anulada", EstadoVenta.aTextoEstado (EstadoVenta.Anulada anulacion))
+
+    // Roundtrip con desdeTexto
+    match EstadoVenta.desdeTexto (EstadoVenta.aTextoEstado EstadoVenta.Confirmada) None with
+    | Ok EstadoVenta.Confirmada -> ()
+    | res -> failwithf "Roundtrip Confirmada falló: %A" res
+
+    match EstadoVenta.desdeTexto (EstadoVenta.aTextoEstado EstadoVenta.Despachada) None with
+    | Ok EstadoVenta.Despachada -> ()
+    | res -> failwithf "Roundtrip Despachada falló: %A" res
+
+    match EstadoVenta.desdeTexto (EstadoVenta.aTextoEstado (EstadoVenta.Anulada anulacion)) (Some anulacion) with
+    | Ok (EstadoVenta.Anulada a) -> Assert.Equal("Prueba", a.Motivo)
+    | res -> failwithf "Roundtrip Anulada falló: %A" res
+
+[<Fact>]
+let ``// EstadoDespacho.aTextoEstado retorna representacion de texto exacta para todos los casos`` () =
+    Assert.Equal("Pendiente", EstadoDespacho.aTextoEstado EstadoDespacho.Pendiente)
+    let movId = MovimientoId (Guid.NewGuid())
+    Assert.Equal("Despachado", EstadoDespacho.aTextoEstado (EstadoDespacho.Despachado movId))
+    let anulacion = { Fecha = DateTime.UtcNow; Motivo = "Prueba"; AnuladoPor = EmpleadoId Guid.Empty }
+    Assert.Equal("Anulado", EstadoDespacho.aTextoEstado (EstadoDespacho.Anulado anulacion))
+
+    // Roundtrip con desdeTexto
+    match EstadoDespacho.desdeTexto (EstadoDespacho.aTextoEstado EstadoDespacho.Pendiente) None None with
+    | Ok EstadoDespacho.Pendiente -> ()
+    | res -> failwithf "Roundtrip Pendiente falló: %A" res
+
+    match EstadoDespacho.desdeTexto (EstadoDespacho.aTextoEstado (EstadoDespacho.Despachado movId)) (Some (let (MovimientoId g) = movId in g)) None with
+    | Ok (EstadoDespacho.Despachado m) -> Assert.Equal(movId, m)
+    | res -> failwithf "Roundtrip Despachado falló: %A" res
+
+    match EstadoDespacho.desdeTexto (EstadoDespacho.aTextoEstado (EstadoDespacho.Anulado anulacion)) None (Some anulacion) with
+    | Ok (EstadoDespacho.Anulado a) -> Assert.Equal("Prueba", a.Motivo)
+    | res -> failwithf "Roundtrip Anulado falló: %A" res
