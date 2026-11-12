@@ -17,23 +17,21 @@ type LineaCotizada =
 [<RequireQualifiedAccess>]
 type EstadoProforma =
     | Vigente
-    | Vencida
     | Convertida
     | Anulada
 
 module EstadoProforma =
     let aTexto = function
         | EstadoProforma.Vigente    -> "Vigente"
-        | EstadoProforma.Vencida    -> "Vencida"
         | EstadoProforma.Convertida -> "Convertida"
         | EstadoProforma.Anulada    -> "Anulada"
 
     let desdeTexto (s: string) : Result<EstadoProforma, DomainError> =
         match (if isNull s then "" else s.Trim().ToLowerInvariant()) with
         | "vigente"    -> Ok EstadoProforma.Vigente
-        | "vencida"    -> Ok EstadoProforma.Vencida
         | "convertida" -> Ok EstadoProforma.Convertida
         | "anulada"    -> Ok EstadoProforma.Anulada
+        | "vencida"    -> Error (OperacionInvalida "El estado 'Vencida' no es válido: las proformas no tienen vencimiento")
         | otro         -> Error (ValorRequerido (sprintf "Estado de proforma desconocido: '%s'" otro))
 
 [<AutoOpen>]

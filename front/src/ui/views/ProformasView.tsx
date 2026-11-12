@@ -299,8 +299,6 @@ export const ProformasView: Component = () => {
     switch (estado) {
       case 'Vigente':
         return 'badge-success';
-      case 'Vencida':
-        return 'badge-warning';
       case 'Convertida':
         return 'badge-info';
       case 'Anulada':
@@ -347,7 +345,6 @@ export const ProformasView: Component = () => {
           >
             <option value="">Todos los Estados</option>
             <option value="Vigente">Vigente</option>
-            <option value="Vencida">Vencida</option>
             <option value="Convertida">Convertida</option>
             <option value="Anulada">Anulada</option>
           </select>
