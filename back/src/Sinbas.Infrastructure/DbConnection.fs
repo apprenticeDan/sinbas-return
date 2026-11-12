@@ -432,7 +432,7 @@ create index if not exists ix_proforma_responsable on proforma(responsable_id);
 do $$ begin
     if not exists (select 1 from pg_constraint where conname = 'ck_proforma_estado') then
         alter table proforma add constraint ck_proforma_estado
-            check (estado in ('Vigente', 'Vencida', 'Convertida', 'Anulada'));
+            check (estado in ('Vigente', 'Convertida', 'Anulada'));
     end if;
     if not exists (select 1 from pg_constraint where conname = 'ck_proforma_total') then
         alter table proforma add constraint ck_proforma_total
