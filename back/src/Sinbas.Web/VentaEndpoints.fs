@@ -242,9 +242,12 @@ module VentaEndpoints =
 
                     match res with
                     | Ok dto -> return Results.Ok(dto)
+                    | Error (msg, 400) -> return Results.BadRequest({| error = msg |})
+                    | Error (msg, 403) -> return Results.Json({| error = msg |}, statusCode = 403)
                     | Error (msg, 404) -> return Results.NotFound({| error = msg |})
                     | Error (msg, 409) -> return Results.Conflict({| error = msg |})
-                    | Error (msg, _)   -> return Results.BadRequest({| error = msg |})
+                    | Error (msg, 503) -> return Results.Problem(msg, statusCode = 503)
+                    | Error (msg, _)   -> return Results.Problem(msg, statusCode = 500)
             } |> Async.StartAsTask
         ))
             .RequireAuthorization("RequireComercial")
