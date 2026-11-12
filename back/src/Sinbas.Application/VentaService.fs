@@ -545,8 +545,8 @@ module VentaService =
                 match vOpt with
                 | None -> return Error ("Orden de venta no encontrada", 404)
                 | Some venta ->
-                    if String.IsNullOrWhiteSpace(motivo) then
-                        return Error ("El motivo de anulación es obligatorio", 400)
+                    if not (Venta.puedeAnularVenta actor venta) then
+                        return Error ("No tiene permiso para anular esta orden de venta.", 403)
                     else
                         match venta.Estado with
                         | EstadoVenta.Despachada ->
@@ -554,13 +554,16 @@ module VentaService =
                         | EstadoVenta.Anulada _ ->
                             return Error ("La orden de venta ya se encuentra anulada", 409)
                         | EstadoVenta.Confirmada ->
-                            let! txRes = anularVentaTx vId (motivo.Trim()) actor.EmpleadoId
-                            match txRes with
-                            | Error msg -> return Error (msg, 500)
-                            | Ok () ->
-                                let! ventaRecargadaOpt = obtenerVenta vId
-                                match ventaRecargadaOpt with
-                                | None -> return Error ("Error al recargar venta anulada", 500)
-                                | Some ventaAnulada ->
-                                    return Ok (toVentaDto nombreProductoResolver nombreClienteResolver ventaAnulada)
+                            match Anulacion.validarMotivo motivo with
+                            | Error domErr -> return Error (errorToString domErr, 400)
+                            | Ok motivoLimpio ->
+                                let! txRes = anularVentaTx vId motivoLimpio actor.EmpleadoId
+                                match txRes with
+                                | Error msg -> return Error (msg, 500)
+                                | Ok () ->
+                                    let! ventaRecargadaOpt = obtenerVenta vId
+                                    match ventaRecargadaOpt with
+                                    | None -> return Error ("Error al recargar venta anulada", 500)
+                                    | Some ventaAnulada ->
+                                        return Ok (toVentaDto nombreProductoResolver nombreClienteResolver ventaAnulada)
         }
