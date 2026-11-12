@@ -236,11 +236,9 @@ module VentaService =
 
                     let hoy = DateOnly.FromDateTime(DateTime.UtcNow)
 
-                    // 2. Validar estado de la proforma (RN14 + OBS-04: no bloquea por fecha)
-                    if proforma.Estado = EstadoProforma.Anulada then
-                        return Error ("No se puede confirmar una proforma que ha sido anulada.", 409)
-                    elif proforma.Estado = EstadoProforma.Convertida then
-                        return Error ("La proforma ya fue convertida a orden de venta previamente.", 409)
+                    // 2. Validar estado de la proforma (allow-list: solo Vigente)
+                    if proforma.Estado <> EstadoProforma.Vigente then
+                        return Error ("La proforma no está disponible para confirmar (Anulada o Convertida).", 409)
                     else
 
                     // 3. Resolver y validar ClienteId obligatorio (D4)
