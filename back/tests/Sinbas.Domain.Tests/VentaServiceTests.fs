@@ -576,3 +576,104 @@ let ``anularVenta fails 400 on empty motivo`` () =
         Assert.False(txLlamado, "El mock no debió ser llamado")
         Assert.Equal(400, code)
         Assert.Contains("motivo", msg.ToLowerInvariant())
+
+[<Fact>]
+let ``anularVenta fails 403 when Comercial actor is not the issuer`` () =
+    let ventaId = OrdenId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let prodId = ProductoId (Guid.NewGuid())
+    let emisorId = EmpleadoId (Guid.NewGuid())
+    let otroComercialId = EmpleadoId (Guid.NewGuid())
+    let ordenVenta : OrdenVenta =
+        { Id = ventaId
+          Codigo = unwrap (CodigoVenta.crear "OV-202610-0004")
+          ProformaOrigenId = ProformaId (Guid.NewGuid())
+          ClienteId = clienteId
+          Fecha = DateOnly.FromDateTime(DateTime.UtcNow)
+          ResponsableId = emisorId
+          Lineas = [ { ProductoId = prodId; Cantidad = cantReconst 1m Kilogramo; PrecioUnitario = 100m } ]
+          Total = 100m
+          Moneda = "BOB"
+          Estado = EstadoVenta.Confirmada
+          CreadoEn = DateTime.UtcNow }
+
+    let mutable txLlamado = false
+    let mockTx (_: OrdenId) (_: string) (_: EmpleadoId) =
+        async { txLlamado <- true; return Ok () }
+
+    let actorComercialAjeno =
+        { UsuarioId = UsuarioId (Guid.NewGuid())
+          EmpleadoId = otroComercialId
+          Roles = Set.singleton NombreRol.Comercial }
+
+    let res =
+        VentaService.anularVenta
+            (fun _ -> async { return Some ordenVenta })
+            mockTx
+            (fun _ -> "Producto")
+            (fun _ -> "Cliente")
+            actorComercialAjeno
+            (let (OrdenId g) = ventaId in g.ToString())
+            "Cancelación cliente ajeno"
+        |> Async.RunSynchronously
+
+    match res with
+    | Ok _ -> failwith "Debió fallar con 403 para comercial ajeno"
+    | Error (msg, code) ->
+        Assert.False(txLlamado, "El mock no debió ser llamado")
+        Assert.Equal(403, code)
+        Assert.Contains("permiso", msg.ToLowerInvariant())
+
+[<Fact>]
+let ``anularVenta ok when Gerencia actor is not the issuer`` () =
+    let ventaId = OrdenId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let prodId = ProductoId (Guid.NewGuid())
+    let emisorId = EmpleadoId (Guid.NewGuid())
+    let gerenteId = EmpleadoId (Guid.NewGuid())
+    let ordenVenta : OrdenVenta =
+        { Id = ventaId
+          Codigo = unwrap (CodigoVenta.crear "OV-202610-0005")
+          ProformaOrigenId = ProformaId (Guid.NewGuid())
+          ClienteId = clienteId
+          Fecha = DateOnly.FromDateTime(DateTime.UtcNow)
+          ResponsableId = emisorId
+          Lineas = [ { ProductoId = prodId; Cantidad = cantReconst 1m Kilogramo; PrecioUnitario = 100m } ]
+          Total = 100m
+          Moneda = "BOB"
+          Estado = EstadoVenta.Confirmada
+          CreadoEn = DateTime.UtcNow }
+
+    let mutable ventaAnuladaEstado : OrdenVenta =
+        { ordenVenta with
+            Estado =
+                EstadoVenta.Anulada
+                    { Fecha = DateTime.UtcNow
+                      Motivo = "Intervención gerencial"
+                      AnuladoPor = gerenteId } }
+
+    let mutable txLlamado = false
+    let mockTx (_: OrdenId) (_: string) (_: EmpleadoId) =
+        async { txLlamado <- true; return Ok () }
+
+    let actorGerente =
+        { UsuarioId = UsuarioId (Guid.NewGuid())
+          EmpleadoId = gerenteId
+          Roles = Set.singleton NombreRol.Gerencia }
+
+    let res =
+        VentaService.anularVenta
+            (fun _ -> async { if txLlamado then return Some ventaAnuladaEstado else return Some ordenVenta })
+            mockTx
+            (fun _ -> "Producto")
+            (fun _ -> "Cliente")
+            actorGerente
+            (let (OrdenId g) = ventaId in g.ToString())
+            "Intervención gerencial"
+        |> Async.RunSynchronously
+
+    match res with
+    | Error (msg, code) -> failwithf "Fallo inesperado: %s (code=%d)" msg code
+    | Ok dto ->
+        Assert.True(txLlamado)
+        Assert.Equal("Anulada", dto.Estado)
