@@ -171,13 +171,19 @@ let ``// RF-07 | CU-10 - Anular proforma ya anulada retorna OperacionInvalida`` 
 [<Fact>]
 let ``// RF-07 | CU-10 - EstadoProforma parsing y formato textual`` () =
     Assert.Equal("Vigente", EstadoProforma.aTexto EstadoProforma.Vigente)
-    Assert.Equal("Vencida", EstadoProforma.aTexto EstadoProforma.Vencida)
     Assert.Equal("Convertida", EstadoProforma.aTexto EstadoProforma.Convertida)
     Assert.Equal("Anulada", EstadoProforma.aTexto EstadoProforma.Anulada)
     Assert.Equal(Ok EstadoProforma.Vigente, EstadoProforma.desdeTexto "vigente")
-    Assert.Equal(Ok EstadoProforma.Vencida, EstadoProforma.desdeTexto "Vencida")
     Assert.Equal(Ok EstadoProforma.Convertida, EstadoProforma.desdeTexto "convertida")
     Assert.Equal(Ok EstadoProforma.Anulada, EstadoProforma.desdeTexto "anulada")
     match EstadoProforma.desdeTexto "desconocido" with
     | Error (ValorRequerido _) -> ()
     | res -> failwithf "Se esperaba Error ValorRequerido, se obtuvo: %A" res
+
+[<Fact>]
+let ``// RNF06 - EstadoProforma.desdeTexto Vencida devuelve Error`` () =
+    match EstadoProforma.desdeTexto "Vencida" with
+    | Error (OperacionInvalida msg) ->
+        Assert.Contains("no es válido", msg)
+    | res ->
+        failwithf "Se esperaba Error OperacionInvalida para 'Vencida', se obtuvo: %A" res
