@@ -159,8 +159,7 @@ module ProformaService =
             | EstadoProforma.Convertida
             | EstadoProforma.Anulada ->
                 return dtoBase
-            | EstadoProforma.Vigente
-            | EstadoProforma.Vencida ->
+            | EstadoProforma.Vigente ->
                 let pares = List.zip dtoBase.Lineas proformaDominio.Lineas
                 let! resultados =
                     pares
