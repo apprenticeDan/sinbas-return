@@ -92,7 +92,8 @@ module ProformaService =
         | LoteRechazado msg
         | PorcentajeInvalido msg
         | FechaInvalida msg
-        | OperacionInvalida msg -> msg
+        | OperacionInvalida msg
+        | PermisoDenegado msg -> msg
 
     let private mapearUnidad (uStr: string) : UnidadMedida =
         match (if isNull uStr then "" else uStr.Trim().ToLowerInvariant()) with

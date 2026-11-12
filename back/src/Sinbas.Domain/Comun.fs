@@ -25,6 +25,7 @@ type DomainError =
     | PorcentajeInvalido of string
     | FechaInvalida of string
     | OperacionInvalida of string
+    | PermisoDenegado of string
 
 
 // ─────────────────────────────────────────────────────────────

@@ -579,7 +579,7 @@ let ``anularVenta fails 403 when Comercial actor is not the issuer`` () =
     | Error (msg, code) ->
         Assert.False(txLlamado, "El mock no debió ser llamado")
         Assert.Equal(403, code)
-        Assert.Contains("permiso", msg.ToLowerInvariant())
+        Assert.Contains("responsable", msg.ToLowerInvariant())
 
 [<Fact>]
 let ``anularVenta ok when Gerencia actor is not the issuer`` () =

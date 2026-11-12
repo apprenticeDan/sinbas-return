@@ -90,10 +90,13 @@ module Anulacion =
 
 module Venta =
     /// Q1: ownership con escalamiento a Gerencia/Administrador.
-    let puedeAnularVenta (actor: Actor) (venta: OrdenVenta) : bool =
-        Actor.tieneRol NombreRol.Gerencia actor
-        || Actor.tieneRol NombreRol.Administrador actor
-        || (Actor.tieneRol NombreRol.Comercial actor && venta.ResponsableId = actor.EmpleadoId)
+    let puedeAnularVenta (actor: Actor) (venta: OrdenVenta) : Result<unit, DomainError> =
+        if Actor.tieneRol NombreRol.Gerencia actor
+           || Actor.tieneRol NombreRol.Administrador actor
+           || (Actor.tieneRol NombreRol.Comercial actor && venta.ResponsableId = actor.EmpleadoId) then
+            Ok ()
+        else
+            Error (PermisoDenegado "Solo Gerencia/Administrador o el Comercial responsable pueden anular esta venta")
 
 module OrdenVenta =
 

@@ -106,7 +106,8 @@ module ClientService =
         | LoteRechazado msg
         | PorcentajeInvalido msg
         | FechaInvalida msg
-        | OperacionInvalida msg -> msg
+        | OperacionInvalida msg
+        | PermisoDenegado msg -> msg
 
     let toPersonaDto (p: Persona) : PersonaDto =
         let extStr = p.CI.Extension |> Option.map DepartamentoExpedicion.aTexto
