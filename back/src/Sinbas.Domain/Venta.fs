@@ -40,6 +40,11 @@ module EstadoVenta =
         | EstadoVenta.Despachada -> "Despachada"
         | EstadoVenta.Anulada _  -> "Anulada"
 
+    let aTextoEstado = function
+        | EstadoVenta.Confirmada -> "Confirmada"
+        | EstadoVenta.Despachada -> "Despachada"
+        | EstadoVenta.Anulada _  -> "Anulada"
+
     let desdeTexto (s: string) (anulacion: Anulacion option) : Result<EstadoVenta, DomainError> =
         match (if isNull s then "" else s.Trim().ToLowerInvariant()) with
         | "confirmada" -> Ok EstadoVenta.Confirmada

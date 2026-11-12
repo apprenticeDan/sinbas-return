@@ -60,6 +60,11 @@ module EstadoDespacho =
         | EstadoDespacho.Despachado _ -> "Despachado"
         | EstadoDespacho.Anulado _ -> "Anulado"
 
+    let aTextoEstado = function
+        | EstadoDespacho.Pendiente -> "Pendiente"
+        | EstadoDespacho.Despachado _ -> "Despachado"
+        | EstadoDespacho.Anulado _ -> "Anulado"
+
     let desdeTexto (s: string) (movimientoId: Guid option) (anulacion: Anulacion option) : Result<EstadoDespacho, DomainError> =
         match (if isNull s then "" else s.Trim().ToLowerInvariant()) with
         | "pendiente" -> Ok EstadoDespacho.Pendiente
