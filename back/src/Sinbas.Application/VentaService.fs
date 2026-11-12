@@ -110,7 +110,8 @@ module VentaService =
         | LoteRechazado msg
         | PorcentajeInvalido msg
         | FechaInvalida msg
-        | OperacionInvalida msg -> msg
+        | OperacionInvalida msg
+        | PermisoDenegado msg -> msg
 
     let private desmapearUnidad (u: UnidadMedida) : string =
         UnidadMedida.aTexto u
@@ -543,9 +544,10 @@ module VentaService =
                 match vOpt with
                 | None -> return Error ("Orden de venta no encontrada", 404)
                 | Some venta ->
-                    if not (Venta.puedeAnularVenta actor venta) then
-                        return Error ("No tiene permiso para anular esta orden de venta.", 403)
-                    else
+                    match Venta.puedeAnularVenta actor venta with
+                    | Error (PermisoDenegado msg) -> return Error (msg, 403)
+                    | Error other                 -> return Error (errorToString other, 400)
+                    | Ok () ->
                         match venta.Estado with
                         | EstadoVenta.Despachada ->
                             return Error ("No se puede anular una orden de venta que ya ha sido despachada", 409)

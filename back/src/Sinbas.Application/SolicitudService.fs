@@ -60,7 +60,8 @@ module SolicitudService =
         | NombreInvalido msg | CIInvalido msg | ValorRequerido msg | SecuenciaInvalida msg
         | StockInsuficiente msg | SimbolosNoPermitidos msg | LetrasNoPermitidas msg
         | EmpleadoDuplicado msg | SinAnalisisLaboratorio msg | LoteRechazado msg
-        | PorcentajeInvalido msg | FechaInvalida msg | OperacionInvalida msg -> msg
+        | PorcentajeInvalido msg | FechaInvalida msg | OperacionInvalida msg
+        | PermisoDenegado msg -> msg
 
     let private parsearTipo (tipoStr: string) (destinoTipo: string option) (destinoOtro: string option) : Result<TipoEgresoInterno, string> =
         let ts = if isNull tipoStr then "" else tipoStr.Trim()

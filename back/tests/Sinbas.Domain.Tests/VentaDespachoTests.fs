@@ -290,7 +290,12 @@ let ``// Q1 - puedeAnularVenta verifica ownership y escalamiento a Gerencia/Admi
     let venta = crearOrdenVentaParaTest emisorId
 
     let resultado = Venta.puedeAnularVenta actor venta
-    Assert.Equal(esperado, resultado)
+    if esperado then
+        Assert.Equal(Ok (), resultado)
+    else
+        match resultado with
+        | Error (PermisoDenegado _) -> ()
+        | other -> failwithf "Se esperaba Error (PermisoDenegado _), se obtuvo: %A" other
 
 [<Fact>]
 let ``// Anulacion.validarMotivo rechaza cadenas vacias, espacios o nulos`` () =

@@ -160,7 +160,8 @@ module VentaRepository =
         | NombreInvalido m | CIInvalido m | ValorRequerido m | SecuenciaInvalida m
         | StockInsuficiente m | SimbolosNoPermitidos m | LetrasNoPermitidas m
         | EmpleadoDuplicado m | SinAnalisisLaboratorio m | LoteRechazado m
-        | PorcentajeInvalido m | FechaInvalida m | OperacionInvalida m -> m
+        | PorcentajeInvalido m | FechaInvalida m | OperacionInvalida m
+        | PermisoDenegado m -> m
 
     /// Configura la sesión de BD para la transacción actual.
     /// Q6: lock_timeout previene cuelgues indefinidos ante bloqueos imprevistos.
