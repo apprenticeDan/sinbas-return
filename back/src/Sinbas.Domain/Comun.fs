@@ -66,7 +66,6 @@ type NombreRol =
     | Comercial
     | Almacen
     | Laboratorio
-    | Vivero
 
 module NombreRol =
     let aTexto = function
@@ -75,7 +74,6 @@ module NombreRol =
         | Comercial     -> "Comercial"
         | Almacen       -> "Almacen"
         | Laboratorio   -> "Laboratorio"
-        | Vivero        -> "Vivero"
 
     let toString = aTexto
 
@@ -86,7 +84,6 @@ module NombreRol =
         | "Comercial"     -> Some Comercial
         | "Almacen"       -> Some Almacen
         | "Laboratorio"   -> Some Laboratorio
-        | "Vivero"        -> Some Vivero
         | _               -> None
 
     let fromString (s: string) : Result<NombreRol, string> =

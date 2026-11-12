@@ -364,19 +364,20 @@ let ``Rol Comercial permite gestionar ventas y desactivar pasa estado a Desactiv
     Assert.False(Usuario.puedeIniciarSesion desactivado)
 
 [<Fact>]
-let ``NombreRol roundtrip aTexto y desdeTexto para los 6 roles`` () =
+let ``NombreRol roundtrip aTexto y desdeTexto para los 5 roles`` () =
     let roles =
         [ NombreRol.Administrador
           NombreRol.Gerencia
           NombreRol.Comercial
           NombreRol.Almacen
-          NombreRol.Laboratorio
-          NombreRol.Vivero ]
+          NombreRol.Laboratorio ]
     for r in roles do
         let txt = NombreRol.aTexto r
         Assert.Equal(Some r, NombreRol.desdeTexto txt)
         Assert.Equal(Ok r, NombreRol.fromString txt)
 
+    Assert.Equal(None, NombreRol.desdeTexto "Vivero")
+    Assert.Equal(Error "Rol desconocido: Vivero", NombreRol.fromString "Vivero")
     Assert.Equal(None, NombreRol.desdeTexto "RolInvalido")
     Assert.Equal(None, NombreRol.desdeTexto null)
     Assert.Equal(None, NombreRol.desdeTexto "  ")
@@ -386,9 +387,9 @@ let ``Actor y tieneRol identifican correctamente los roles del actor`` () =
     let actor : Actor =
         { UsuarioId = UsuarioId (Guid.NewGuid())
           EmpleadoId = EmpleadoId (Guid.NewGuid())
-          Roles = Set.ofList [ NombreRol.Comercial; NombreRol.Vivero ] }
+          Roles = Set.ofList [ NombreRol.Comercial; NombreRol.Almacen ] }
 
     Assert.True(Actor.tieneRol NombreRol.Comercial actor)
-    Assert.True(Actor.tieneRol NombreRol.Vivero actor)
+    Assert.True(Actor.tieneRol NombreRol.Almacen actor)
     Assert.False(Actor.tieneRol NombreRol.Administrador actor)
     Assert.False(Actor.tieneRol NombreRol.Gerencia actor)
