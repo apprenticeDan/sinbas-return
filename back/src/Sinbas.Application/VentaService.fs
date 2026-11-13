@@ -221,8 +221,7 @@ module VentaService =
             OrdenVenta ->
             OrdenDespacho ->
             (LoteId * Cantidad) list ->
-            (CodigoVenta -> CodigoDespacho -> VentaConfirmadaDto * string) ->
-            Async<Result<VentaConfirmadaDto, string>>)
+            Async<Result<CodigoVenta * CodigoDespacho, string>>)
         (nombreProductoResolver: ProductoId -> string)
         (nombreClienteResolver: ClienteId -> string)
         (actor: Actor)
@@ -366,22 +365,20 @@ module VentaService =
 
                     let ordenDespachoBase = Despacho.desdeVenta ordenDespachoId codDespachoPlaceholder ordenVentaBase
 
-                    let construirRespuesta (cv: CodigoVenta) (cd: CodigoDespacho) : VentaConfirmadaDto * string =
-                        let ovFinal = { ordenVentaBase with Codigo = cv }
-                        let odFinal = { ordenDespachoBase with Codigo = cd }
-                        let dto: VentaConfirmadaDto =
-                            { Venta = toVentaDto nombreProductoResolver (fun _ -> Cliente.nombreVisible cliente) ovFinal
-                              Despacho = toDespachoDto nombreProductoResolver (fun _ -> Cliente.nombreVisible cliente) (fun _ -> Some (CodigoVenta.valor cv)) odFinal }
-                        let json = System.Text.Json.JsonSerializer.Serialize(dto)
-                        (dto, json)
-
                     // 6. Ejecutar transacción atómica de persistencia con reservas y secuencia (RNF05 / OBS-03)
-                    let! txRes = confirmarVentaTx ordenVentaBase ordenDespachoBase reservasLotes construirRespuesta
+                    let! txRes = confirmarVentaTx ordenVentaBase ordenDespachoBase reservasLotes
                     match txRes with
                     | Error msg ->
                         return Error (sprintf "Error transaccional al confirmar venta: %s" msg, 500)
-                    | Ok dto ->
-                        return Ok dto
+                    | Ok (codVentaFinal, codDespachoFinal) ->
+
+                    let ordenVentaFinal = { ordenVentaBase with Codigo = codVentaFinal }
+                    let ordenDespachoFinal = { ordenDespachoBase with Codigo = codDespachoFinal }
+
+                    let ventaDto = toVentaDto nombreProductoResolver (fun _ -> Cliente.nombreVisible cliente) ordenVentaFinal
+                    let despachoDto = toDespachoDto nombreProductoResolver (fun _ -> Cliente.nombreVisible cliente) (fun _ -> Some (CodigoVenta.valor codVentaFinal)) ordenDespachoFinal
+
+                    return Ok { Venta = ventaDto; Despacho = despachoDto }
         }
 
     /// Listar órdenes de venta con filtros opcionales
