@@ -217,7 +217,12 @@ module VentaService =
         (obtenerCliente: ClienteId -> Async<Cliente option>)
         (obtenerProducto: ProductoId -> Async<Producto option>)
         (listarLotes: ProductoId option -> EstadoLote option -> Async<Lote list>)
-        (confirmarVentaTx: OrdenVenta -> OrdenDespacho -> (LoteId * Cantidad) list -> Async<Result<unit, string>>)
+        (confirmarVentaTx:
+            OrdenVenta ->
+            OrdenDespacho ->
+            (LoteId * Cantidad) list ->
+            (CodigoVenta -> CodigoDespacho -> VentaConfirmadaDto * string) ->
+            Async<Result<VentaConfirmadaDto, string>>)
         (nombreProductoResolver: ProductoId -> string)
         (nombreClienteResolver: ClienteId -> string)
         (actor: Actor)
@@ -346,41 +351,37 @@ module VentaService =
                                 | Error _ -> List.head cantidades
                             (loteId, cantConsolidada))
 
-                    // 5. Generar entidades de dominio OrdenVenta y OrdenDespacho
+                    // 5. Generar entidades de dominio OrdenVenta y OrdenDespacho con placeholders
+                    // (la transacción atómica asigna los códigos definitivos mediante secuencia_documento)
                     let ordenVentaId = OrdenId (Identidad.nuevo ())
                     let ordenDespachoId = OrdenId (Identidad.nuevo ())
                     let respEmpleadoId = actor.EmpleadoId
 
-                    // Generar códigos identificadores basados en fecha y sufijo único
-                    let ticks = DateTime.UtcNow.Ticks % 10000L
-                    let seqNum = int (max 1L ticks)
-                    let codVenta =
-                        match CodigoVenta.generar hoy seqNum with
-                        | Ok c -> c
-                        | Error _ -> CodigoVenta.reconstruir (sprintf "OV-%d%02d-%04d" hoy.Year hoy.Month seqNum)
+                    let codVentaPlaceholder = CodigoVenta.reconstruir "OV-PENDING"
+                    let codDespachoPlaceholder = CodigoDespacho.reconstruir "DSP-PENDING"
 
-                    let codDespacho =
-                        match CodigoDespacho.generar hoy seqNum with
-                        | Ok c -> c
-                        | Error _ -> CodigoDespacho.reconstruir (sprintf "DSP-%d%02d-%04d" hoy.Year hoy.Month seqNum)
-
-                    match OrdenVenta.crearDesdeProforma hoy ordenVentaId codVenta proforma cid respEmpleadoId with
+                    match OrdenVenta.crearDesdeProforma hoy ordenVentaId codVentaPlaceholder proforma cid respEmpleadoId with
                     | Error domErr -> return Error (errorToString domErr, 400)
-                    | Ok (ordenVenta, _) ->
+                    | Ok (ordenVentaBase, _) ->
 
-                    let ordenDespacho = Despacho.desdeVenta ordenDespachoId codDespacho ordenVenta
+                    let ordenDespachoBase = Despacho.desdeVenta ordenDespachoId codDespachoPlaceholder ordenVentaBase
 
-                    // 6. Ejecutar transacción atómica de persistencia con reservas (RNF05 / OBS-03)
-                    let! txRes = confirmarVentaTx ordenVenta ordenDespacho reservasLotes
+                    let construirRespuesta (cv: CodigoVenta) (cd: CodigoDespacho) : VentaConfirmadaDto * string =
+                        let ovFinal = { ordenVentaBase with Codigo = cv }
+                        let odFinal = { ordenDespachoBase with Codigo = cd }
+                        let dto: VentaConfirmadaDto =
+                            { Venta = toVentaDto nombreProductoResolver (fun _ -> Cliente.nombreVisible cliente) ovFinal
+                              Despacho = toDespachoDto nombreProductoResolver (fun _ -> Cliente.nombreVisible cliente) (fun _ -> Some (CodigoVenta.valor cv)) odFinal }
+                        let json = System.Text.Json.JsonSerializer.Serialize(dto)
+                        (dto, json)
+
+                    // 6. Ejecutar transacción atómica de persistencia con reservas y secuencia (RNF05 / OBS-03)
+                    let! txRes = confirmarVentaTx ordenVentaBase ordenDespachoBase reservasLotes construirRespuesta
                     match txRes with
                     | Error msg ->
                         return Error (sprintf "Error transaccional al confirmar venta: %s" msg, 500)
-                    | Ok () ->
-
-                    let ventaDto = toVentaDto nombreProductoResolver (fun _ -> Cliente.nombreVisible cliente) ordenVenta
-                    let despachoDto = toDespachoDto nombreProductoResolver (fun _ -> Cliente.nombreVisible cliente) (fun _ -> Some (CodigoVenta.valor codVenta)) ordenDespacho
-
-                    return Ok { Venta = ventaDto; Despacho = despachoDto }
+                    | Ok dto ->
+                        return Ok dto
         }
 
     /// Listar órdenes de venta con filtros opcionales
