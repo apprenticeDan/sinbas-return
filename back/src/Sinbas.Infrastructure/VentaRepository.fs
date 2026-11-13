@@ -218,8 +218,7 @@ module VentaRepository =
         (ordenVentaBase: OrdenVenta)
         (ordenDespachoBase: OrdenDespacho)
         (reservasLotes: (LoteId * Cantidad) list)
-        (construirRespuesta: CodigoVenta -> CodigoDespacho -> VentaConfirmadaDto * string)
-        : Async<Result<VentaConfirmadaDto, string>> =
+        : Async<Result<CodigoVenta * CodigoDespacho, string>> =
         async {
             use conn = DbConnection.crear ()
             conn.Open()
@@ -298,7 +297,6 @@ module VentaRepository =
                 // ── Construir entidades finales con códigos reales ──
                 let ordenVentaFinal    = { ordenVentaBase    with Codigo = codigoVenta    }
                 let ordenDespachoFinal = { ordenDespachoBase with Codigo = codigoDespacho }
-                let dto, _ = construirRespuesta codigoVenta codigoDespacho
 
                 // ── INSERT cabecera OrdenVenta ────────────────────
                 let sqlCabVenta = """
@@ -428,7 +426,7 @@ module VentaRepository =
                         return Error msg
                     | Ok () ->
                         tx.Commit()
-                        return Ok dto
+                        return Ok (codigoVenta, codigoDespacho)
             with ex ->
                 try tx.Rollback() with _ -> ()
                 if esTransitorio ex then
