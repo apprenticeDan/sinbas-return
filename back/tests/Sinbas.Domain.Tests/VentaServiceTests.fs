@@ -84,8 +84,14 @@ let ``confirmarVenta convierte 1 kg a 1000 g al reservar en lote en gramos`` () 
     let cliente = mkCliente clienteId
 
     let mutable capturado : (LoteId * Cantidad) list = []
-    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (reservas: (LoteId * Cantidad) list) =
-        async { capturado <- reservas; return Ok () }
+    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (reservas: (LoteId * Cantidad) list) (construirRespuesta: CodigoVenta -> CodigoDespacho -> VentaConfirmadaDto * string) =
+        async {
+            capturado <- reservas
+            let cv = CodigoVenta.reconstruir "OV-202611-0001"
+            let cd = CodigoDespacho.reconstruir "DSP-202611-0001"
+            let dto, _ = construirRespuesta cv cd
+            return Ok dto
+        }
 
     let res =
         VentaService.confirmarVenta
@@ -127,8 +133,14 @@ let ``confirmarVenta falla 409 si stock disponible insuficiente tras reserva par
     let cliente = mkCliente clienteId
 
     let mutable llamadoTx = false
-    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
-        async { llamadoTx <- true; return Ok () }
+    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) (construirRespuesta: CodigoVenta -> CodigoDespacho -> VentaConfirmadaDto * string) =
+        async {
+            llamadoTx <- true
+            let cv = CodigoVenta.reconstruir "OV-202611-0001"
+            let cd = CodigoDespacho.reconstruir "DSP-202611-0001"
+            let dto, _ = construirRespuesta cv cd
+            return Ok dto
+        }
 
     let res =
         VentaService.confirmarVenta
@@ -166,8 +178,13 @@ let ``confirmarVenta falla 422 si producto fue desactivado despues de proforma``
                             PrecioUnitario = 100m } ]
     let cliente = mkCliente clienteId
 
-    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
-        async { return Ok () }
+    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) (construirRespuesta: CodigoVenta -> CodigoDespacho -> VentaConfirmadaDto * string) =
+        async {
+            let cv = CodigoVenta.reconstruir "OV-202611-0001"
+            let cd = CodigoDespacho.reconstruir "DSP-202611-0001"
+            let dto, _ = construirRespuesta cv cd
+            return Ok dto
+        }
 
     let res =
         VentaService.confirmarVenta
@@ -261,8 +278,14 @@ let ``confirmarVenta OBS-04: proforma con FechaVencimiento en el pasado no bloqu
     let cliente = mkCliente clienteId
 
     let mutable llamadoTx = false
-    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
-        async { llamadoTx <- true; return Ok () }
+    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) (construirRespuesta: CodigoVenta -> CodigoDespacho -> VentaConfirmadaDto * string) =
+        async {
+            llamadoTx <- true
+            let cv = CodigoVenta.reconstruir "OV-202611-0001"
+            let cd = CodigoDespacho.reconstruir "DSP-202611-0001"
+            let dto, _ = construirRespuesta cv cd
+            return Ok dto
+        }
 
     let res =
         VentaService.confirmarVenta
@@ -302,8 +325,14 @@ let ``confirmarVenta inserts reservas with preserved unit`` () =
     let cliente = mkCliente clienteId
 
     let mutable capturado : (LoteId * Cantidad) list = []
-    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (reservas: (LoteId * Cantidad) list) =
-        async { capturado <- reservas; return Ok () }
+    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (reservas: (LoteId * Cantidad) list) (construirRespuesta: CodigoVenta -> CodigoDespacho -> VentaConfirmadaDto * string) =
+        async {
+            capturado <- reservas
+            let cv = CodigoVenta.reconstruir "OV-202611-0001"
+            let cd = CodigoDespacho.reconstruir "DSP-202611-0001"
+            let dto, _ = construirRespuesta cv cd
+            return Ok dto
+        }
 
     let res =
         VentaService.confirmarVenta
@@ -634,3 +663,53 @@ let ``anularVenta ok when Gerencia actor is not the issuer`` () =
     | Ok dto ->
         Assert.True(txLlamado)
         Assert.Equal("Anulada", dto.Estado)
+
+[<Fact>]
+let ``confirmarVenta usa placeholders en base y asigna codigos reales via construirRespuesta en tx`` () =
+    let prodId = ProductoId (Guid.NewGuid())
+    let loteId = LoteId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let proformaId = ProformaId (Guid.NewGuid())
+    let responsableId = UsuarioId (Guid.NewGuid())
+    let prod = mkProducto prodId true
+    let lote = mkLote loteId prodId 5000m 0m Gramo
+    let proforma = mkProforma proformaId clienteId responsableId
+                        [ { ProductoId = prodId
+                            Cantidad = cantReconst 1m Kilogramo
+                            PrecioUnitario = 100m } ]
+    let cliente = mkCliente clienteId
+
+    let mutable codigoVentaBaseRecibido = ""
+    let mutable codigoDespachoBaseRecibido = ""
+
+    let mockTx (ov: OrdenVenta) (od: OrdenDespacho) (_: (LoteId * Cantidad) list) (construirRespuesta: CodigoVenta -> CodigoDespacho -> VentaConfirmadaDto * string) =
+        async {
+            codigoVentaBaseRecibido <- CodigoVenta.valor ov.Codigo
+            codigoDespachoBaseRecibido <- CodigoDespacho.valor od.Codigo
+            let cvReal = CodigoVenta.reconstruir "OV-202611-0042"
+            let cdReal = CodigoDespacho.reconstruir "DSP-202611-0042"
+            let dto, _ = construirRespuesta cvReal cdReal
+            return Ok dto
+        }
+
+    let res =
+        VentaService.confirmarVenta
+            (fun _ -> async { return Some proforma })
+            (fun _ -> async { return Some cliente })
+            (fun _ -> async { return Some prod })
+            (fun _ _ -> async { return [ lote ] })
+            mockTx
+            (fun _ -> "Producto Test")
+            (fun _ -> "Cliente Test")
+            actorTest
+            (let (ProformaId g) = proformaId in g.ToString())
+            { ClienteId = None }
+        |> Async.RunSynchronously
+
+    match res with
+    | Error (msg, code) -> failwithf "Fallo inesperado: %s (code=%d)" msg code
+    | Ok dto ->
+        Assert.Equal("OV-PENDING", codigoVentaBaseRecibido)
+        Assert.Equal("DSP-PENDING", codigoDespachoBaseRecibido)
+        Assert.Equal("OV-202611-0042", dto.Venta.Codigo)
+        Assert.Equal("DSP-202611-0042", dto.Despacho.Codigo)

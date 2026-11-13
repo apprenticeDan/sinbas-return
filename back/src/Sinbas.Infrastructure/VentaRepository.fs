@@ -175,28 +175,64 @@ module VentaRepository =
             pg.SqlState = "40P01" || pg.SqlState = "40001" || pg.SqlState = "55P03"
         | _ -> false
 
+    /// Secuencia real por (tipo, periodo). El UPSERT toma el lock de fila
+    /// hasta el commit; dos confirmaciones del mes se serializan aquí.
+    /// Si la tx rollbackea, el incremento también se revierte → sin huecos.
+    let private siguienteSecuencia
+        (conn: NpgsqlConnection) (tx: NpgsqlTransaction)
+        (tipo: string) (periodo: int) : Async<int> =
+        conn.ExecuteScalarAsync<int>(
+            """
+            INSERT INTO secuencia_documento (tipo, periodo, ultimo)
+            VALUES (@tipo, @periodo, 1)
+            ON CONFLICT (tipo, periodo)
+            DO UPDATE SET ultimo = secuencia_documento.ultimo + 1
+            RETURNING ultimo
+            """,
+            {| tipo = tipo; periodo = periodo |}, tx)
+        |> Async.AwaitTask
+
+    let private periodo (fecha: DateOnly) = fecha.Year * 100 + fecha.Month
+
+    /// Construye `CodigoVenta.generar` a partir de la secuencia real.
+    /// La función de dominio sigue siendo pura; el lado I/O vive aquí.
+    let private generarCodigo
+        (tipo: string) (fecha: DateOnly) (secuencia: int)
+        : Result<string, string> =
+        if tipo = "OV" then
+            CodigoVenta.generar fecha secuencia
+            |> Result.map CodigoVenta.valor
+            |> Result.mapError errorToString
+        else
+            CodigoDespacho.generar fecha secuencia
+            |> Result.map CodigoDespacho.valor
+            |> Result.mapError errorToString
+
     /// Inserción atómica transaccional de Confirmación de Venta (RNF05 / OBS-03)
-    /// 1. Convierte Proforma a 'Convertida' de manera optimista (WHERE id=@id AND estado='Vigente')
-    /// 2. Lock + re-reserva autoritativa con dominio (Lote.reservar bajo FOR UPDATE)
-    /// 3. Inserta orden_venta, linea_orden_venta, orden_despacho, linea_despacho
-    /// 4. Persiste lotes actualizados con stock y reserva coherentes
+    /// L1: Convierte Proforma a 'Convertida' de manera optimista (WHERE id=@id AND estado='Vigente')
+    /// L2: Secuencia atómica de códigos de venta y despacho
+    /// L6: Lock + re-reserva autoritativa con dominio (Lote.reservar bajo FOR UPDATE)
+    /// Inserta orden_venta, linea_orden_venta, orden_despacho, linea_despacho
+    /// Persiste lotes actualizados con stock y reserva coherentes
     let confirmarVentaTx
-        (ordenVenta: OrdenVenta)
-        (ordenDespacho: OrdenDespacho)
+        (ordenVentaBase: OrdenVenta)
+        (ordenDespachoBase: OrdenDespacho)
         (reservasLotes: (LoteId * Cantidad) list)
-        : Async<Result<unit, string>> =
+        (construirRespuesta: CodigoVenta -> CodigoDespacho -> VentaConfirmadaDto * string)
+        : Async<Result<VentaConfirmadaDto, string>> =
         async {
             use conn = DbConnection.crear ()
             conn.Open()
             use tx = conn.BeginTransaction()
             try
                 configurarTx conn tx
-                let (OrdenId ovId) = ordenVenta.Id
-                let (ProformaId pId) = ordenVenta.ProformaOrigenId
-                let (ClienteId cId) = ordenVenta.ClienteId
-                let (EmpleadoId eId) = ordenVenta.ResponsableId
+                let (OrdenId ovId) = ordenVentaBase.Id
+                let (ProformaId pId) = ordenVentaBase.ProformaOrigenId
+                let (ClienteId cId) = ordenVentaBase.ClienteId
+                let (EmpleadoId eId) = ordenVentaBase.ResponsableId
+                let (OrdenId odId) = ordenDespachoBase.Id
 
-                // 1. Convertir proforma atómicamente asegurando estado Vigente
+                // ── L1: claim de proforma (allow-list: solo Vigente) ──
                 let sqlUpdateProforma = """
                     UPDATE proforma
                     SET estado = 'Convertida', orden_venta_id = @ovId
@@ -211,11 +247,28 @@ module VentaRepository =
                     return Error "La proforma ya fue convertida previamente o no se encuentra en estado Vigente."
                 else
 
-                // 2. Lock + re-reserva autoritativa con dominio
+                // ── L2: secuencia real por (tipo, periodo) ───────
+                let per = periodo ordenVentaBase.Fecha
+                let! secOV  = siguienteSecuencia conn tx "OV"  per
+                let! secDSP = siguienteSecuencia conn tx "DSP" per
+
+                match generarCodigo "OV" ordenVentaBase.Fecha secOV,
+                      generarCodigo "DSP" ordenVentaBase.Fecha secDSP with
+                | Error msg, _ | _, Error msg ->
+                    tx.Rollback()
+                    return Error (sprintf "No se pudo generar código: %s" msg)
+                | Ok cvStr, Ok cdStr ->
+
+                let codigoVenta    = CodigoVenta.reconstruir cvStr
+                let codigoDespacho = CodigoDespacho.reconstruir cdStr
+
+                // ── L6: lock de lotes en orden determinista ─────
                 let loteIds = reservasLotes |> List.map fst
                 let! lotesLockedRes = LoteRepository.obtenerMultiplesPorIdParaActualizacion conn tx loteIds
                 match lotesLockedRes with
-                | Error msg -> tx.Rollback(); return Error msg
+                | Error msg ->
+                    tx.Rollback()
+                    return Error (sprintf "Error de integridad al bloquear lotes: %s" msg)
                 | Ok lotesLocked ->
 
                 let lotesPorId = lotesLocked |> List.map (fun l -> (l.Id, l)) |> Map.ofList
@@ -234,28 +287,35 @@ module VentaRepository =
                             | Ok lr ->
                                 match reservarTodo rest with
                                 | Error e -> Error e
-                                | Ok acc -> Ok (lr :: acc)
+                                | Ok acc  -> Ok (lr :: acc)
 
                 match reservarTodo reservasLotes with
-                | Error msg -> tx.Rollback(); return Error msg
+                | Error msg ->
+                    tx.Rollback()
+                    return Error msg
                 | Ok lotesReservados ->
 
-                // 3. Insertar cabecera OrdenVenta
+                // ── Construir entidades finales con códigos reales ──
+                let ordenVentaFinal    = { ordenVentaBase    with Codigo = codigoVenta    }
+                let ordenDespachoFinal = { ordenDespachoBase with Codigo = codigoDespacho }
+                let dto, _ = construirRespuesta codigoVenta codigoDespacho
+
+                // ── INSERT cabecera OrdenVenta ────────────────────
                 let sqlCabVenta = """
                     INSERT INTO orden_venta (id, codigo, proforma_id, cliente_id, fecha, responsable_id, total, moneda, estado, creado_en)
                     VALUES (@id, @codigo, @proforma_id, @cliente_id, @fecha, @responsable_id, @total, @moneda, @estado, @creado_en)
                 """
                 let paramsCabVenta = {|
                     id = ovId
-                    codigo = CodigoVenta.valor ordenVenta.Codigo
+                    codigo = CodigoVenta.valor codigoVenta
                     proforma_id = pId
                     cliente_id = cId
-                    fecha = ordenVenta.Fecha
+                    fecha = ordenVentaFinal.Fecha
                     responsable_id = eId
-                    total = ordenVenta.Total
-                    moneda = ordenVenta.Moneda
-                    estado = EstadoVenta.aTexto ordenVenta.Estado
-                    creado_en = ordenVenta.CreadoEn
+                    total = ordenVentaFinal.Total
+                    moneda = ordenVentaFinal.Moneda
+                    estado = EstadoVenta.aTexto ordenVentaFinal.Estado
+                    creado_en = ordenVentaFinal.CreadoEn
                 |}
                 let! affectedVenta = conn.ExecuteAsync(sqlCabVenta, paramsCabVenta, tx) |> Async.AwaitTask
                 if affectedVenta <> 1 then
@@ -263,45 +323,55 @@ module VentaRepository =
                     return Error (sprintf "No se pudo insertar orden_venta (affectedRows=%d)" affectedVenta)
                 else
 
-                // 4. Insertar líneas de OrdenVenta
+                // ── INSERT líneas de OrdenVenta ────────────────────
                 let sqlLineaVenta = """
                     INSERT INTO linea_orden_venta (orden_venta_id, item, producto_id, cantidad, unidad, precio_unitario, subtotal)
                     VALUES (@orden_venta_id, @item, @producto_id, @cantidad, @unidad, @precio_unitario, @subtotal)
                 """
-                for (i, linea) in ordenVenta.Lineas |> List.mapi (fun i l -> (i + 1, l)) do
-                    let (ProductoId pid) = linea.ProductoId
-                    do! conn.ExecuteAsync(sqlLineaVenta, {|
-                            orden_venta_id = ovId
-                            item = i
-                            producto_id = pid
-                            cantidad = linea.Cantidad.Valor
-                            unidad = UnidadMedida.aTexto linea.Cantidad.Unidad
-                            precio_unitario = linea.PrecioUnitario
-                            subtotal = Cotizacion.subtotal linea
-                        |}, tx)
-                        |> Async.AwaitTask |> Async.Ignore
+                let mutable errorLineaVenta : string option = None
+                for (i, linea) in ordenVentaFinal.Lineas |> List.mapi (fun i l -> (i + 1, l)) do
+                    if errorLineaVenta.IsNone then
+                        let (ProductoId pid) = linea.ProductoId
+                        let! affected =
+                            conn.ExecuteAsync(sqlLineaVenta, {|
+                                orden_venta_id = ovId
+                                item           = i
+                                producto_id    = pid
+                                cantidad       = linea.Cantidad.Valor
+                                unidad         = UnidadMedida.aTexto linea.Cantidad.Unidad
+                                precio_unitario = linea.PrecioUnitario
+                                subtotal       = Cotizacion.subtotal linea
+                            |}, tx)
+                            |> Async.AwaitTask
+                        if affected <> 1 then
+                            errorLineaVenta <- Some (sprintf "INSERT linea_orden_venta item=%d affected=%d" i affected)
 
-                // 5. Insertar cabecera OrdenDespacho
-                let (OrdenId odId) = ordenDespacho.Id
+                match errorLineaVenta with
+                | Some msg ->
+                    tx.Rollback()
+                    return Error msg
+                | None ->
+
+                // ── INSERT cabecera OrdenDespacho ─────────────────
                 let sqlCabDespacho = """
                     INSERT INTO orden_despacho (id, codigo, orden_venta_id, origen_tipo, cliente_id, estado, movimiento_id, creado_en)
                     VALUES (@id, @codigo, @orden_venta_id, @origen_tipo, @cliente_id, @estado, @movimiento_id, @creado_en)
                 """
                 let clienteDespachoGuid =
-                    ordenDespacho.ClienteId
+                    ordenDespachoFinal.ClienteId
                     |> Option.map (fun (ClienteId id) -> box id)
                     |> Option.defaultValue (box DBNull.Value)
 
                 let! affectedDesp =
                     conn.ExecuteAsync(sqlCabDespacho, {|
                         id = odId
-                        codigo = CodigoDespacho.valor ordenDespacho.Codigo
+                        codigo = CodigoDespacho.valor codigoDespacho
                         orden_venta_id = box ovId
-                        origen_tipo = OrigenDespacho.aTexto ordenDespacho.Origen
+                        origen_tipo = OrigenDespacho.aTexto ordenDespachoFinal.Origen
                         cliente_id = clienteDespachoGuid
-                        estado = EstadoDespacho.aTexto ordenDespacho.Estado
+                        estado = EstadoDespacho.aTexto ordenDespachoFinal.Estado
                         movimiento_id = box DBNull.Value
-                        creado_en = ordenDespacho.CreadoEn
+                        creado_en = ordenDespachoFinal.CreadoEn
                     |}, tx)
                     |> Async.AwaitTask
                 if affectedDesp <> 1 then
@@ -309,23 +379,34 @@ module VentaRepository =
                     return Error (sprintf "No se pudo insertar orden_despacho (affectedRows=%d)" affectedDesp)
                 else
 
-                // 6. Insertar líneas de OrdenDespacho
+                // ── INSERT líneas de OrdenDespacho ─────────────────
                 let sqlLineaDespacho = """
                     INSERT INTO linea_despacho (orden_despacho_id, item, producto_id, cantidad, unidad)
                     VALUES (@orden_despacho_id, @item, @producto_id, @cantidad, @unidad)
                 """
-                for (i, linea) in ordenDespacho.Lineas |> List.mapi (fun i l -> (i + 1, l)) do
-                    let (ProductoId pid) = linea.Referencia
-                    do! conn.ExecuteAsync(sqlLineaDespacho, {|
-                            orden_despacho_id = odId
-                            item = i
-                            producto_id = pid
-                            cantidad = linea.Cantidad.Valor
-                            unidad = UnidadMedida.aTexto linea.Cantidad.Unidad
-                        |}, tx)
-                        |> Async.AwaitTask |> Async.Ignore
+                let mutable errorLineaDesp : string option = None
+                for (i, linea) in ordenDespachoFinal.Lineas |> List.mapi (fun i l -> (i + 1, l)) do
+                    if errorLineaDesp.IsNone then
+                        let (ProductoId pid) = linea.Referencia
+                        let! affected =
+                            conn.ExecuteAsync(sqlLineaDespacho, {|
+                                orden_despacho_id = odId
+                                item        = i
+                                producto_id = pid
+                                cantidad    = linea.Cantidad.Valor
+                                unidad      = UnidadMedida.aTexto linea.Cantidad.Unidad
+                            |}, tx)
+                            |> Async.AwaitTask
+                        if affected <> 1 then
+                            errorLineaDesp <- Some (sprintf "INSERT linea_despacho item=%d affected=%d" i affected)
 
-                // 7. Persistir lotes reservados (con affectedRows check)
+                match errorLineaDesp with
+                | Some msg ->
+                    tx.Rollback()
+                    return Error msg
+                | None ->
+
+                // ── Persistir lotes reservados ─────────────────────
                 let rec persistirLotes = function
                     | [] -> async { return Ok () }
                     | lote :: rest ->
@@ -337,13 +418,17 @@ module VentaRepository =
                         }
                 let! persistRes = persistirLotes lotesReservados
                 match persistRes with
-                | Error msg -> tx.Rollback(); return Error msg
+                | Error msg ->
+                    tx.Rollback()
+                    return Error msg
                 | Ok () ->
-                    match! ReservaStockRepository.insertarBatch conn tx ordenVenta.Id reservasLotes with
-                    | Error msg -> tx.Rollback(); return Error msg
+                    match! ReservaStockRepository.insertarBatch conn tx ordenVentaFinal.Id reservasLotes with
+                    | Error msg ->
+                        tx.Rollback()
+                        return Error msg
                     | Ok () ->
                         tx.Commit()
-                        return Ok ()
+                        return Ok dto
             with ex ->
                 try tx.Rollback() with _ -> ()
                 if esTransitorio ex then
