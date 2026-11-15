@@ -84,24 +84,22 @@ module VentaEndpoints =
                     let nombreProdResolver = crearNombreProductoResolver ()
                     let nombreCliResolver = crearNombreClienteResolver ()
 
-                    // Soporte de idempotencia
+                    // Soporte de idempotencia obligatoria (Q5)
                     let idempotencyKey =
-                        if ctx.Request.Headers.ContainsKey("Idempotency-Key") then
-                            let k = ctx.Request.Headers.["Idempotency-Key"].ToString()
-                            if String.IsNullOrWhiteSpace k then None else Some (k.Trim())
-                        else None
+                        if not (ctx.Request.Headers.ContainsKey("Idempotency-Key")) then None
+                        else
+                            let k = ctx.Request.Headers.["Idempotency-Key"].ToString().Trim()
+                            if String.IsNullOrWhiteSpace k then None else Some k
 
-                    let! regPrevio =
-                        match idempotencyKey with
-                        | Some key -> IdempotenciaRepository.buscar key
-                        | None -> async { return None }
-
-                    match regPrevio with
-                    | Some r ->
-                        return Results.Content(r.cuerpo_respuesta, "application/json", null, Nullable r.status_code)
-                    | None ->
+                    match idempotencyKey with
+                    | None -> return Results.BadRequest({| error = "Idempotency-Key header is required" |})
+                    | Some key ->
 
                     let reqBody = if isNull (box req) then { ClienteId = None } else req
+                    let bodyCanonico = System.Text.Json.JsonSerializer.Serialize(reqBody)
+                    let hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(bodyCanonico))
+                    let requestHash = Convert.ToHexString(hashBytes).ToLowerInvariant()
+                    let endpoint = sprintf "POST /api/proformas/%s/confirmar-venta" id
 
                     let! res =
                         VentaService.confirmarVenta
@@ -109,35 +107,28 @@ module VentaEndpoints =
                             ClientRepository.obtenerPorId
                             CatalogRepository.buscarPorId
                             LoteRepository.listar
+                            IdempotenciaRepository.consultar
                             VentaRepository.confirmarVentaTx
                             nombreProdResolver
                             nombreCliResolver
                             actor
+                            (Some key)
+                            endpoint
+                            requestHash
                             id
                             reqBody
 
                     match res with
                     | Ok dto ->
                         let location = sprintf "/api/ventas/%s" dto.Venta.Id
-                        let result = Results.Created(location, dto)
-                        match idempotencyKey with
-                        | Some key ->
-                            let (UsuarioId uId) = actor.UsuarioId
-                            let json = System.Text.Json.JsonSerializer.Serialize(dto)
-                            let reg : RegistroIdempotenciaRow =
-                                { clave = key
-                                  endpoint = sprintf "POST /api/proformas/%s/confirmar-venta" id
-                                  usuario_id = uId
-                                  status_code = 201
-                                  cuerpo_respuesta = json
-                                  creado_en = DateTime.UtcNow }
-                            do! IdempotenciaRepository.guardar reg
-                        | None -> ()
-                        return result
+                        return Results.Created(location, dto)
+                    | Error (msg, 200) when msg.StartsWith("REPLAY:") ->
+                        return Results.Content(msg.Substring(7), "application/json", null, 200)
                     | Error (msg, 404) -> return Results.NotFound({| error = msg |})
                     | Error (msg, 409) -> return Results.Conflict({| error = msg |})
                     | Error (msg, 422) -> return Results.UnprocessableEntity({| error = msg |})
-                    | Error (msg, _)   -> return Results.BadRequest({| error = msg |})
+                    | Error (msg, 500) -> return Results.Json({| error = msg |}, statusCode = 500)
+                    | Error (msg, code) -> return Results.Json({| error = msg |}, statusCode = code)
             } |> Async.StartAsTask
         ))
             .RequireAuthorization("RequireComercial")

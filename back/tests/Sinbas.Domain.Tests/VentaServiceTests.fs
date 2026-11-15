@@ -66,6 +66,8 @@ let private actorTest : Actor =
       EmpleadoId = EmpleadoId (Guid.NewGuid())
       Roles = Set.ofList [ NombreRol.Comercial; NombreRol.Almacen; NombreRol.Gerencia ] }
 
+let private mockConsultarIdempotencia _ = async { return Ok ClaimOutcome.Nuevo }
+
 // ── Tests ──
 
 [<Fact>]
@@ -84,7 +86,7 @@ let ``confirmarVenta convierte 1 kg a 1000 g al reservar en lote en gramos`` () 
     let cliente = mkCliente clienteId
 
     let mutable capturado : (LoteId * Cantidad) list = []
-    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (reservas: (LoteId * Cantidad) list) =
+    let mockTx (_: (IdempotenciaClaim * (CodigoVenta -> CodigoDespacho -> string)) option) (_: OrdenVenta) (_: OrdenDespacho) (reservas: (LoteId * Cantidad) list) =
         async {
             capturado <- reservas
             let cv = CodigoVenta.reconstruir "OV-202611-0001"
@@ -98,10 +100,14 @@ let ``confirmarVenta convierte 1 kg a 1000 g al reservar en lote en gramos`` () 
             (fun _ -> async { return Some cliente })
             (fun _ -> async { return Some prod })
             (fun _ _ -> async { return [ lote ] })
+            mockConsultarIdempotencia
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
             actorTest
+            None
+            "POST /api/proformas/test/confirmar-venta"
+            "hash"
             (let (ProformaId g) = proformaId in g.ToString())
             { ClienteId = None }
         |> Async.RunSynchronously
@@ -132,7 +138,7 @@ let ``confirmarVenta falla 409 si stock disponible insuficiente tras reserva par
     let cliente = mkCliente clienteId
 
     let mutable llamadoTx = false
-    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
+    let mockTx (_: (IdempotenciaClaim * (CodigoVenta -> CodigoDespacho -> string)) option) (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
         async {
             llamadoTx <- true
             let cv = CodigoVenta.reconstruir "OV-202611-0001"
@@ -146,10 +152,14 @@ let ``confirmarVenta falla 409 si stock disponible insuficiente tras reserva par
             (fun _ -> async { return Some cliente })
             (fun _ -> async { return Some prod })
             (fun _ _ -> async { return [ lote ] })
+            mockConsultarIdempotencia
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
             actorTest
+            None
+            "POST /api/proformas/test/confirmar-venta"
+            "hash"
             (let (ProformaId g) = proformaId in g.ToString())
             { ClienteId = None }
         |> Async.RunSynchronously
@@ -176,7 +186,7 @@ let ``confirmarVenta falla 422 si producto fue desactivado despues de proforma``
                             PrecioUnitario = 100m } ]
     let cliente = mkCliente clienteId
 
-    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
+    let mockTx (_: (IdempotenciaClaim * (CodigoVenta -> CodigoDespacho -> string)) option) (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
         async {
             let cv = CodigoVenta.reconstruir "OV-202611-0001"
             let cd = CodigoDespacho.reconstruir "DSP-202611-0001"
@@ -189,10 +199,14 @@ let ``confirmarVenta falla 422 si producto fue desactivado despues de proforma``
             (fun _ -> async { return Some cliente })
             (fun _ -> async { return Some prod })
             (fun _ _ -> async { return [ lote ] })
+            mockConsultarIdempotencia
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
             actorTest
+            None
+            "POST /api/proformas/test/confirmar-venta"
+            "hash"
             (let (ProformaId g) = proformaId in g.ToString())
             { ClienteId = None }
         |> Async.RunSynchronously
@@ -275,7 +289,7 @@ let ``confirmarVenta OBS-04: proforma con FechaVencimiento en el pasado no bloqu
     let cliente = mkCliente clienteId
 
     let mutable llamadoTx = false
-    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
+    let mockTx (_: (IdempotenciaClaim * (CodigoVenta -> CodigoDespacho -> string)) option) (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
         async {
             llamadoTx <- true
             let cv = CodigoVenta.reconstruir "OV-202611-0001"
@@ -289,10 +303,14 @@ let ``confirmarVenta OBS-04: proforma con FechaVencimiento en el pasado no bloqu
             (fun _ -> async { return Some cliente })
             (fun _ -> async { return Some prod })
             (fun _ _ -> async { return [ lote ] })
+            mockConsultarIdempotencia
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
             actorTest
+            None
+            "POST /api/proformas/test/confirmar-venta"
+            "hash"
             (let (ProformaId g) = proformaId in g.ToString())
             { ClienteId = None }
         |> Async.RunSynchronously
@@ -321,7 +339,7 @@ let ``confirmarVenta inserts reservas with preserved unit`` () =
     let cliente = mkCliente clienteId
 
     let mutable capturado : (LoteId * Cantidad) list = []
-    let mockTx (_: OrdenVenta) (_: OrdenDespacho) (reservas: (LoteId * Cantidad) list) =
+    let mockTx (_: (IdempotenciaClaim * (CodigoVenta -> CodigoDespacho -> string)) option) (_: OrdenVenta) (_: OrdenDespacho) (reservas: (LoteId * Cantidad) list) =
         async {
             capturado <- reservas
             let cv = CodigoVenta.reconstruir "OV-202611-0001"
@@ -335,10 +353,14 @@ let ``confirmarVenta inserts reservas with preserved unit`` () =
             (fun _ -> async { return Some cliente })
             (fun _ -> async { return Some prod })
             (fun _ _ -> async { return [ lote ] })
+            mockConsultarIdempotencia
             mockTx
             (fun _ -> "Producto")
             (fun _ -> "Cliente")
             actorTest
+            None
+            "POST /api/proformas/test/confirmar-venta"
+            "hash"
             (let (ProformaId g) = proformaId in g.ToString())
             { ClienteId = None }
         |> Async.RunSynchronously
@@ -677,7 +699,7 @@ let ``confirmarVenta usa placeholders en base y compone DTO con codigos reales d
     let mutable codigoVentaBaseRecibido = ""
     let mutable codigoDespachoBaseRecibido = ""
 
-    let mockTx (ov: OrdenVenta) (od: OrdenDespacho) (_: (LoteId * Cantidad) list) =
+    let mockTx (_: (IdempotenciaClaim * (CodigoVenta -> CodigoDespacho -> string)) option) (ov: OrdenVenta) (od: OrdenDespacho) (_: (LoteId * Cantidad) list) =
         async {
             codigoVentaBaseRecibido <- CodigoVenta.valor ov.Codigo
             codigoDespachoBaseRecibido <- CodigoDespacho.valor od.Codigo
@@ -692,10 +714,14 @@ let ``confirmarVenta usa placeholders en base y compone DTO con codigos reales d
             (fun _ -> async { return Some cliente })
             (fun _ -> async { return Some prod })
             (fun _ _ -> async { return [ lote ] })
+            mockConsultarIdempotencia
             mockTx
             (fun _ -> "Producto Test")
             (fun _ -> "Cliente Test")
             actorTest
+            None
+            "POST /api/proformas/test/confirmar-venta"
+            "hash"
             (let (ProformaId g) = proformaId in g.ToString())
             { ClienteId = None }
         |> Async.RunSynchronously
@@ -707,3 +733,206 @@ let ``confirmarVenta usa placeholders en base y compone DTO con codigos reales d
         Assert.Equal("DSP-PENDING", codigoDespachoBaseRecibido)
         Assert.Equal("OV-202611-0042", dto.Venta.Codigo)
         Assert.Equal("DSP-202611-0042", dto.Despacho.Codigo)
+
+[<Fact>]
+let ``confirmarVenta sin header idempotencia -> invoca tx con None`` () =
+    let prodId = ProductoId (Guid.NewGuid())
+    let loteId = LoteId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let proformaId = ProformaId (Guid.NewGuid())
+    let responsableId = UsuarioId (Guid.NewGuid())
+    let prod = mkProducto prodId true
+    let lote = mkLote loteId prodId 5000m 0m Gramo
+    let proforma = mkProforma proformaId clienteId responsableId
+                        [ { ProductoId = prodId
+                            Cantidad = cantReconst 1m Kilogramo
+                            PrecioUnitario = 100m } ]
+    let cliente = mkCliente clienteId
+
+    let mutable idempotenciaRecibida : (IdempotenciaClaim * (CodigoVenta -> CodigoDespacho -> string)) option =
+        Some ({ UsuarioId = UsuarioId Guid.Empty; Endpoint = ""; Clave = ""; RequestHash = ""; TtlHours = 0 }, (fun _ _ -> ""))
+
+    let mockTx (idem: (IdempotenciaClaim * (CodigoVenta -> CodigoDespacho -> string)) option) (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
+        async {
+            idempotenciaRecibida <- idem
+            let cv = CodigoVenta.reconstruir "OV-202611-0001"
+            let cd = CodigoDespacho.reconstruir "DSP-202611-0001"
+            return Ok (cv, cd)
+        }
+
+    let res =
+        VentaService.confirmarVenta
+            (fun _ -> async { return Some proforma })
+            (fun _ -> async { return Some cliente })
+            (fun _ -> async { return Some prod })
+            (fun _ _ -> async { return [ lote ] })
+            mockConsultarIdempotencia
+            mockTx
+            (fun _ -> "Producto")
+            (fun _ -> "Cliente")
+            actorTest
+            None
+            "POST /api/proformas/test/confirmar-venta"
+            "hash"
+            (let (ProformaId g) = proformaId in g.ToString())
+            { ClienteId = None }
+        |> Async.RunSynchronously
+
+    match res with
+    | Error (msg, _) -> failwith msg
+    | Ok _ ->
+        Assert.True(idempotenciaRecibida.IsNone, "La tx debió recibir None para idempotencia cuando no hay clave")
+
+[<Fact>]
+let ``confirmarVenta con header -> invoca tx con Some claim y serializer produce JSON valido`` () =
+    let prodId = ProductoId (Guid.NewGuid())
+    let loteId = LoteId (Guid.NewGuid())
+    let clienteId = ClienteId (Guid.NewGuid())
+    let proformaId = ProformaId (Guid.NewGuid())
+    let responsableId = UsuarioId (Guid.NewGuid())
+    let prod = mkProducto prodId true
+    let lote = mkLote loteId prodId 5000m 0m Gramo
+    let proforma = mkProforma proformaId clienteId responsableId
+                        [ { ProductoId = prodId
+                            Cantidad = cantReconst 1m Kilogramo
+                            PrecioUnitario = 100m } ]
+    let cliente = mkCliente clienteId
+
+    let mutable claimRecibido : IdempotenciaClaim option = None
+    let mutable jsonGenerado : string option = None
+
+    let mockTx (idem: (IdempotenciaClaim * (CodigoVenta -> CodigoDespacho -> string)) option) (_: OrdenVenta) (_: OrdenDespacho) (_: (LoteId * Cantidad) list) =
+        async {
+            match idem with
+            | None -> ()
+            | Some (claim, serializer) ->
+                claimRecibido <- Some claim
+                let cv = CodigoVenta.reconstruir "OV-202611-0042"
+                let cd = CodigoDespacho.reconstruir "DSP-202611-0042"
+                jsonGenerado <- Some (serializer cv cd)
+            let cv = CodigoVenta.reconstruir "OV-202611-0042"
+            let cd = CodigoDespacho.reconstruir "DSP-202611-0042"
+            return Ok (cv, cd)
+        }
+
+    let clavePrueba = "key-test-uuid"
+    let endpointPrueba = "POST /api/proformas/p-123/confirmar-venta"
+    let hashPrueba = "hash-sha256-abc"
+
+    let res =
+        VentaService.confirmarVenta
+            (fun _ -> async { return Some proforma })
+            (fun _ -> async { return Some cliente })
+            (fun _ -> async { return Some prod })
+            (fun _ _ -> async { return [ lote ] })
+            mockConsultarIdempotencia
+            mockTx
+            (fun _ -> "Producto Test")
+            (fun _ -> "Cliente Test")
+            actorTest
+            (Some clavePrueba)
+            endpointPrueba
+            hashPrueba
+            (let (ProformaId g) = proformaId in g.ToString())
+            { ClienteId = None }
+        |> Async.RunSynchronously
+
+    match res with
+    | Error (msg, _) -> failwith msg
+    | Ok _ ->
+        Assert.True(claimRecibido.IsSome, "El claim debió recibirse en la tx")
+        let claim = claimRecibido.Value
+        Assert.Equal(clavePrueba, claim.Clave)
+        Assert.Equal(endpointPrueba, claim.Endpoint)
+        Assert.Equal(hashPrueba, claim.RequestHash)
+        Assert.Equal(actorTest.UsuarioId, claim.UsuarioId)
+        Assert.Equal(24, claim.TtlHours)
+
+        Assert.True(jsonGenerado.IsSome, "El serializer debió generar JSON")
+        let json = jsonGenerado.Value
+        Assert.Contains("OV-202611-0042", json)
+        Assert.Contains("DSP-202611-0042", json)
+        let dto = System.Text.Json.JsonSerializer.Deserialize<VentaConfirmadaDto>(json)
+        Assert.Equal("OV-202611-0042", dto.Venta.Codigo)
+        Assert.Equal("DSP-202611-0042", dto.Despacho.Codigo)
+
+[<Fact>]
+let ``confirmarVenta con replay detectado -> retorna 200 con cuerpo previo sin invocar tx ni validar proforma`` () =
+    let proformaId = ProformaId (Guid.NewGuid())
+    let mutable txInvocada = false
+    let mockTx _ _ _ _ =
+        async {
+            txInvocada <- true
+            return Ok (CodigoVenta.reconstruir "OV-0", CodigoDespacho.reconstruir "DSP-0")
+        }
+
+    let cuerpoCacheado = "{\"Venta\":{\"Codigo\":\"OV-CACHE\"}}"
+    let mockConsultar (c: IdempotenciaClaim) =
+        async {
+            return Ok (ClaimOutcome.Replay (cuerpoCacheado, 201))
+        }
+
+    let res =
+        VentaService.confirmarVenta
+            (fun _ -> async { return failwith "No debió cargar proforma en replay" })
+            (fun _ -> async { return None })
+            (fun _ -> async { return None })
+            (fun _ _ -> async { return [] })
+            mockConsultar
+            mockTx
+            (fun _ -> "")
+            (fun _ -> "")
+            actorTest
+            (Some "key-replay-1")
+            "POST /api/proformas/p/confirmar-venta"
+            "hash-1"
+            (let (ProformaId g) = proformaId in g.ToString())
+            { ClienteId = None }
+        |> Async.RunSynchronously
+
+    match res with
+    | Ok _ -> failwith "Debió retornar Error con prefijo REPLAY"
+    | Error (msg, code) ->
+        Assert.Equal(200, code)
+        Assert.Equal("REPLAY:" + cuerpoCacheado, msg)
+        Assert.False(txInvocada, "La tx no debió invocarse en replay")
+
+[<Fact>]
+let ``confirmarVenta con hash mismatch -> retorna 422 sin invocar tx`` () =
+    let proformaId = ProformaId (Guid.NewGuid())
+    let mutable txInvocada = false
+    let mockTx _ _ _ _ =
+        async {
+            txInvocada <- true
+            return Ok (CodigoVenta.reconstruir "OV-0", CodigoDespacho.reconstruir "DSP-0")
+        }
+
+    let mockConsultar (c: IdempotenciaClaim) =
+        async {
+            return Ok ClaimOutcome.HashMismatch
+        }
+
+    let res =
+        VentaService.confirmarVenta
+            (fun _ -> async { return failwith "No debió cargar proforma en mismatch" })
+            (fun _ -> async { return None })
+            (fun _ -> async { return None })
+            (fun _ _ -> async { return [] })
+            mockConsultar
+            mockTx
+            (fun _ -> "")
+            (fun _ -> "")
+            actorTest
+            (Some "key-mismatch-1")
+            "POST /api/proformas/p/confirmar-venta"
+            "hash-2"
+            (let (ProformaId g) = proformaId in g.ToString())
+            { ClienteId = None }
+        |> Async.RunSynchronously
+
+    match res with
+    | Ok _ -> failwith "Debió retornar Error 422"
+    | Error (msg, code) ->
+        Assert.Equal(422, code)
+        Assert.Equal("Idempotency-Key reused with different body", msg)
+        Assert.False(txInvocada, "La tx no debió invocarse en mismatch")

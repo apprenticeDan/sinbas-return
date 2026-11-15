@@ -217,18 +217,53 @@ module VentaService =
         (obtenerCliente: ClienteId -> Async<Cliente option>)
         (obtenerProducto: ProductoId -> Async<Producto option>)
         (listarLotes: ProductoId option -> EstadoLote option -> Async<Lote list>)
+        (consultarIdempotencia: IdempotenciaClaim -> Async<Result<ClaimOutcome, string>>)
         (confirmarVentaTx:
+            (IdempotenciaClaim * (CodigoVenta -> CodigoDespacho -> string)) option ->
             OrdenVenta ->
             OrdenDespacho ->
             (LoteId * Cantidad) list ->
-            Async<Result<CodigoVenta * CodigoDespacho, string>>)
+            Async<Result<CodigoVenta * CodigoDespacho, string * int>>)
         (nombreProductoResolver: ProductoId -> string)
         (nombreClienteResolver: ClienteId -> string)
         (actor: Actor)
+        (idempotencyKey: string option)
+        (endpoint: string)
+        (requestHash: string)
         (proformaIdRaw: string)
         (req: ConfirmarVentaRequest)
         : Async<Result<VentaConfirmadaDto, string * int>> =
         async {
+            // 0. Pre-check de idempotencia: detectar Replay (200) o HashMismatch (422) antes de validar proforma o FIFO
+            let claimOpt =
+                idempotencyKey
+                |> Option.map (fun clave ->
+                    { UsuarioId = actor.UsuarioId
+                      Endpoint = endpoint
+                      Clave = clave
+                      RequestHash = requestHash
+                      TtlHours = 24 })
+
+            let! preCheck =
+                async {
+                    match claimOpt with
+                    | None -> return Ok ()
+                    | Some claim ->
+                        let! res = consultarIdempotencia claim
+                        match res with
+                        | Ok ClaimOutcome.Nuevo -> return Ok ()
+                        | Ok (ClaimOutcome.Replay (cuerpo, _)) ->
+                            return Error (sprintf "REPLAY:%s" cuerpo, 200)
+                        | Ok ClaimOutcome.HashMismatch ->
+                            return Error ("Idempotency-Key reused with different body", 422)
+                        | Error err ->
+                            return Error (err, 500)
+                }
+
+            match preCheck with
+            | Error (msg, code) -> return Error (msg, code)
+            | Ok () ->
+
             // 1. Validar ID de proforma
             match Guid.TryParse(proformaIdRaw) with
             | false, _ -> return Error ("Identificador de proforma inválido", 400)
@@ -365,11 +400,24 @@ module VentaService =
 
                     let ordenDespachoBase = Despacho.desdeVenta ordenDespachoId codDespachoPlaceholder ordenVentaBase
 
-                    // 6. Ejecutar transacción atómica de persistencia con reservas y secuencia (RNF05 / OBS-03)
-                    let! txRes = confirmarVentaTx ordenVentaBase ordenDespachoBase reservasLotes
+                    let idempotencia =
+                        claimOpt
+                        |> Option.map (fun claim ->
+                            (claim,
+                             fun (cv: CodigoVenta) (cd: CodigoDespacho) ->
+                                 let ventaFinal = { ordenVentaBase with Codigo = cv }
+                                 let despachoFinal = { ordenDespachoBase with Codigo = cd }
+                                 let dto =
+                                     { Venta = toVentaDto nombreProductoResolver (fun _ -> Cliente.nombreVisible cliente) ventaFinal
+                                       Despacho = toDespachoDto nombreProductoResolver (fun _ -> Cliente.nombreVisible cliente) (fun _ -> Some (CodigoVenta.valor cv)) despachoFinal }
+                                 System.Text.Json.JsonSerializer.Serialize(dto))
+                        )
+
+                    // 6. Ejecutar transacción atómica de persistencia con reservas y secuencia (RNF05 / OBS-03 / Q5)
+                    let! txRes = confirmarVentaTx idempotencia ordenVentaBase ordenDespachoBase reservasLotes
                     match txRes with
-                    | Error msg ->
-                        return Error (sprintf "Error transaccional al confirmar venta: %s" msg, 500)
+                    | Error (msg, code) ->
+                        return Error (msg, code)
                     | Ok (codVentaFinal, codDespachoFinal) ->
 
                     let ordenVentaFinal = { ordenVentaBase with Codigo = codVentaFinal }

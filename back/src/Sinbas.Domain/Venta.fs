@@ -7,6 +7,21 @@ open System
 // (RF-08 | CU-11 | RN04 / RN05 / RN12 / RN14 / RNF05)
 // ─────────────────────────────────────────────────────────────
 
+/// Q5: datos del claim de idempotencia. Solo primitivos, sin funciones.
+type IdempotenciaClaim =
+    { UsuarioId:   UsuarioId
+      Endpoint:    string
+      Clave:       string
+      RequestHash: string
+      TtlHours:    int }
+
+/// Q5: resultado de consultar o reclamar idempotencia.
+[<RequireQualifiedAccess>]
+type ClaimOutcome =
+    | Nuevo
+    | Replay of cuerpo: string * statusCode: int
+    | HashMismatch
+
 type CodigoVenta = private CodigoVenta of string
 
 module CodigoVenta =

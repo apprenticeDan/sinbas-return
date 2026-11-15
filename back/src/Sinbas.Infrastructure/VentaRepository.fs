@@ -209,16 +209,19 @@ module VentaRepository =
             |> Result.mapError errorToString
 
     /// Inserción atómica transaccional de Confirmación de Venta (RNF05 / OBS-03)
+    /// L0: Claim de idempotencia dentro de la transacción
     /// L1: Convierte Proforma a 'Convertida' de manera optimista (WHERE id=@id AND estado='Vigente')
     /// L2: Secuencia atómica de códigos de venta y despacho
     /// L6: Lock + re-reserva autoritativa con dominio (Lote.reservar bajo FOR UPDATE)
     /// Inserta orden_venta, linea_orden_venta, orden_despacho, linea_despacho
     /// Persiste lotes actualizados con stock y reserva coherentes
+    /// L7: Actualiza cuerpo_respuesta y status_code en registro_idempotencia antes de commit
     let confirmarVentaTx
+        (idempotencia: (IdempotenciaClaim * (CodigoVenta -> CodigoDespacho -> string)) option)
         (ordenVentaBase: OrdenVenta)
         (ordenDespachoBase: OrdenDespacho)
         (reservasLotes: (LoteId * Cantidad) list)
-        : Async<Result<CodigoVenta * CodigoDespacho, string>> =
+        : Async<Result<CodigoVenta * CodigoDespacho, string * int>> =
         async {
             use conn = DbConnection.crear ()
             conn.Open()
@@ -230,6 +233,28 @@ module VentaRepository =
                 let (ClienteId cId) = ordenVentaBase.ClienteId
                 let (EmpleadoId eId) = ordenVentaBase.ResponsableId
                 let (OrdenId odId) = ordenDespachoBase.Id
+
+                // ── L0: Claim de idempotencia dentro de tx ──────────
+                let! claimOk =
+                    async {
+                        match idempotencia with
+                        | None -> return Ok ()
+                        | Some (claim, _) ->
+                            let! outcomeRes = IdempotenciaRepository.claimEnTx conn tx claim
+                            match outcomeRes with
+                            | Error err -> return Error (err, 500)
+                            | Ok ClaimOutcome.Nuevo -> return Ok ()
+                            | Ok (ClaimOutcome.Replay (json, code)) ->
+                                return Error ("REPLAY:" + json, if code > 0 then code else 200)
+                            | Ok ClaimOutcome.HashMismatch ->
+                                return Error ("Idempotency-Key reused with different body", 422)
+                    }
+
+                match claimOk with
+                | Error (msg, code) ->
+                    tx.Rollback()
+                    return Error (msg, code)
+                | Ok () ->
 
                 // ── L1: claim de proforma (allow-list: solo Vigente) ──
                 let sqlUpdateProforma = """
@@ -243,7 +268,7 @@ module VentaRepository =
 
                 if affectedProforma = 0 then
                     tx.Rollback()
-                    return Error "La proforma ya fue convertida previamente o no se encuentra en estado Vigente."
+                    return Error ("La proforma ya fue convertida previamente o no se encuentra en estado Vigente.", 409)
                 else
 
                 // ── L2: secuencia real por (tipo, periodo) ───────
@@ -255,7 +280,7 @@ module VentaRepository =
                       generarCodigo "DSP" ordenVentaBase.Fecha secDSP with
                 | Error msg, _ | _, Error msg ->
                     tx.Rollback()
-                    return Error (sprintf "No se pudo generar código: %s" msg)
+                    return Error (sprintf "No se pudo generar código: %s" msg, 500)
                 | Ok cvStr, Ok cdStr ->
 
                 let codigoVenta    = CodigoVenta.reconstruir cvStr
@@ -267,7 +292,7 @@ module VentaRepository =
                 match lotesLockedRes with
                 | Error msg ->
                     tx.Rollback()
-                    return Error (sprintf "Error de integridad al bloquear lotes: %s" msg)
+                    return Error (sprintf "Error de integridad al bloquear lotes: %s" msg, 500)
                 | Ok lotesLocked ->
 
                 let lotesPorId = lotesLocked |> List.map (fun l -> (l.Id, l)) |> Map.ofList
@@ -291,7 +316,7 @@ module VentaRepository =
                 match reservarTodo reservasLotes with
                 | Error msg ->
                     tx.Rollback()
-                    return Error msg
+                    return Error (msg, 409)
                 | Ok lotesReservados ->
 
                 // ── Construir entidades finales con códigos reales ──
@@ -318,7 +343,7 @@ module VentaRepository =
                 let! affectedVenta = conn.ExecuteAsync(sqlCabVenta, paramsCabVenta, tx) |> Async.AwaitTask
                 if affectedVenta <> 1 then
                     tx.Rollback()
-                    return Error (sprintf "No se pudo insertar orden_venta (affectedRows=%d)" affectedVenta)
+                    return Error (sprintf "No se pudo insertar orden_venta (affectedRows=%d)" affectedVenta, 500)
                 else
 
                 // ── INSERT líneas de OrdenVenta ────────────────────
@@ -347,7 +372,7 @@ module VentaRepository =
                 match errorLineaVenta with
                 | Some msg ->
                     tx.Rollback()
-                    return Error msg
+                    return Error (msg, 500)
                 | None ->
 
                 // ── INSERT cabecera OrdenDespacho ─────────────────
@@ -374,7 +399,7 @@ module VentaRepository =
                     |> Async.AwaitTask
                 if affectedDesp <> 1 then
                     tx.Rollback()
-                    return Error (sprintf "No se pudo insertar orden_despacho (affectedRows=%d)" affectedDesp)
+                    return Error (sprintf "No se pudo insertar orden_despacho (affectedRows=%d)" affectedDesp, 500)
                 else
 
                 // ── INSERT líneas de OrdenDespacho ─────────────────
@@ -401,7 +426,7 @@ module VentaRepository =
                 match errorLineaDesp with
                 | Some msg ->
                     tx.Rollback()
-                    return Error msg
+                    return Error (msg, 500)
                 | None ->
 
                 // ── Persistir lotes reservados ─────────────────────
@@ -418,23 +443,40 @@ module VentaRepository =
                 match persistRes with
                 | Error msg ->
                     tx.Rollback()
-                    return Error msg
+                    return Error (msg, 500)
                 | Ok () ->
                     match! ReservaStockRepository.insertarBatch conn tx ordenVentaFinal.Id reservasLotes with
                     | Error msg ->
                         tx.Rollback()
-                        return Error msg
+                        return Error (msg, 500)
                     | Ok () ->
-                        tx.Commit()
-                        return Ok (codigoVenta, codigoDespacho)
+
+                    // ── L7: Actualizar respuesta en idempotencia antes de commit ──
+                    let! actIdemRes =
+                        async {
+                            match idempotencia with
+                            | None -> return Ok ()
+                            | Some (claim, serializar) ->
+                                let jsonRespuesta = serializar codigoVenta codigoDespacho
+                                return! IdempotenciaRepository.actualizarRespuestaEnTx conn tx claim 201 jsonRespuesta
+                        }
+
+                    match actIdemRes with
+                    | Error msg ->
+                        tx.Rollback()
+                        return Error (sprintf "Error guardando respuesta de idempotencia: %s" msg, 500)
+                    | Ok () ->
+
+                    tx.Commit()
+                    return Ok (codigoVenta, codigoDespacho)
             with ex ->
                 try tx.Rollback() with _ -> ()
                 if esTransitorio ex then
                     eprintfn "[VentaRepository.confirmarVentaTx] Error transitorio: %s" ex.Message
-                    return Error (sprintf "Error transitorio: %s" ex.Message)
+                    return Error (sprintf "Error transitorio: %s" ex.Message, 500)
                 else
                     eprintfn "[VentaRepository.confirmarVentaTx] Error: %s" ex.Message
-                    return Error ex.Message
+                    return Error (ex.Message, 500)
         }
 
     let obtenerVentaPorId (id: OrdenId) : Async<OrdenVenta option> =

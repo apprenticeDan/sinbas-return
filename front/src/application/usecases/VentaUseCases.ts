@@ -6,8 +6,8 @@ import type {
 } from '../../domain/models/Venta';
 
 export const VentaUseCases = {
-  async confirmarVenta(proformaId: string, req: ConfirmarVentaRequest): Promise<VentaConfirmadaDto> {
-    return ApiVentaGateway.confirmarVenta(proformaId, req);
+  async confirmarVenta(proformaId: string, req: ConfirmarVentaRequest, idempotencyKey: string): Promise<VentaConfirmadaDto> {
+    return ApiVentaGateway.confirmarVenta(proformaId, req, idempotencyKey);
   },
 
   async listarVentas(filtros?: { clienteId?: string; estado?: string; desde?: string; hasta?: string }): Promise<OrdenVentaDto[]> {
