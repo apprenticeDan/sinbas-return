@@ -65,9 +65,10 @@ export const ventaStore = {
   },
 
   async confirmarVenta(proformaId: string, clienteId?: string): Promise<VentaConfirmadaDto> {
+    const idempotencyKey = crypto.randomUUID();
     setError(null);
     try {
-      const result = await VentaUseCases.confirmarVenta(proformaId, { clienteId });
+      const result = await VentaUseCases.confirmarVenta(proformaId, { clienteId }, idempotencyKey);
       // Añadir la venta a la lista o refrescar
       await ventaStore.cargarVentas();
       return result;

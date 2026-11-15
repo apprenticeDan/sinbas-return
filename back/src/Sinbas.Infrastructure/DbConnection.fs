@@ -391,15 +391,18 @@ create index if not exists ix_refresh_token_hash on refresh_token(token_hash);
 create index if not exists ix_refresh_token_usuario on refresh_token(usuario_id);
 
 create table if not exists registro_idempotencia (
-    clave           text primary key,
-    endpoint        text not null,
-    usuario_id      uuid not null references usuario(id) on delete cascade,
-    status_code     integer not null,
+    clave            text not null,
+    endpoint         text not null,
+    usuario_id       uuid not null references usuario(id) on delete cascade,
+    status_code      integer not null,
     cuerpo_respuesta text not null,
-    creado_en       timestamp with time zone not null default current_timestamp
+    creado_en        timestamp with time zone not null default current_timestamp,
+    request_hash     text not null,
+    expira_en        timestamp with time zone not null,
+    primary key (usuario_id, endpoint, clave)
 );
 
-create index if not exists ix_idempotencia_creado on registro_idempotencia(creado_en);
+create index if not exists ix_idempotencia_expira on registro_idempotencia(expira_en);
 
 -- ─────────────────────────────────────────────────────────────
 -- Feature F7: Proformas y Cotizaciones (011_proforma)

@@ -18,8 +18,8 @@
     <Compile Include="ClientRepository.fs" />
     <Compile Include="ProformaRepository.fs" />
     <Compile Include="ReservaStockRepository.fs" />
-    <Compile Include="VentaRepository.fs" />
     <Compile Include="IdempotenciaRepository.fs" />
+    <Compile Include="VentaRepository.fs" />
     <Compile Include="SolicitudRepository.fs" />
   </ItemGroup>
 

@@ -11,10 +11,11 @@ export type * from '../../domain/models/Venta';
 export type * from '../../domain/models/Despacho';
 
 export const ApiVentaGateway = {
-  async confirmarVenta(proformaId: string, req: ConfirmarVentaRequest): Promise<VentaConfirmadaDto> {
+  async confirmarVenta(proformaId: string, req: ConfirmarVentaRequest, idempotencyKey: string): Promise<VentaConfirmadaDto> {
     return httpClient<VentaConfirmadaDto>(`/proformas/${proformaId}/confirmar-venta`, {
       method: 'POST',
       body: JSON.stringify(req),
+      headers: { 'Idempotency-Key': idempotencyKey },
     });
   },
 
