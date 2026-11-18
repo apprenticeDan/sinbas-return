@@ -223,7 +223,35 @@ module SolicitudRepository =
                     match lotesLockedRes with
                     | Error msg -> return Error msg
                     | Ok lotesLocked ->
-                        let lotesPorId = lotesLocked |> List.map (fun l -> (l.Id, l)) |> Map.ofList
+                        // Reconciliar cantidad_reservada en memoria con reserva_stock activa.
+                        // Puede ocurrir desincronización entre ambas tablas por deploys
+                        // previos, resets de DB o bugs en creación de solicitudes.
+                        let reservasPorLote =
+                            reservasActivas
+                            |> List.groupBy fst
+                            |> List.map (fun (loteId, pairs) ->
+                                let totalBase = pairs |> List.sumBy (fun (_, c) -> Cantidad.aUnidadBase c)
+                                (loteId, totalBase))
+                            |> Map.ofList
+
+                        let lotesPorId =
+                            lotesLocked
+                            |> List.map (fun lote ->
+                                let reservadoEnLoteBase = Cantidad.aUnidadBase lote.CantidadReservada
+                                let reservadoEnDocBase  = reservasPorLote |> Map.tryFind lote.Id |> Option.defaultValue 0m
+                                let loteReconciliado =
+                                    if reservadoEnLoteBase < reservadoEnDocBase then
+                                        eprintfn
+                                            "[RECONCILIACION] Lote %s: cantidad_reservada=%M g < reserva_stock=%M g. Corrigiendo en memoria antes del despacho."
+                                            (lote.Codigo.ToString()) reservadoEnLoteBase reservadoEnDocBase
+                                        match Cantidad.reconstruir reservadoEnDocBase lote.CantidadReservada.Unidad with
+                                        | Ok cantCorregida -> { lote with CantidadReservada = cantCorregida }
+                                        | Error _ -> lote  // si la conversion falla, deja el lote como está y fallará en despacharReserva
+                                    else
+                                        lote
+                                (lote.Id, loteReconciliado))
+                            |> Map.ofList
+
                         let rec despacharTodo = function
                             | [] -> Ok []
                             | ((loteId, cant) :: rest) ->
