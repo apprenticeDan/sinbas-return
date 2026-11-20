@@ -156,7 +156,7 @@ export function ClientesView() {
     <section class="panel">
       {/* Panel Header */}
       <div class="panel-head">
-        <p class="panel-eyebrow">Gestión Comercial (F6)</p>
+        <p class="panel-eyebrow">Gestión Comercial</p>
         <h1 class="panel-title">Catálogo de Clientes</h1>
         <p class="panel-desc">
           Registro y búsqueda multivariable de clientes (Personas Naturales y Jurídicas) para consignación de despachos y facturación.

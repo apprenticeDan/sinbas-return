@@ -18,28 +18,13 @@ export function LabAnalysisModal(props: LabAnalysisModalProps) {
   const [viabilidad, setViabilidad] = createSignal<number>(90);
   const [semillasPurasKg, setSemillasPurasKg] = createSignal<number>(15000);
   const [semillasImpurezasKg, setSemillasImpurezasKg] = createSignal<number>(500);
-  const [dictamenManual, setDictamenManual] = createSignal<string>('Auto');
+  const [dictamenManual, setDictamenManual] = createSignal<string>('Aprobado');
   const [fechaAnalisis, setFechaAnalisis] = createSignal<string>(todayStr);
   const [observaciones, setObservaciones] = createSignal<string>('');
   const [error, setError] = createSignal<string | null>(null);
   const [submitting, setSubmitting] = createSignal<boolean>(false);
 
-  // Sugerencia automática según RN12 / F-LAB-05: Germinación >= 60%, Pureza >= 70%, Humedad <= 15%, Viabilidad >= 60%
-  const dictamenSugerido = createMemo(() => {
-    const g = germinacion();
-    const p = pureza();
-    const h = humedad();
-    const v = viabilidad();
-    if (g >= 60 && p >= 70 && h <= 15 && v >= 60) {
-      return 'Aprobado';
-    }
-    return 'Observado';
-  });
-
-  const dictamenFinal = createMemo(() => {
-    if (dictamenManual() === 'Auto') return dictamenSugerido();
-    return dictamenManual();
-  });
+  const dictamenFinal = createMemo(() => dictamenManual());
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -234,14 +219,13 @@ export function LabAnalysisModal(props: LabAnalysisModalProps) {
               </div>
 
               <div class="field">
-                <label>Dictamen Oficial</label>
+                <label>Dictamen</label>
                 <select
                   value={dictamenManual()}
                   onChange={(e) => setDictamenManual(e.currentTarget.value)}
                 >
-                  <option value="Auto">Sugerido Automático ({dictamenSugerido()})</option>
-                  <option value="Aprobado">Aprobado (Cumple Estándares Forestales)</option>
-                  <option value="Observado">Observado (Amerita Revisión / Cuarentena)</option>
+                  <option value="Aprobado">Aprobado</option>
+                  <option value="Observado">Observado</option>
                 </select>
               </div>
             </div>
@@ -265,7 +249,7 @@ export function LabAnalysisModal(props: LabAnalysisModalProps) {
                 </strong>
               </div>
               <span style={{ 'font-size': '11.5px', color: 'var(--ink-soft)' }}>
-                RN12: Si es Observado, el lote pasa a EnCuarentena
+                Si es Observado, el lote pasa a Cuarentena
               </span>
             </div>
 

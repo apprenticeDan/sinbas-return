@@ -82,10 +82,9 @@ export function AssignPriceModal() {
                 <label>Moneda</label>
                 <select
                   value={moneda()}
-                  onChange={(e) => setMoneda(e.currentTarget.value)}
+                  disabled
                 >
                   <option value="BOB">BOB (Bs.)</option>
-                  <option value="USD">USD ($)</option>
                 </select>
               </div>
             </div>

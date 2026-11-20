@@ -13,30 +13,29 @@ module LoteEndpoints =
 
     let mapEndpoints (app: WebApplication) =
 
-        let resolverEmpleadoId (ctx: HttpContext) : Async<Guid> =
+        let resolverEmpleadoId (ctx: HttpContext) : Async<Result<Guid, string * int>> =
             async {
-                let defaultEmpleado = Guid.Parse("01917f3a-0001-7000-8000-000000000001")
                 let empClaim = ctx.User.FindFirst("empleado_id")
-                if not (isNull empClaim) then
+                if not (isNull empClaim) && empClaim.Value.Length = 36 then
                     match Guid.TryParse(empClaim.Value) with
-                    | true, g -> return g
-                    | false, _ -> return defaultEmpleado
+                    | true, g -> return Ok g
+                    | false, _ -> return Error ("Token inválido: 'empleado_id' no es UUID", 401)
                 else
                     let subClaim =
                         let c1 = ctx.User.FindFirst(ClaimTypes.NameIdentifier)
                         if isNull c1 then ctx.User.FindFirst(JwtRegisteredClaimNames.Sub) else c1
-                    if not (isNull subClaim) then
+                    if not (isNull subClaim) && subClaim.Value.Length = 36 then
                         match Guid.TryParse(subClaim.Value) with
                         | true, uGuid ->
                             let! uRes = AuthRepository.buscarUsuarioPorId (UsuarioId uGuid)
                             match uRes with
                             | Ok u ->
                                 let (EmpleadoId eId) = Usuario.empleadoId u
-                                return eId
-                            | Error _ -> return defaultEmpleado
-                        | false, _ -> return defaultEmpleado
+                                return Ok eId
+                            | Error _ -> return Error ("Usuario no encontrado para el token provisto", 401)
+                        | false, _ -> return Error ("Token inválido: 'sub' no es UUID", 401)
                     else
-                        return defaultEmpleado
+                        return Error ("Token inválido: falta claim de identidad de empleado o usuario", 401)
             }
 
         // 1. GET /api/lotes - Listar lotes de almacén
@@ -148,7 +147,10 @@ module LoteEndpoints =
         // 5. PUT /api/lotes/{id}/liberar-cuarentena - Levantar cuarentena de lote tras revisión gerencial
         app.MapPut("/api/lotes/{id}/liberar-cuarentena", Func<HttpContext, string, LiberarCuarentenaRequest, Threading.Tasks.Task<IResult>>(fun ctx id req ->
             async {
-                let! empGuid = resolverEmpleadoId ctx
+                let! empRes = resolverEmpleadoId ctx
+                match empRes with
+                | Error (msg, code) -> return Results.Json({| error = msg |}, statusCode = Nullable code)
+                | Ok empGuid ->
                 let! res =
                     LoteService.liberarCuarentena
                         LoteRepository.obtenerPorId
@@ -171,7 +173,10 @@ module LoteEndpoints =
         // 6. PUT /api/lotes/{id}/rechazar - Rechazar definitivamente lote en cuarentena (Gerencia)
         app.MapPut("/api/lotes/{id}/rechazar", Func<HttpContext, string, RechazarLoteRequest, Threading.Tasks.Task<IResult>>(fun ctx id req ->
             async {
-                let! empGuid = resolverEmpleadoId ctx
+                let! empRes = resolverEmpleadoId ctx
+                match empRes with
+                | Error (msg, code) -> return Results.Json({| error = msg |}, statusCode = Nullable code)
+                | Ok empGuid ->
                 let! res =
                     LoteService.rechazarLote
                         LoteRepository.obtenerPorId
@@ -194,7 +199,10 @@ module LoteEndpoints =
         // 7. PUT /api/lotes/{id}/solicitar-analisis - Solicitar nuevo análisis a laboratorio para lote en cuarentena
         app.MapPut("/api/lotes/{id}/solicitar-analisis", Func<HttpContext, string, SolicitarNuevoAnalisisRequest, Threading.Tasks.Task<IResult>>(fun ctx id req ->
             async {
-                let! empGuid = resolverEmpleadoId ctx
+                let! empRes = resolverEmpleadoId ctx
+                match empRes with
+                | Error (msg, code) -> return Results.Json({| error = msg |}, statusCode = Nullable code)
+                | Ok empGuid ->
                 let! res =
                     LoteService.solicitarNuevoAnalisis
                         LoteRepository.obtenerPorId

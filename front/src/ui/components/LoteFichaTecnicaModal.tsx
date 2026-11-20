@@ -139,7 +139,7 @@ export function LoteFichaTecnicaModal(props: LoteFichaTecnicaModalProps) {
                 </Show>
               </div>
               <p style={{ 'font-size': '12.5px', color: 'var(--ink-soft)', margin: '4px 0 0' }}>
-                Historial técnico, calidad y trazabilidad botánica (RF14 / CU-14 / F-LAB-06).
+                Historial técnico, calidad y trazabilidad botánica.
               </p>
             </div>
             <button

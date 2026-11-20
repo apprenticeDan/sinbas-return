@@ -37,46 +37,49 @@ module SolicitudEndpoints =
                 |> Option.map (fun l -> CodigoLote.valor l.Codigo)
                 |> Option.defaultValue "?")
 
-    let private resolverEmpleadoId (ctx: HttpContext) : Async<Guid> =
+    let private resolverEmpleadoId (ctx: HttpContext) : Async<Result<Guid, string * int>> =
         async {
-            let defaultEmpleado = Guid.Parse("01917f3a-0001-7000-8000-000000000001")
             let empClaim = ctx.User.FindFirst("empleado_id")
-            if not (isNull empClaim) then
+            if not (isNull empClaim) && empClaim.Value.Length = 36 then
                 match Guid.TryParse(empClaim.Value) with
-                | true, g -> return g
-                | false, _ -> return defaultEmpleado
+                | true, g -> return Ok g
+                | false, _ -> return Error ("Token inválido: 'empleado_id' no es UUID", 401)
             else
                 let subClaim =
                     let c1 = ctx.User.FindFirst(ClaimTypes.NameIdentifier)
                     if isNull c1 then ctx.User.FindFirst(JwtRegisteredClaimNames.Sub) else c1
-                if not (isNull subClaim) then
+                if not (isNull subClaim) && subClaim.Value.Length = 36 then
                     match Guid.TryParse(subClaim.Value) with
                     | true, uGuid ->
                         let! uRes = AuthRepository.buscarUsuarioPorId (UsuarioId uGuid)
                         match uRes with
                         | Ok u ->
                             let (EmpleadoId eId) = Usuario.empleadoId u
-                            return eId
-                        | Error _ -> return defaultEmpleado
-                    | false, _ -> return defaultEmpleado
+                            return Ok eId
+                        | Error _ -> return Error ("Usuario no encontrado para el token provisto", 401)
+                    | false, _ -> return Error ("Token inválido: 'sub' no es UUID", 401)
                 else
-                    return defaultEmpleado
+                    return Error ("Token inválido: falta claim de identidad de empleado o usuario", 401)
         }
 
     let private mapError (msg: string, code: int) : IResult =
         match code with
+        | 401 -> Results.Json({| error = msg |}, statusCode = Nullable 401)
         | 404 -> Results.NotFound({| error = msg |})
         | 409 -> Results.Conflict({| error = msg |})
         | 422 -> Results.UnprocessableEntity({| error = msg |})
-        | 500 -> Results.Problem(detail = msg, statusCode = Nullable 500)
-        | _   -> Results.BadRequest({| error = msg |})
+        | 500 -> Results.Json({| error = msg |}, statusCode = Nullable 500)
+        | c   -> Results.Json({| error = msg |}, statusCode = Nullable c)
 
     let mapEndpoints (app: WebApplication) =
 
         // 1. POST /api/solicitudes (RequireAlmacen)
         app.MapPost("/api/solicitudes", Func<HttpContext, CrearSolicitudRequest, Threading.Tasks.Task<IResult>>(fun ctx req ->
             async {
-                let! solicitanteId = resolverEmpleadoId ctx
+                let! empRes = resolverEmpleadoId ctx
+                match empRes with
+                | Error (msg, code) -> return mapError (msg, code)
+                | Ok solicitanteId ->
                 let nombreProdResolver = crearNombreProductoResolver ()
                 let codLoteResolver = crearCodigoLoteResolver ()
 
@@ -170,7 +173,10 @@ module SolicitudEndpoints =
         // 4. PUT /api/solicitudes/{id}/aprobar (RequireGerencia)
         app.MapPut("/api/solicitudes/{id}/aprobar", Func<HttpContext, string, Threading.Tasks.Task<IResult>>(fun ctx id ->
             async {
-                let! aprobadorId = resolverEmpleadoId ctx
+                let! empRes = resolverEmpleadoId ctx
+                match empRes with
+                | Error (msg, code) -> return mapError (msg, code)
+                | Ok aprobadorId ->
                 let nombreProdResolver = crearNombreProductoResolver ()
                 let codLoteResolver = crearCodigoLoteResolver ()
 
@@ -198,7 +204,10 @@ module SolicitudEndpoints =
         // 5. PUT /api/solicitudes/{id}/rechazar (RequireGerencia)
         app.MapPut("/api/solicitudes/{id}/rechazar", Func<HttpContext, string, RechazarSolicitudRequest, Threading.Tasks.Task<IResult>>(fun ctx id req ->
             async {
-                let! rechazadorId = resolverEmpleadoId ctx
+                let! empRes = resolverEmpleadoId ctx
+                match empRes with
+                | Error (msg, code) -> return mapError (msg, code)
+                | Ok rechazadorId ->
                 let nombreProdResolver = crearNombreProductoResolver ()
                 let codLoteResolver = crearCodigoLoteResolver ()
 
@@ -231,7 +240,10 @@ module SolicitudEndpoints =
         // 6. POST /api/solicitudes/{id}/confirmar (RequireAlmacen)
         app.MapPost("/api/solicitudes/{id}/confirmar", Func<HttpContext, string, Threading.Tasks.Task<IResult>>(fun ctx id ->
             async {
-                let! confirmadorId = resolverEmpleadoId ctx
+                let! empRes = resolverEmpleadoId ctx
+                match empRes with
+                | Error (msg, code) -> return mapError (msg, code)
+                | Ok confirmadorId ->
                 let nombreProdResolver = crearNombreProductoResolver ()
                 let codLoteResolver = crearCodigoLoteResolver ()
 

@@ -54,7 +54,11 @@ export function LabView() {
       await ApiLabGateway.descargarEtiquetaPdf(lote.id, lote.codigo);
       setNotification({ type: 'success', message: `Etiqueta oficial del lote ${lote.codigo} descargada correctamente` });
     } catch (err: any) {
-      setNotification({ type: 'error', message: err.message || 'No se pudo descargar la etiqueta. Verifique que el lote tenga análisis registrado.' });
+      const msg = err.message || '';
+      const friendlyMsg = msg.includes('ERR_SIN_ANALISIS_LABORATORIO') || msg.includes('no cuenta con análisis')
+        ? `El lote '${lote.codigo}' no cuenta con análisis de laboratorio registrado. No se puede generar la etiqueta.`
+        : (msg || 'No se pudo descargar la etiqueta. Verifique que el lote tenga análisis registrado.');
+      setNotification({ type: 'error', message: friendlyMsg });
     } finally {
       setDownloadingId(null);
     }
@@ -137,7 +141,7 @@ export function LabView() {
             }}
             class="btn btn-ghost"
             style={{ padding: '5px 10px', 'font-size': '12px' }}
-            title="Consultar ficha técnica consolidada e historial de análisis (RF14 / CU-14)"
+            title="Consultar ficha técnica consolidada e historial de análisis"
           >
             📄 Ficha
           </button>
@@ -146,7 +150,7 @@ export function LabView() {
             class="btn btn-ghost"
             style={{ padding: '5px 10px', 'font-size': '12px', color: 'var(--green-deep)' }}
             disabled={downloadingId() === l.id}
-            title="Descargar etiqueta oficial de trazabilidad en formato PDF (RF07 / RN01)"
+            title="Descargar etiqueta oficial de trazabilidad en formato PDF"
           >
             {downloadingId() === l.id ? 'Descargando...' : '🏷️ Etiqueta PDF'}
           </button>
@@ -160,8 +164,8 @@ export function LabView() {
     <section class="panel">
       {/* Panel Header */}
       <div class="panel-head">
-        <p class="panel-eyebrow">Control de Calidad y Ensayos (F3)</p>
-        <h1 class="panel-title">Laboratorio de Semillas & Etiquetado</h1>
+        <p class="panel-eyebrow">Control de Calidad y Ensayos</p>
+        <h1 class="panel-title">Laboratorio de Semillas</h1>
         <p class="panel-desc">
           Evaluación de germinación, pureza física, viabilidad y emisión de dictamen técnico con etiqueta oficial.
         </p>

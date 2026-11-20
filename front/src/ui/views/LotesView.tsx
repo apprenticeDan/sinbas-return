@@ -74,11 +74,6 @@ export function LotesView() {
       cell: (l) => (
         <div>
           <div style={{ 'font-weight': '600', color: 'var(--ink)' }}>{l.nombreProducto}</div>
-          <Show when={l.ubicacion}>
-            <div style={{ 'font-size': '11px', color: 'var(--ink-soft)', 'margin-top': '2px' }}>
-              📦 Ubicación: {l.ubicacion}
-            </div>
-          </Show>
         </div>
       ),
     },
@@ -157,17 +152,9 @@ export function LotesView() {
             }}
             class="btn btn-ghost"
             style={{ padding: '4px 8px', 'font-size': '11.5px' }}
-            title="Consultar ficha técnica consolidada e historial (RF14 / CU-14)"
+            title="Consultar ficha técnica consolidada e historial"
           >
             📄 Ficha
-          </button>
-          <button
-            onClick={() => ApiLabGateway.descargarEtiquetaPdf(l.id, l.codigo).catch((e: any) => alert(e.message || 'Error al descargar etiqueta'))}
-            class="btn btn-ghost"
-            style={{ padding: '4px 8px', 'font-size': '11.5px', color: 'var(--green-deep)' }}
-            title="Descargar etiqueta oficial en PDF (RF07 / RN01)"
-          >
-            🏷️ Etiqueta
           </button>
 
           <Show when={canBlockLotes() && l.estado === 'Activo'}>
