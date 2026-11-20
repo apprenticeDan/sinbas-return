@@ -93,7 +93,7 @@ export const VentasView: Component = () => {
       <div class="panel-head">
         <div>
           <p class="panel-eyebrow">Gestión Comercial & Facturación</p>
-          <h1 class="panel-title">Órdenes de Venta (F8)</h1>
+          <h1 class="panel-title">Órdenes de Venta</h1>
           <p class="panel-desc">
             Seguimiento de órdenes confirmadas desde proformas vigentes, trazabilidad de stock congelado y estado de despacho físico en almacén.
           </p>

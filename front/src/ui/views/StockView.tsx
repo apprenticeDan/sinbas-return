@@ -24,7 +24,6 @@ export const StockView: Component = () => {
         <div>
           <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
             <h1 class="view-title">Existencias & Kardex Digital</h1>
-            <span class="pill pill-green" style={{ 'font-size': '11px' }}>F5 / MF-05-01..03</span>
           </div>
           <p class="view-subtitle">
             Control de inventario en tiempo real, desglose por lotes y auditoría cronológica de movimientos.

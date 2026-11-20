@@ -126,13 +126,15 @@ async function procesarRespuesta<T>(response: Response): Promise<T> {
   if (!response.ok) {
     if (response.status === 409) {
       const errorData = await response.json().catch(() => ({}));
-      throw new ApiError(409, errorData.error || 'Conflicto: El recurso ya existe.');
+      const msg409 = errorData.error || errorData.detail || errorData.title || 'Conflicto: El recurso ya existe.';
+      throw new ApiError(409, msg409);
     }
     let errorMsg = `Error ${response.status}: ${response.statusText}`;
     try {
       const errData = await response.json();
-      if (errData.error) {
-        errorMsg = errData.detalle ? `${errData.error} (${errData.detalle})` : errData.error;
+      const rawMsg = errData.error || errData.detail || errData.title || errData.message;
+      if (rawMsg) {
+        errorMsg = errData.detalle ? `${rawMsg} (${errData.detalle})` : rawMsg;
       }
     } catch (_) {}
     throw new ApiError(response.status, errorMsg);

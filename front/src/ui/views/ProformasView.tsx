@@ -315,7 +315,7 @@ export const ProformasView: Component = () => {
         <div>
           <h1 class="text-2xl font-bold text-gray-800">Proformas & Cotizaciones</h1>
           <p class="text-sm text-gray-500">
-            Módulo Comercial (Feature F7): Elaboración de cotizaciones oficiales con validación de stock y precios congelados.
+            Módulo Comercial: Elaboración de cotizaciones oficiales con validación de stock y precios congelados.
           </p>
         </div>
         <button class="btn btn-primary flex items-center gap-2" onClick={abrirModalNuevo}>
@@ -710,7 +710,7 @@ export const ProformasView: Component = () => {
               <div class="bg-amber-50/70 border border-amber-200 rounded-lg p-4 flex flex-col md:flex-row justify-between items-center gap-3">
                 <div class="text-xs text-amber-900 font-medium flex items-center gap-2">
                   <span class="text-base">⚠️</span>
-                  <span><strong>Aviso Legal (RN05):</strong> Disponibilidad sujeta a cambios - La proforma no reserva stock físico.</span>
+                  <span><strong>Aviso:</strong> Documento informativo sujeto a cambios. No implica reserva ni compromiso de stock físico.</span>
                 </div>
                 <div class="text-right">
                   <div class="text-xs text-gray-500 uppercase tracking-wide">Total Cotizado</div>

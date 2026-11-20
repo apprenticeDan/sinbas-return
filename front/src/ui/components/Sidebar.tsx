@@ -21,35 +21,119 @@ export const Sidebar: Component<SidebarProps> = (props) => {
         </div>
       </div>
 
-      <nav class="nav-list">
-        <div class="nav-eyebrow">Módulos de Sistema</div>
+      {/* Identidad del Usuario y Logout reubicados en cabecera */}
+      <div class="sidebar-user-header" style={{
+        padding: '10px 14px',
+        margin: '10px 12px 14px',
+        background: 'var(--surface-alt, rgba(255,255,255,0.06))',
+        'border-radius': 'var(--radius-m, 8px)',
+        display: 'flex',
+        'align-items': 'center',
+        'justify-content': 'space-between',
+        gap: '8px',
+        border: '1px solid var(--border-soft, rgba(255,255,255,0.1))',
+      }}>
+        <div class="user-badge" style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
+          <div class="user-avatar" style={{
+            width: '28px',
+            height: '28px',
+            'border-radius': '50%',
+            background: 'var(--green-deep, #15803d)',
+            color: '#fff',
+            display: 'flex',
+            'align-items': 'center',
+            'justify-content': 'center',
+            'font-weight': '700',
+            'font-size': '12px',
+          }}>
+            {authStore.user()?.username.charAt(0).toUpperCase() || 'U'}
+          </div>
+          <div style={{ 'line-height': '1.2' }}>
+            <div style={{ 'font-weight': '600', 'font-size': '12.5px', color: 'var(--sidebar-text, #fff)' }}>
+              {authStore.user()?.username || 'Usuario'}
+            </div>
+            <div style={{ 'font-size': '10px', color: 'var(--sidebar-text-soft, rgba(255,255,255,0.6))' }}>
+              {authStore.user()?.roles.join(', ') || 'Sin Rol'}
+            </div>
+          </div>
+        </div>
 
-        <Show when={authStore.canAccessView('users')}>
+        <button
+          class="btn btn-ghost"
+          style={{ padding: '5px', color: 'var(--sidebar-text-soft, rgba(255,255,255,0.7))', background: 'transparent', border: 'none', cursor: 'pointer' }}
+          onClick={() => authStore.logout()}
+          title="Cerrar Sesión"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ width: '15px', height: '15px' }}>
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+          </svg>
+        </button>
+      </div>
+
+      <nav class="nav-list">
+        {/* GRUPO 1: Atención al Cliente */}
+        <div class="nav-eyebrow">Atención al Cliente</div>
+
+        <Show when={authStore.canAccessView('clientes')}>
           <button
-            class={`nav-item ${props.currentView === 'users' ? 'active' : ''}`}
-            onClick={() => props.onNavigate('users')}
+            class={`nav-item ${props.currentView === 'clientes' ? 'active' : ''}`}
+            onClick={() => props.onNavigate('clientes')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
               <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
-            Usuarios & Roles
+            Clientes
           </button>
         </Show>
 
-        <Show when={authStore.canAccessView('productos')}>
+        <Show when={authStore.canAccessView('proformas')}>
           <button
-            class={`nav-item ${props.currentView === 'productos' ? 'active' : ''}`}
-            onClick={() => props.onNavigate('productos')}
+            class={`nav-item ${props.currentView === 'proformas' ? 'active' : ''}`}
+            onClick={() => props.onNavigate('proformas')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
             </svg>
-            Productos & Precios
+            Proformas
           </button>
         </Show>
+
+        <Show when={authStore.canAccessView('ventas')}>
+          <button
+            class={`nav-item ${props.currentView === 'ventas' ? 'active' : ''}`}
+            onClick={() => props.onNavigate('ventas')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <path d="M16 10a4 4 0 0 1-8 0" />
+            </svg>
+            Ventas & Despachos
+          </button>
+        </Show>
+
+        <Show when={authStore.canAccessView('solicitudes')}>
+          <button
+            class={`nav-item ${props.currentView === 'solicitudes' ? 'active' : ''}`}
+            onClick={() => props.onNavigate('solicitudes')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 11l3 3L22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+            Solicitudes Internas
+          </button>
+        </Show>
+
+        {/* GRUPO 2: Almacén */}
+        <div class="nav-eyebrow" style={{ 'margin-top': '10px' }}>Almacén</div>
 
         <Show when={authStore.canAccessView('lotes')}>
           <button
@@ -63,20 +147,6 @@ export const Sidebar: Component<SidebarProps> = (props) => {
             Lotes de Semilla
           </button>
         </Show>
-
-        <Show when={authStore.canAccessView('laboratorio')}>
-          <button
-            class={`nav-item ${props.currentView === 'laboratorio' ? 'active' : ''}`}
-            onClick={() => props.onNavigate('laboratorio')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 3h6M10 3v6.5L4 19.5A1 1 0 0 0 5 21h14a1 1 0 0 0 1-1.5L14 9.5V3" />
-            </svg>
-            Análisis Calidad
-          </button>
-        </Show>
-
-        <div class="nav-eyebrow" style={{ 'margin-top': '10px' }}>Almacén</div>
 
         <Show when={authStore.canAccessView('ingresos')}>
           <button
@@ -104,19 +174,6 @@ export const Sidebar: Component<SidebarProps> = (props) => {
           </button>
         </Show>
 
-        <Show when={authStore.canAccessView('solicitudes')}>
-          <button
-            class={`nav-item ${props.currentView === 'solicitudes' ? 'active' : ''}`}
-            onClick={() => props.onNavigate('solicitudes')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 11l3 3L22 4" />
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-            </svg>
-            Solicitudes Internas
-          </button>
-        </Show>
-
         <Show when={authStore.canAccessView('stock')}>
           <button
             class={`nav-item ${props.currentView === 'stock' ? 'active' : ''}`}
@@ -131,78 +188,54 @@ export const Sidebar: Component<SidebarProps> = (props) => {
           </button>
         </Show>
 
-        <Show when={authStore.canAccessView('clientes')}>
+        {/* GRUPO 3: Laboratorio */}
+        <div class="nav-eyebrow" style={{ 'margin-top': '10px' }}>Laboratorio</div>
+
+        <Show when={authStore.canAccessView('laboratorio')}>
           <button
-            class={`nav-item ${props.currentView === 'clientes' ? 'active' : ''}`}
-            onClick={() => props.onNavigate('clientes')}
+            class={`nav-item ${props.currentView === 'laboratorio' ? 'active' : ''}`}
+            onClick={() => props.onNavigate('laboratorio')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <path d="M9 3h6M10 3v6.5L4 19.5A1 1 0 0 0 5 21h14a1 1 0 0 0 1-1.5L14 9.5V3" />
+            </svg>
+            Control de Calidad
+          </button>
+        </Show>
+
+        {/* GRUPO 4: Administración */}
+        <div class="nav-eyebrow" style={{ 'margin-top': '10px' }}>Administración</div>
+
+        <Show when={authStore.canAccessView('productos')}>
+          <button
+            class={`nav-item ${props.currentView === 'productos' ? 'active' : ''}`}
+            onClick={() => props.onNavigate('productos')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+            Catálogo de Productos
+          </button>
+        </Show>
+
+        {/* GRUPO 5: Sistema */}
+        <div class="nav-eyebrow" style={{ 'margin-top': '10px' }}>Sistema</div>
+
+        <Show when={authStore.canAccessView('users')}>
+          <button
+            class={`nav-item ${props.currentView === 'users' ? 'active' : ''}`}
+            onClick={() => props.onNavigate('users')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
               <circle cx="9" cy="7" r="4" />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
-            Clientes (F6)
-          </button>
-        </Show>
-
-        <Show when={authStore.canAccessView('proformas')}>
-          <button
-            class={`nav-item ${props.currentView === 'proformas' ? 'active' : ''}`}
-            onClick={() => props.onNavigate('proformas')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="16" y1="13" x2="8" y2="13" />
-              <line x1="16" y1="17" x2="8" y2="17" />
-              <polyline points="10 9 9 9 8 9" />
-            </svg>
-            Proformas (F7)
-          </button>
-        </Show>
-
-        <Show when={authStore.canAccessView('ventas')}>
-          <button
-            class={`nav-item ${props.currentView === 'ventas' ? 'active' : ''}`}
-            onClick={() => props.onNavigate('ventas')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <path d="M16 10a4 4 0 0 1-8 0" />
-            </svg>
-            Ventas & Despachos (F8)
+            Usuarios & Roles
           </button>
         </Show>
       </nav>
-
-      <div class="sidebar-foot">
-        <div class="user-badge">
-          <div class="user-avatar">
-            {authStore.user()?.username.charAt(0).toUpperCase() || 'U'}
-          </div>
-          <div style={{ 'line-height': '1.2' }}>
-            <div style={{ 'font-weight': '600', color: 'var(--sidebar-text)' }}>
-              {authStore.user()?.username || 'Usuario'}
-            </div>
-            <div style={{ 'font-size': '10px', color: 'var(--sidebar-text-soft)' }}>
-              {authStore.user()?.roles.join(', ') || 'Sin Rol'}
-            </div>
-          </div>
-        </div>
-
-        <button
-          class="btn btn-ghost"
-          style={{ padding: '6px', color: 'var(--sidebar-text-soft)' }}
-          onClick={() => authStore.logout()}
-          title="Cerrar Sesión"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ width: '16px', height: '16px' }}>
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-          </svg>
-        </button>
-      </div>
     </aside>
   );
 };

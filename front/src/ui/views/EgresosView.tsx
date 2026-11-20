@@ -302,9 +302,9 @@ export const EgresosView: Component = () => {
       {/* ─── Header ──────────────────────────────────────────── */}
       <div class="panel-head">
         <p class="panel-eyebrow">Gestión de Almacén & Comercial</p>
-        <h1 class="panel-title">Egresos & Despacho Físico (F8)</h1>
+        <h1 class="panel-title">Egresos & Despacho Físico</h1>
         <p class="panel-desc">
-          Atención física de órdenes de venta pendientes de entrega con deducción FIFO y registro de salidas por uso interno o merma.
+          Atención física de órdenes de venta pendientes de entrega y registro de salidas por uso interno o merma.
         </p>
       </div>
 
@@ -421,7 +421,7 @@ export const EgresosView: Component = () => {
                               style={{ 'font-size': '12px', padding: '5px 12px' }}
                               onClick={() => abrirModalDespacho(d)}
                             >
-                              📦 Despachar (FIFO)
+                              📦 Despachar
                             </button>
                           </Show>
                         </td>
@@ -707,26 +707,6 @@ export const EgresosView: Component = () => {
                       </table>
                     </div>
 
-                    {/* Sugerencia FIFO de lotes */}
-                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '12px', 'border-radius': '6px' }}>
-                      <div style={{ 'font-weight': '700', 'font-size': '12px', color: '#166534', 'margin-bottom': '6px', display: 'flex', 'align-items': 'center', gap: '6px' }}>
-                        <span>⚡ Algoritmo FIFO de Lotes Activos</span>
-                      </div>
-                      <p style={{ 'font-size': '11.5px', color: '#15803d', margin: '0 0 8px' }}>
-                        El sistema descontará automáticamente el stock físico de los lotes más antiguos disponibles cumpliendo la regla de inventario.
-                      </p>
-
-                      <Show when={ventaStore.despachoSeleccionado()?.sugerenciasFifo}>
-                        <For each={ventaStore.despachoSeleccionado()?.sugerenciasFifo}>
-                          {(sug) => (
-                            <div style={{ 'font-size': '11.5px', 'margin-bottom': '4px', color: '#166534' }}>
-                              • <strong>{sug.nombreProducto}</strong>: {sug.lotesSugeridos.length} lote(s) comprometido(s)
-                            </div>
-                          )}
-                        </For>
-                      </Show>
-                    </div>
-
                     <div>
                       <label style={{ display: 'block', 'font-size': '12px', 'font-weight': '600', color: 'var(--ink)', 'margin-bottom': '4px' }}>
                         Observaciones del Despacho (Opcional)
@@ -762,7 +742,7 @@ export const EgresosView: Component = () => {
                       disabled={despachando()}
                       style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}
                     >
-                      {despachando() ? 'Procesando Salida...' : '✓ Confirmar Salida Física (FIFO)'}
+                      {despachando() ? 'Procesando Salida...' : '✓ Confirmar Salida Física'}
                     </button>
                   </div>
                 </form>

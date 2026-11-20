@@ -13,30 +13,29 @@ module InventoryEndpoints =
 
     let mapEndpoints (app: WebApplication) =
 
-        let resolverEmpleadoId (ctx: HttpContext) : Async<Guid> =
+        let resolverEmpleadoId (ctx: HttpContext) : Async<Result<Guid, string * int>> =
             async {
-                let defaultEmpleado = Guid.Parse("01917f3a-0001-7000-8000-000000000001")
                 let empClaim = ctx.User.FindFirst("empleado_id")
-                if not (isNull empClaim) then
+                if not (isNull empClaim) && empClaim.Value.Length = 36 then
                     match Guid.TryParse(empClaim.Value) with
-                    | true, g -> return g
-                    | false, _ -> return defaultEmpleado
+                    | true, g -> return Ok g
+                    | false, _ -> return Error ("Token inválido: 'empleado_id' no es UUID", 401)
                 else
                     let subClaim =
                         let c1 = ctx.User.FindFirst(ClaimTypes.NameIdentifier)
                         if isNull c1 then ctx.User.FindFirst(JwtRegisteredClaimNames.Sub) else c1
-                    if not (isNull subClaim) then
+                    if not (isNull subClaim) && subClaim.Value.Length = 36 then
                         match Guid.TryParse(subClaim.Value) with
                         | true, uGuid ->
                             let! uRes = AuthRepository.buscarUsuarioPorId (UsuarioId uGuid)
                             match uRes with
                             | Ok u ->
                                 let (EmpleadoId eId) = Usuario.empleadoId u
-                                return eId
-                            | Error _ -> return defaultEmpleado
-                        | false, _ -> return defaultEmpleado
+                                return Ok eId
+                            | Error _ -> return Error ("Usuario no encontrado para el token provisto", 401)
+                        | false, _ -> return Error ("Token inválido: 'sub' no es UUID", 401)
                     else
-                        return defaultEmpleado
+                        return Error ("Token inválido: falta claim de identidad de empleado o usuario", 401)
             }
 
         // ─────────────────────────────────────────────────────────
@@ -45,7 +44,10 @@ module InventoryEndpoints =
         // ─────────────────────────────────────────────────────────
         app.MapPost("/api/inventario/ingreso", Func<RegistrarIngresoRequest, HttpContext, Threading.Tasks.Task<IResult>>(fun req ctx ->
             async {
-                let! responsableId = resolverEmpleadoId ctx
+                let! empRes = resolverEmpleadoId ctx
+                match empRes with
+                | Error (msg, code) -> return Results.Json({| error = msg |}, statusCode = Nullable code)
+                | Ok responsableId ->
 
                 let! res =
                     InventoryService.registrarIngreso
@@ -215,7 +217,10 @@ module InventoryEndpoints =
         // ─────────────────────────────────────────────────────────
         app.MapPost("/api/inventario/egreso", Func<RegistrarEgresoRequest, HttpContext, Threading.Tasks.Task<IResult>>(fun req ctx ->
             async {
-                let! responsableId = resolverEmpleadoId ctx
+                let! empRes = resolverEmpleadoId ctx
+                match empRes with
+                | Error (msg, code) -> return Results.Json({| error = msg |}, statusCode = Nullable code)
+                | Ok responsableId ->
 
                 let! lotesCol = LoteRepository.listarColeccion None None
                 let! movsCol = InventoryRepository.listarTodosMovimientosDominioColeccion ()
