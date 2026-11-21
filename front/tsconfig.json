@@ -10,7 +10,8 @@
     "types": ["vite/client"],
     "noEmit": true,
     "isolatedModules": true,
-    "strict": true
+    "strict": true,
+    "skipLibCheck": true
   },
   "include": ["src"]
 }
