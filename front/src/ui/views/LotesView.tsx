@@ -3,7 +3,7 @@
 // stock + kardex coherentemente. Este módulo es consulta + gestión
 // de estado (bloquear, liberar, archivar, ficha técnica).
 
-import { onMount, Show, For, createMemo, createSignal } from 'solid-js';
+import { onMount, Show, createMemo, createSignal } from 'solid-js';
 import { loteStore } from '../store/loteStore';
 import { authStore } from '../store/authStore';
 import { LoteItem } from '../../domain/models/Lote';
@@ -11,12 +11,17 @@ import { DataTable, Column } from '../components/DataTable';
 import { LoteBlockModal } from '../components/LoteBlockModal';
 import { LoteFichaTecnicaModal } from '../components/LoteFichaTecnicaModal';
 import { formatDisplayId } from '../utils/formatters';
-import { ApiLabGateway } from '../../infrastructure/api/ApiLabGateway';
 import { downloadBlob } from '../../infrastructure/api/HttpClient';
+import { FiltersBar } from '../primitives/FiltersBar';
+import { createFilteredSorted, SortConfig } from '../hooks/createFilteredSorted';
 
 export function LotesView() {
   const [fichaModalOpen, setFichaModalOpen] = createSignal<boolean>(false);
   const [selectedFichaLoteId, setSelectedFichaLoteId] = createSignal<string | null>(null);
+
+  const [search, setSearch] = createSignal<string>('');
+  const [estadoFilter, setEstadoFilter] = createSignal<string>('');
+  const [sortField, setSortField] = createSignal<string>('fecha');
 
   onMount(() => {
     loteStore.loadLotes();
@@ -33,6 +38,41 @@ export function LotesView() {
     const bloqueados = list.filter((l) => l.estado === 'Bloqueado').length;
     const agotados = list.filter((l) => l.estado === 'Agotado').length;
     return { total, activos, cuarentena, rechazados, bloqueados, agotados };
+  });
+
+  const sortConfig = createMemo<SortConfig<LoteItem> | null>(() => {
+    const f = sortField();
+    switch (f) {
+      case 'fecha':
+        return { key: (l) => l.fechaIngreso, direction: 'desc' };
+      case 'codigo':
+        return { key: (l) => l.codigo, direction: 'asc' };
+      case 'producto':
+        return { key: (l) => l.nombreProducto, direction: 'asc' };
+      case 'estado':
+        return { key: (l) => l.estado, direction: 'asc' };
+      default:
+        return null;
+    }
+  });
+
+  const filteredLotes = createFilteredSorted(loteStore.lotes, {
+    search: {
+      value: search,
+      keys: [
+        (l) => l.codigo,
+        (l) => l.nombreProducto,
+        (l) => l.procedencia || '',
+        (l) => l.ubicacion || '',
+      ],
+    },
+    filters: [
+      {
+        value: estadoFilter,
+        match: (l, val) => l.estado === val,
+      },
+    ],
+    sort: sortConfig,
   });
 
   const columns: Column<LoteItem>[] = [
@@ -187,50 +227,75 @@ export function LotesView() {
       </div>
 
       {/* Toolbar & Filters */}
-      <div class="card" style={{ 'margin-bottom': '20px' }}>
-        <div class="toolbar" style={{ 'justify-content': 'space-between' }}>
-          <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '12px', flex: '1', 'align-items': 'flex-end' }}>
-            <div class="field" style={{ 'min-width': '220px', flex: '1' }}>
-              <label>Buscar Lote o Producto</label>
-              <input
-                type="text"
-                placeholder="Código (ej. SWIETMAC), especie o procedencia..."
-                value={loteStore.searchTerm()}
-                onInput={(e) => loteStore.setSearchTerm(e.currentTarget.value)}
-              />
-            </div>
-
-            <div class="field">
-              <label>Estado de Lote</label>
-              <select
-                value={loteStore.stateFilter()}
-                onChange={(e) => loteStore.setStateFilter(e.currentTarget.value)}
-              >
-                <option value="">Todos los Estados</option>
-                <option value="Activo">Activos</option>
-                <option value="EnCuarentena">En Cuarentena</option>
-                <option value="Agotado">Agotados</option>
-                <option value="Bloqueado">Bloqueados</option>
-                <option value="Rechazado">Rechazados</option>
-              </select>
-            </div>
-
-            <button
-              class="btn btn-ghost"
-              style={{ 'font-size': '12.5px', padding: '6px 12px', 'align-self': 'flex-end' }}
-              onClick={() => downloadBlob(
-                '/reportes/lotes.csv',
-                `lotes-${new Date().toISOString().split('T')[0]}.csv`
-              ).catch(e => alert(e.message))}
-              title="Exportar lotes a CSV"
-            >
-              📥 Exportar CSV
-            </button>
+      <div style={{ 'margin-bottom': '20px', display: 'flex', 'flex-direction': 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', 'align-items': 'center', 'justify-content': 'space-between', 'flex-wrap': 'wrap' }}>
+          <div style={{ flex: '1', 'min-width': '300px' }}>
+            <FiltersBar
+              search={{
+                value: search(),
+                onChange: setSearch,
+                placeholder: 'Buscar por código, producto o procedencia...',
+              }}
+              filters={[
+                {
+                  label: 'Estado',
+                  value: estadoFilter(),
+                  onChange: setEstadoFilter,
+                  options: [
+                    { value: '', label: 'Todos' },
+                    { value: 'Activo', label: 'Activo' },
+                    { value: 'EnCuarentena', label: 'En Cuarentena' },
+                    { value: 'Agotado', label: 'Agotado' },
+                    { value: 'Bloqueado', label: 'Bloqueado' },
+                    { value: 'Rechazado', label: 'Rechazado' },
+                  ],
+                },
+              ]}
+              sort={{
+                value: sortField(),
+                onChange: setSortField,
+                options: [
+                  { value: 'fecha', label: 'Fecha ingreso' },
+                  { value: 'codigo', label: 'Código' },
+                  { value: 'producto', label: 'Producto' },
+                  { value: 'estado', label: 'Estado' },
+                ],
+              }}
+              onRefresh={() => {
+                loteStore.loadLotes();
+              }}
+              onClear={() => {
+                setSearch('');
+                setEstadoFilter('');
+                setSortField('fecha');
+              }}
+            />
           </div>
+          <button
+            class="btn btn-ghost"
+            style={{ 'font-size': '12.5px', padding: '8px 14px', 'white-space': 'nowrap' }}
+            onClick={() => downloadBlob(
+              '/reportes/lotes.csv',
+              `lotes-${new Date().toISOString().split('T')[0]}.csv`
+            ).catch(e => alert(e.message))}
+            title="Exportar lotes a CSV"
+          >
+            📥 Exportar CSV
+          </button>
         </div>
 
         {/* Stats Sub-bar */}
-        <div style={{ padding: '12px 20px', background: 'var(--surface-alt)', 'border-top': '1px solid var(--border-soft)', display: 'flex', 'flex-wrap': 'wrap', gap: '20px', 'font-size': '12px' }}>
+        <div
+          class="card"
+          style={{
+            padding: '10px 16px',
+            background: 'var(--surface-alt)',
+            display: 'flex',
+            'flex-wrap': 'wrap',
+            gap: '20px',
+            'font-size': '12px',
+          }}
+        >
           <div>Total Lotes: <strong>{stats().total}</strong></div>
           <div style={{ color: 'var(--green-deep)' }}>Disponibles: <strong>{stats().activos}</strong></div>
           <div style={{ color: '#b45309' }}>En Cuarentena: <strong>{stats().cuarentena}</strong></div>
@@ -243,7 +308,7 @@ export function LotesView() {
       {/* Data Table */}
       <DataTable
         columns={columns}
-        data={loteStore.filteredLotes()}
+        data={filteredLotes()}
         loading={loteStore.loading()}
         emptyMessage="No se encontraron lotes registrados con los filtros seleccionados."
       />
